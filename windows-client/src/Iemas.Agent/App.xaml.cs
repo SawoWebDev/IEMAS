@@ -18,11 +18,32 @@ public partial class App : Application
 {
     private NotifyIcon? _notifyIcon;
     private MainWindow? _mainWindow;
+    private static Mutex? _singleInstance;
     public static AgentSessionManager Session { get; private set; } = null!;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // One Agent per Windows user. A second copy (for example the user double-clicks the shortcut
+        // while the tray one is running) would double every pop-up, so it just quits.
+        _singleInstance = new Mutex(true, @"Local\IemasAgent.SingleInstance", out var firstInstance);
+        if (!firstInstance)
+        {
+            Shutdown();
+            return;
+        }
+
+        // Start with Windows is on by default; keep the Run entry pointing at this exe every launch.
+        var settings = AgentSettings.Load();
+        if (!settings.StartupDefaultApplied)
+        {
+            settings.StartWithWindows = true;
+            settings.StartupDefaultApplied = true;
+            settings.Save();
+        }
+        try { StartupRegistration.Apply(settings.StartWithWindows); } catch { /* a locked registry must not stop the Agent */ }
+        var startedByWindows = e.Args.Contains(StartupRegistration.BackgroundArgument, StringComparer.OrdinalIgnoreCase);
 
         // §8.1 "Report errors" — a single unhandled exception anywhere (a WPF async-void event
         // handler, a background timer tick) must never silently kill the whole tray app; confirmed
@@ -44,7 +65,15 @@ public partial class App : Application
         SetupToastActivation();
 
         _mainWindow = new MainWindow();
-        _mainWindow.Show();
+        if (startedByWindows)
+        {
+            // Quietly in the tray; pop-ups still appear on their own.
+            _notifyIcon!.Text = "IEMAS Agent - starting...";
+        }
+        else
+        {
+            _mainWindow.Show();
+        }
 
         Session.StateUpdated += UpdateTrayState;
         Session.PushReceived += ShowPopup;

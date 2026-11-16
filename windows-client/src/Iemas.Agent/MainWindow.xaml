@@ -276,7 +276,7 @@
                 <TextBlock Text="Server URL" FontSize="12" Foreground="#4B5563"/>
                 <TextBox x:Name="ServerUrlTextBox" Margin="0,4,0,10" Padding="6"/>
                 <CheckBox x:Name="AllowInsecureTlsCheckBox" Content="Allow self-signed certificates (dev only)" Margin="0,0,0,10"/>
-                <CheckBox x:Name="StartWithWindowsCheckBox" Content="Start with Windows" Margin="0,0,0,14"/>
+                <CheckBox x:Name="StartWithWindowsCheckBox" Content="Start with Windows (recommended - pop-ups only arrive while the Agent is running)" Margin="0,0,0,14"/>
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Save" Style="{StaticResource ActionButton}" Click="SaveSettingsButton_Click"/>
                     <Button Content="Sign Out / Re-register" Style="{StaticResource SecondaryButton}" Click="SignOutButton_Click"/>

@@ -56,6 +56,33 @@ public class CaseWorkflowServiceTests
 
     private static CaseWorkflowService CreateService(TestDbContext db) => new(db, new CaseMatchingService(db), new ReminderSchedulingService(db));
 
+    /// <summary>
+    /// Found in the live run: numbers were "count + 1", so once any number was skipped or a Case was
+    /// removed, every new Case asked for a number that already existed and case creation failed forever.
+    /// </summary>
+    [Fact]
+    public async Task ProcessOneAsync_NumberGapInExistingCases_StillGetsAFreshCaseNumber()
+    {
+        using var db = TestDbContext.CreateNew();
+        var employee = CreateEmployee();
+        db.Employees.Add(employee);
+        await db.SaveChangesAsync();
+        var account = CreateAccount(employee.Id);
+        db.EmailAccounts.Add(account);
+        // Two Cases numbered 1 and 3 (2 was skipped): "count + 1" asks for 3, which already exists.
+        db.Cases.Add(new Case { CaseNumber = "CASE-000001", EmailAccountId = account.Id, CustomerEmailAddress = "old@example.com", Subject = "Old" });
+        db.Cases.Add(new Case { CaseNumber = "CASE-000003", EmailAccountId = account.Id, CustomerEmailAddress = "old2@example.com", Subject = "Old 2" });
+        var message = CreateMessage(account.Id);
+        db.EmailMessages.Add(message);
+        db.EmailClassifications.Add(CreateClassification(message.Id, ImportanceDecision.Important));
+        await db.SaveChangesAsync();
+
+        await CreateService(db).ProcessOneAsync(message.Id, CancellationToken.None);
+
+        var created = await db.Cases.SingleAsync(c => c.CustomerEmailAddress == "customer@example.com");
+        Assert.Equal("CASE-000004", created.CaseNumber);
+    }
+
     /// <summary>Core boundary: an Important message creates a new Case with the account owner as Case owner.</summary>
     [Fact]
     public async Task ProcessOneAsync_ImportantMessage_CreatesNewCase_OwnedByAccountOwner()

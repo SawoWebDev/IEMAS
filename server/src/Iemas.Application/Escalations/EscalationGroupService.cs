@@ -76,14 +76,24 @@ public class EscalationGroupService
 
         group.Name = name;
         group.UpdatedAt = DateTimeOffset.UtcNow;
-        group.Members.Clear();
-        foreach (var employeeId in request.EmployeeIds.Distinct())
+        var employeeIds = request.EmployeeIds.Distinct().ToList();
+        foreach (var employeeId in employeeIds)
         {
             if (!await _db.Employees.AnyAsync(e => e.Id == employeeId, cancellationToken))
             {
                 return Result<EscalationGroupDto>.Failure($"Employee {employeeId} not found.");
             }
-            group.Members.Add(new EscalationGroupMember { EmployeeId = employeeId });
+        }
+
+        // Replace members through the DbSet, not group.Members.Clear()/Add(): a new member already
+        // carries its Guid, so EF Core would treat it as an existing row on this tracked group and
+        // send an UPDATE that matches nothing (DbUpdateConcurrencyException).
+        var existingMembers = await _db.EscalationGroupMembers.Where(m => m.EscalationGroupId == group.Id).ToListAsync(cancellationToken);
+        _db.EscalationGroupMembers.RemoveRange(existingMembers);
+        group.Members.Clear();
+        foreach (var employeeId in employeeIds)
+        {
+            _db.EscalationGroupMembers.Add(new EscalationGroupMember { EscalationGroupId = group.Id, EmployeeId = employeeId });
         }
 
         await _db.SaveChangesAsync(cancellationToken);

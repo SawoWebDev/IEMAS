@@ -50,3 +50,6 @@ logs/
 
 # Self-contained Agent build output (large); the small build is in windows-client/agent-release
 agent-publish/
+
+# Local credential notes - never commit
+crede.txt

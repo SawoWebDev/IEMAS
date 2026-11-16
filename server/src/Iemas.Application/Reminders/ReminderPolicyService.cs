@@ -131,10 +131,16 @@ public class ReminderPolicyService
         policy.EscalationThresholdReminderCount = request.EscalationThresholdReminderCount;
         policy.UpdatedAt = DateTimeOffset.UtcNow;
 
+        // Replace the holiday list through the DbSet, not policy.Holidays.Clear()/Add(): a new
+        // holiday already carries its Guid (Entity sets it), so EF Core would treat a child added to
+        // this tracked, pre-existing policy as an existing row and send an UPDATE that matches
+        // nothing. Same pattern as EscalationPolicyService's levels.
+        var existingHolidays = await _db.ReminderPolicyHolidays.Where(h => h.ReminderPolicyId == policy.Id).ToListAsync(cancellationToken);
+        _db.ReminderPolicyHolidays.RemoveRange(existingHolidays);
         policy.Holidays.Clear();
         foreach (var h in request.Holidays)
         {
-            policy.Holidays.Add(new ReminderPolicyHoliday { Date = h.Date, Label = h.Label });
+            _db.ReminderPolicyHolidays.Add(new ReminderPolicyHoliday { ReminderPolicyId = policy.Id, Date = h.Date, Label = h.Label });
         }
 
         try
@@ -143,8 +149,10 @@ public class ReminderPolicyService
         }
         catch (DbUpdateException)
         {
-            return Result<ReminderPolicyDto>.Failure("A Reminder Policy with this name already exists.");
+            return Result<ReminderPolicyDto>.Failure("The Reminder Policy could not be saved. Another policy may already use this name; reload and try again.");
         }
+
+        policy = await _db.ReminderPolicies.AsNoTracking().Include(p => p.Holidays).FirstAsync(p => p.Id == id, cancellationToken);
 
         await _auditService.LogAsync("ReminderPolicy.Updated", "ReminderPolicy", policy.Id.ToString(), $"Updated policy \"{policy.Name}\".", cancellationToken);
 
@@ -195,6 +203,15 @@ public class ReminderPolicyService
         if (ReminderTimingCalculator.ResolveTimeZone(request.TimeZoneId).Id != request.TimeZoneId && !string.Equals(request.TimeZoneId, "UTC", StringComparison.OrdinalIgnoreCase))
         {
             return "Unrecognized time zone id.";
+        }
+        var duplicateDate = request.Holidays.GroupBy(h => h.Date).FirstOrDefault(g => g.Count() > 1);
+        if (duplicateDate is not null)
+        {
+            return $"The holiday {duplicateDate.Key:yyyy-MM-dd} is listed more than once.";
+        }
+        foreach (var h in request.Holidays)
+        {
+            if (h.Label is not null && InputSanitizer.ValidateFreeText("Holiday label", h.Label) is { } labelError) return labelError;
         }
         return null;
     }

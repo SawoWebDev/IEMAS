@@ -531,8 +531,17 @@ public class CaseWorkflowService
     /// </summary>
     private async Task<string> GenerateNextCaseNumberAsync(CancellationToken cancellationToken)
     {
-        var count = await _db.Cases.CountAsync(cancellationToken);
-        return $"CASE-{(count + 1):D6}";
+        // Highest existing number + 1, not "count + 1": a skipped or removed number would otherwise make
+        // every new Case ask for one that already exists. Length first, so CASE-1000000 sorts above CASE-999999.
+        var highestSaved = await _db.Cases.AsNoTracking()
+            .OrderByDescending(c => c.CaseNumber.Length).ThenByDescending(c => c.CaseNumber)
+            .Select(c => c.CaseNumber).FirstOrDefaultAsync(cancellationToken);
+        var highestPending = _db.Cases.Local.Select(c => c.CaseNumber)
+            .OrderByDescending(n => n.Length).ThenByDescending(n => n).FirstOrDefault();
+
+        var highest = new[] { highestSaved, highestPending }.Where(n => n is not null)
+            .Select(n => int.TryParse(n!.Replace("CASE-", ""), out var v) ? v : 0).DefaultIfEmpty(0).Max();
+        return $"CASE-{(highest + 1):D6}";
     }
 
     /// <summary>Requirements §48 — completing a Case requires a reason; recorded as a history event, not a destructive edit.</summary>

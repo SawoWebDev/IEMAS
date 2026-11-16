@@ -55,4 +55,29 @@ public class ClassificationDecisionPolicyTests
         Assert.Equal(ConfidenceBand.Medium, result.Band);
         Assert.Equal(ImportanceDecision.ReviewRequired, result.Decision);
     }
+
+    [Theory]
+    [InlineData("business_correspondence")]
+    [InlineData("vendor_pitch")]
+    [InlineData("automated")]
+    [InlineData("spam")]
+    [InlineData("other")]
+    public void Decide_RelevantButNotAnInquiryKind_NeverBecomesImportant(string kind)
+    {
+        var result = ClassificationDecisionPolicy.Decide(true, 0.95, null, null, null, true, true, false, kind);
+
+        Assert.Equal(Iemas.Domain.Ai.ImportanceDecision.NotImportant, result.Decision);
+        Assert.Contains("not a customer or dealer inquiry", result.Reason);
+    }
+
+    [Theory]
+    [InlineData("customer_inquiry")]
+    [InlineData("dealer_inquiry")]
+    [InlineData(null)]
+    public void Decide_InquiryKindOrNoKind_StaysImportant(string? kind)
+    {
+        var result = ClassificationDecisionPolicy.Decide(true, 0.95, null, null, null, true, true, false, kind);
+
+        Assert.Equal(Iemas.Domain.Ai.ImportanceDecision.Important, result.Decision);
+    }
 }

@@ -339,10 +339,16 @@ public class TestDbContext : DbContext, IAppDbContext
         base.OnModelCreating(modelBuilder);
     }
 
-    public static TestDbContext CreateNew()
+    public static TestDbContext CreateNew() => CreateNew(Guid.NewGuid().ToString());
+
+    /// <summary>
+    /// A context on a named in-memory database. Open a second context with the same name to act
+    /// like a new HTTP request: nothing is tracked yet, as in production.
+    /// </summary>
+    public static TestDbContext CreateNew(string databaseName)
     {
         var options = new DbContextOptionsBuilder<TestDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .UseInMemoryDatabase(databaseName)
             .Options;
         return new TestDbContext(options);
     }

@@ -12,7 +12,11 @@ public class AgentSettings
     private static readonly string SettingsPath = Path.Combine(SettingsDirectory, "settings.json");
 
     public string ServerUrl { get; set; } = "https://localhost:8443";
-    public bool StartWithWindows { get; set; }
+    /// <summary>On by default: the Agent must be running to deliver pop-ups, so it starts with Windows unless the user turns it off.</summary>
+    public bool StartWithWindows { get; set; } = true;
+
+    /// <summary>Set once the on-by-default choice has been applied, so older installs (saved before it was the default) get it once, and a later opt-out is respected.</summary>
+    public bool StartupDefaultApplied { get; set; }
     public bool AllowInsecureTls { get; set; } = false;
 
     public static AgentSettings Load()

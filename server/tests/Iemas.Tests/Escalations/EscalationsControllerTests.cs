@@ -17,7 +17,10 @@ namespace Iemas.Tests.Escalations;
 public class EscalationsControllerTests
 {
     private static EscalationsController CreateController(TestDbContext db) =>
-        new(new EscalationQueryService(db), new EscalationService(db));
+        new(new EscalationQueryService(db), new EscalationService(db), TestEmail(db));
+
+    private static EscalationTestEmailService TestEmail(TestDbContext db) =>
+        new(db, new Iemas.Tests.Inquiries.CapturingEscalationEmailSender(), new NoOpAuditService());
 
     private static Case CreateCase()
     {
@@ -57,7 +60,7 @@ public class EscalationsControllerTests
         var escalationService = new EscalationService(db);
         await escalationService.EvaluateCaseAsync(targetCase.Id, CancellationToken.None);
 
-        var controller = new EscalationsController(new EscalationQueryService(db), escalationService);
+        var controller = new EscalationsController(new EscalationQueryService(db), escalationService, TestEmail(db));
         var result = await controller.Search(null, null, null, CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);

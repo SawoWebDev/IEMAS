@@ -49,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<ReminderPolicyService>();
         services.AddScoped<ReminderQueryService>();
         services.AddScoped<EscalationService>();
+        services.AddScoped<EscalationTestEmailService>();
         services.AddScoped<EscalationPolicyService>();
         services.AddScoped<EscalationGroupService>();
         services.AddScoped<EscalationQueryService>();

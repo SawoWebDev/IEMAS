@@ -40,7 +40,14 @@ def check(name, ok, detail=""):
     log(f"  [{'PASS' if ok else 'FAIL'}] {name}{(' - ' + detail) if detail else ''}")
 
 
-def api(method, path, body=None):
+def login():
+    global token
+    token = None
+    token = api("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})["accessToken"]
+    return token
+
+
+def api(method, path, body=None, _retried=False):
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(API + path, data=data, method=method)
     req.add_header("Content-Type", "application/json")
@@ -51,6 +58,10 @@ def api(method, path, body=None):
             raw = r.read()
             return json.loads(raw) if raw else None
     except urllib.error.HTTPError as e:
+        # Access tokens are short-lived and a run waits for many minutes: log in again once.
+        if e.code == 401 and token and not _retried and path != "/auth/login":
+            login()
+            return api(method, path, body, _retried=True)
         raise RuntimeError(f"{method} {path} -> {e.code}: {e.read().decode()[:400]}")
 
 
@@ -202,7 +213,7 @@ def main():
     log("Sending scenario emails...")
     # S1 + S4 + S8: a clear inquiry 10 hours ago that agent1 never answers (24-hour calendar on a fresh install).
     s4 = f"Request for quotation {RUN}"
-    smtp_send("anna@customer.example", "agent1@sawo.com", s4,
+    smtp_send(f"anna.{RUN}@customer.example", "agent1@sawo.com", s4,
               "Hello, I would like to request a quotation for 20 heaters. How much per unit?", now - timedelta(hours=10), ids(1))
     # S2: newsletter and payment notice.
     smtp_send("newsletter@vendor.example", "agent1@sawo.com", f"November news {RUN}",
@@ -211,15 +222,15 @@ def main():
               "Payment received for invoice 1043. This is an automated message.", now - timedelta(minutes=5), ids(3))
     # S5 + S6: agent2 acknowledges only, then the customer follows up in the same thread.
     s5 = f"Spare part pricing {RUN}"
-    smtp_send("ben@customer.example", "agent2@sawo.com", s5,
+    smtp_send(f"ben.{RUN}@customer.example", "agent2@sawo.com", s5,
               "I would like to request a quotation for a control panel. What is the price?", now - timedelta(hours=2), ids(4))
-    agent_sent("agent2@sawo.com", "ben@customer.example", f"Re: {s5}", "We have received your request and will look into it.",
+    agent_sent("agent2@sawo.com", f"ben.{RUN}@customer.example", f"Re: {s5}", "We have received your request and will look into it.",
                now - timedelta(hours=1, minutes=30), ids(5), ids(4))
     # S7: agent2 answered 4 days ago; the customer has been silent since.
     s7 = f"Sauna heater quotation {RUN}"
-    smtp_send("cara@customer.example", "agent2@sawo.com", s7,
+    smtp_send(f"cara.{RUN}@customer.example", "agent2@sawo.com", s7,
               "Can you provide a quotation for a 9kW sauna heater? How much is delivery?", now - timedelta(days=5), ids(6))
-    agent_sent("agent2@sawo.com", "cara@customer.example", f"Re: {s7}", "Which voltage do you need, 230V or 400V?",
+    agent_sent("agent2@sawo.com", f"cara.{RUN}@customer.example", f"Re: {s7}", "Which voltage do you need, 230V or 400V?",
                now - timedelta(days=4), ids(7), ids(6))
     # S10: the same customer writes to both agents.
     s10 = f"Dealer inquiry {RUN}"
@@ -227,15 +238,15 @@ def main():
         smtp_send("dan@dealer.example", agent, s10, "We would like to become a dealer. Can you provide a price list?", now - timedelta(minutes=20), ids(n))
     # Q3: agent1 forwards an inquiry internally; the colleague answers in the thread.
     q3 = f"Warranty extension {RUN}"
-    smtp_send("eva@customer.example", "agent1@sawo.com", q3,
+    smtp_send(f"eva.{RUN}@customer.example", "agent1@sawo.com", q3,
               "Can you provide a quotation for a warranty extension? How much?", now - timedelta(minutes=30), ids(10))
     agent_sent("agent1@sawo.com", "service@sawo.com", f"Fwd: {q3}", "Can service check the warranty options?",
                now - timedelta(minutes=25), ids(11), ids(10))
     # S9: agent1 sends a solution; the inquiry is then confirmed resolved by the agent.
     s9 = f"Heater fault {RUN}"
-    smtp_send("finn@customer.example", "agent1@sawo.com", s9,
+    smtp_send(f"finn.{RUN}@customer.example", "agent1@sawo.com", s9,
               "I would like to request a quotation for a repair, my heater shows E3. How much?", now - timedelta(hours=1), ids(12))
-    agent_sent("agent1@sawo.com", "finn@customer.example", f"Re: {s9}", "E3 means the sensor; reset it. No repair is needed.",
+    agent_sent("agent1@sawo.com", f"finn.{RUN}@customer.example", f"Re: {s9}", "E3 means the sensor; reset it. No repair is needed.",
                now - timedelta(minutes=50), ids(13), ids(12))
 
     log("Waiting for intake, classification, Case creation and the Sent-folder sync...")
@@ -244,7 +255,7 @@ def main():
     smtp_send("service@sawo.com", "agent1@sawo.com", f"Re: Fwd: {q3}", "Option B applies: 3 extra years.",
               now + timedelta(minutes=1), ids(14), ids(11), f"{ids(10)} {ids(11)}")
     s5_reply = ids(5)
-    smtp_send("ben@customer.example", "agent2@sawo.com", f"Re: {s5}", "Any update? Still waiting.",
+    smtp_send(f"ben.{RUN}@customer.example", "agent2@sawo.com", f"Re: {s5}", "Any update? Still waiting.",
               datetime.now(timezone.utc), ids(15), s5_reply, f"{ids(4)} {ids(5)}")
 
     log("\nScenario 1 - legitimate inquiry")

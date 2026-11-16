@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { apiClient } from "../../api/client";
-import type { ReminderPolicyDto } from "../../api/types";
+import type { ClassificationProfileDto, ReminderPolicyDto } from "../../api/types";
 import { InfoTip, TipLabel } from "../../components/help/Tooltip";
+
+const EMPTY_GUID = "00000000-0000-0000-0000-000000000000";
+
+interface HolidayRow {
+  date: string;
+  label: string;
+}
 
 function timeSpanToHours(ts: string): number {
   const parts = ts.split(":");
@@ -32,6 +39,9 @@ interface FormState {
   excludeWeekends: boolean;
   timeZoneId: string;
   expirationDays: number | "";
+  classificationProfileId: string;
+  escalationThresholdReminderCount: number | null;
+  holidays: HolidayRow[];
 }
 
 const emptyForm: FormState = {
@@ -49,6 +59,9 @@ const emptyForm: FormState = {
   excludeWeekends: true,
   timeZoneId: "UTC",
   expirationDays: 3,
+  classificationProfileId: "",
+  escalationThresholdReminderCount: null,
+  holidays: [],
 };
 
 export default function ReminderPoliciesPage() {
@@ -58,12 +71,19 @@ export default function ReminderPoliciesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [showForm, setShowForm] = useState(false);
+  const [profiles, setProfiles] = useState<ClassificationProfileDto[]>([]);
 
   async function load() {
     setLoading(true);
     try {
       const res = await apiClient.get<ReminderPolicyDto[]>("/reminder-policies");
       setPolicies(res.data);
+      try {
+        const prof = await apiClient.get<ClassificationProfileDto[]>("/classification-profiles");
+        setProfiles(prof.data);
+      } catch {
+        setProfiles([]);
+      }
     } catch {
       setError("Failed to load Reminder Policies.");
     } finally {
@@ -97,6 +117,9 @@ export default function ReminderPoliciesPage() {
       excludeWeekends: p.excludeWeekends,
       timeZoneId: p.timeZoneId,
       expirationDays: p.expirationWindow ? Math.round(timeSpanToHours(p.expirationWindow) / 24) : "",
+      classificationProfileId: p.classificationProfileId ?? "",
+      escalationThresholdReminderCount: p.escalationThresholdReminderCount,
+      holidays: p.holidays.map((h) => ({ date: h.date, label: h.label ?? "" })),
     });
     setEditingId(p.id);
     setShowForm(true);
@@ -111,7 +134,7 @@ export default function ReminderPoliciesPage() {
       description: form.description || null,
       enabled: form.enabled,
       isDefault: form.isDefault,
-      classificationProfileId: null,
+      classificationProfileId: form.classificationProfileId || null,
       initialDelay: hoursToTimeSpan(form.initialDelayHours),
       reminderInterval: hoursToTimeSpan(form.reminderIntervalHours),
       maxReminders: form.maxReminders,
@@ -122,8 +145,10 @@ export default function ReminderPoliciesPage() {
       excludeWeekends: form.excludeWeekends,
       timeZoneId: form.timeZoneId,
       expirationWindow: form.expirationDays === "" ? null : hoursToTimeSpan(Number(form.expirationDays) * 24),
-      escalationThresholdReminderCount: null,
-      holidays: [],
+      escalationThresholdReminderCount: form.escalationThresholdReminderCount,
+      holidays: form.holidays
+        .filter((h) => h.date)
+        .map((h) => ({ id: EMPTY_GUID, date: h.date, label: h.label.trim() || null })),
     };
 
     try {
@@ -202,13 +227,17 @@ export default function ReminderPoliciesPage() {
                 {p.description && <div style={{ fontSize: 12, color: "var(--color-text-muted)" }}>{p.description}</div>}
               </td>
               <td style={tdStyle}>{p.enabled ? "Yes" : "No"}</td>
-              <td style={tdStyle}>{p.isDefault ? "Yes" : ""}</td>
+              <td style={tdStyle}>
+                {p.isDefault ? "Yes" : ""}
+                {p.classificationProfileName && <div style={{ fontSize: 12, color: "var(--color-text-muted)" }}>Profile: {p.classificationProfileName}</div>}
+              </td>
               <td style={tdStyle}>{timeSpanToHours(p.initialDelay)}h</td>
               <td style={tdStyle}>{timeSpanToHours(p.reminderInterval)}h</td>
               <td style={tdStyle}>{p.maxReminders}</td>
               <td style={tdStyle}>
                 {p.restrictToBusinessHours ? `${p.businessHoursStart.slice(0, 5)}-${p.businessHoursEnd.slice(0, 5)}` : "Any time"}
                 {p.excludeWeekends ? ", no weekends" : ""}
+                {p.holidays.length > 0 && `, ${p.holidays.length} holiday${p.holidays.length === 1 ? "" : "s"}`}
               </td>
               <td style={tdStyle}>
                 <button onClick={() => startEdit(p)} style={{ marginRight: 8 }} data-tip="Change this policy's timings and business hours.">Edit</button>
@@ -266,6 +295,15 @@ export default function ReminderPoliciesPage() {
             <input value={form.timeZoneId} onChange={(e) => setForm({ ...form, timeZoneId: e.target.value })} style={{ width: 160 }} />
           </div>
           <div>
+            <label><TipLabel tip="Only use this policy for Cases from mailboxes with this Classification Profile. Leave as 'All mailboxes' for a general policy.">Classification Profile</TipLabel></label><br />
+            <select value={form.classificationProfileId} onChange={(e) => setForm({ ...form, classificationProfileId: e.target.value })}>
+              <option value="">All mailboxes</option>
+              {profiles.map((pr) => (
+                <option key={pr.id} value={pr.id}>{pr.name}{pr.enabled ? "" : " (disabled)"}</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label><input type="checkbox" checked={form.restrictToBusinessHours}
               onChange={(e) => setForm({ ...form, restrictToBusinessHours: e.target.checked })} /> Restrict to business hours<InfoTip text="Only send reminders, and only count time, during the hours below." /></label>
           </div>
@@ -293,6 +331,26 @@ export default function ReminderPoliciesPage() {
             <label><input type="checkbox" checked={form.isDefault}
               onChange={(e) => setForm({ ...form, isDefault: e.target.checked })} /> Default policy<InfoTip text="Use this policy whenever no other is chosen. Its calendar is also used by Inquiry Supervision." /></label>
           </div>
+          <fieldset style={{ width: "100%", border: "1px solid var(--color-border, #ccc)", borderRadius: 6, padding: 12 }}>
+            <legend style={{ fontSize: 13 }}>
+              Holidays<InfoTip text="Days that do not count as business time: no reminders are sent and supervision deadlines pause. The default policy's holidays are the calendar Inquiry Supervision uses." />
+            </legend>
+            {form.holidays.length === 0 && (
+              <p style={{ fontSize: 12, color: "var(--color-text-muted)", margin: "0 0 8px" }}>No holidays.</p>
+            )}
+            {form.holidays.map((h, i) => (
+              <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                <input type="date" value={h.date} required
+                  onChange={(e) => setForm({ ...form, holidays: form.holidays.map((x, j) => (j === i ? { ...x, date: e.target.value } : x)) })} />
+                <input placeholder="Label (optional), e.g. Midsummer" value={h.label} style={{ width: 240 }}
+                  onChange={(e) => setForm({ ...form, holidays: form.holidays.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })} />
+                <button type="button" onClick={() => setForm({ ...form, holidays: form.holidays.filter((_, j) => j !== i) })}
+                  data-tip="Remove this holiday.">Remove</button>
+              </div>
+            ))}
+            <button type="button" onClick={() => setForm({ ...form, holidays: [...form.holidays, { date: "", label: "" }] })}
+              data-tip="Add a day that should not count as business time.">Add holiday</button>
+          </fieldset>
           <div style={{ width: "100%" }}>
             <button type="submit" style={{ marginRight: 8 }} data-tip="Save the policy.">Save</button>
             <button type="button" onClick={() => setShowForm(false)}>Cancel</button>

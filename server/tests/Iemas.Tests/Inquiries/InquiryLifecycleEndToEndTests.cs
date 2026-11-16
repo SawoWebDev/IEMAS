@@ -139,6 +139,34 @@ public class InquiryLifecycleEndToEndTests
         Assert.Equal(2, await h.Db.EscalationEvents.CountAsync(e => e.Outcome == EscalationOutcome.Executed && e.DeliveryResult == "Sent"));
     }
 
+    /// <summary>
+    /// Found in the live run: an overdue notice is stored as a Sent reminder, and the escalation
+    /// email counted it, saying "still unanswered after 2 reminder(s)" next to "Previous reminders: 3".
+    /// </summary>
+    [Fact]
+    public async Task S8b_EscalationEmail_DoesNotCountOverdueNoticeAsReminder()
+    {
+        using var h = new InquiryHarness(Agent1);
+        h.Receive(Agent1, Customer, "Request for quotation", "I would like to request a quotation. What is the price?", Monday0900, fromName: "Anna");
+        await h.RunAsync(Monday0900.AddMinutes(1));
+        await h.RunAsync(Day(0, 13, 0));
+        await h.RunAsync(Day(0, 15, 0));
+        await h.RunAsync(Day(0, 17, 0));
+
+        var c = await h.CaseAsync(Agent1, Customer);
+        h.Db.Reminders.Add(new Reminder
+        {
+            CaseId = c.Id, Trigger = ReminderTrigger.ResolutionOverdue, Status = ReminderStatus.Sent,
+            SequenceNumber = 99, ScheduledForUtc = Day(0, 16, 0), ExecutedAtUtc = Day(0, 16, 0),
+        });
+        await h.Db.SaveChangesAsync();
+
+        await h.RunAsync(Day(1, 10, 0));
+        var email = Assert.Single(h.ManagementEmail.Sent);
+        Assert.Contains("still unanswered after 2 reminder(s)", email.TextBody);
+        Assert.Contains("Previous reminders: 2 (", email.TextBody);
+    }
+
     // ---------------------------------------------------------------- Scenario 5
 
     [Fact]

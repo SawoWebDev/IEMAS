@@ -71,4 +71,35 @@ public class EscalationGroupServiceTests
 
         Assert.True(result.Succeeded);
     }
+
+    /// <summary>Editing a group's members in a new request must insert the new member rows, not try to update them.</summary>
+    [Fact]
+    public async Task UpdateAsync_InNewRequest_ReplacesMembers()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        Guid groupId, empA, empB, empC;
+        using (var db = TestDbContext.CreateNew(dbName))
+        {
+            var a = new Employee { FullName = "A", Email = "a@sawo.com" };
+            var b = new Employee { FullName = "B", Email = "b@sawo.com" };
+            var c = new Employee { FullName = "C", Email = "c@sawo.com" };
+            db.Employees.AddRange(a, b, c);
+            await db.SaveChangesAsync();
+            (empA, empB, empC) = (a.Id, b.Id, c.Id);
+            var created = await CreateService(db).CreateAsync(new SaveEscalationGroupRequest("Team", new[] { empA, empB }), CancellationToken.None);
+            groupId = created.Value!.Id;
+        }
+
+        using (var db = TestDbContext.CreateNew(dbName))
+        {
+            var updated = await CreateService(db).UpdateAsync(groupId, new SaveEscalationGroupRequest("Team", new[] { empB, empC }), CancellationToken.None);
+            Assert.True(updated.Succeeded, updated.Error);
+        }
+
+        using (var db = TestDbContext.CreateNew(dbName))
+        {
+            var members = await db.EscalationGroupMembers.Where(m => m.EscalationGroupId == groupId).Select(m => m.EmployeeId).ToListAsync();
+            Assert.Equal(new[] { empB, empC }.OrderBy(x => x), members.OrderBy(x => x));
+        }
+    }
 }

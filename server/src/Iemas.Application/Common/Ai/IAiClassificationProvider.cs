@@ -43,7 +43,9 @@ public record ClassificationResponse(
     double Confidence,
     string Summary,
     /// <summary>Genuine business email from a real sender (not spam, phishing, marketing or an automated notice). Null if the model did not say.</summary>
-    bool? Legitimate = null);
+    bool? Legitimate = null,
+    /// <summary>What sort of email this is (customer_inquiry, dealer_inquiry, business_correspondence, vendor_pitch, automated, spam, other). Null if the model did not say; only the two inquiry kinds can become a Case.</summary>
+    string? Kind = null);
 
 /// <summary>
 /// Phase 10 hardening — lets the provider (which alone knows whether a failure was an HTTP status,

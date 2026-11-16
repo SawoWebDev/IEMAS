@@ -10,6 +10,11 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- SAWO logo for the footer of branded emails (same picture as the SAWO Playbook emails). -->
+    <EmbeddedResource Include="Escalations\Assets\sawo-logo.png" LogicalName="Iemas.Application.sawo-logo.png" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

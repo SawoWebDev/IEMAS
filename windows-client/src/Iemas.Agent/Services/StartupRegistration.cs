@@ -8,6 +8,9 @@ public static class StartupRegistration
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "IemasAgent";
 
+    /// <summary>Passed when Windows starts the Agent, so it goes straight to the tray instead of opening its window.</summary>
+    public const string BackgroundArgument = "--background";
+
     public static void Apply(bool enabled)
     {
         using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true);
@@ -17,7 +20,7 @@ public static class StartupRegistration
         {
             // Assembly.Location is empty in a single-file .exe, so fall back to the app folder instead.
             var exePath = Environment.ProcessPath ?? System.IO.Path.Combine(AppContext.BaseDirectory, "IemasAgent.exe");
-            key.SetValue(ValueName, $"\"{exePath}\"");
+            key.SetValue(ValueName, $"\"{exePath}\" {BackgroundArgument}");
         }
         else
         {

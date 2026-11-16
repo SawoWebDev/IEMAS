@@ -28,33 +28,33 @@ import live_e2e as base  # the same mail/API helpers
 
 CASES = {
     "A": dict(
-        who="ai.a@customer.example",
+        who=f"ai.a.{base.RUN}@customer.example",
         inquiry="My heater shows error E3 and will not start. Can you help me?",
         agent=["We have received your message and will look into it."],
         customer_after=None, expect={"AcknowledgedOnly", "InProgress"}, expect_stage={"InitialResponseReceived"},
     ),
     "B": dict(
-        who="ai.b@customer.example",
+        who=f"ai.b.{base.RUN}@customer.example",
         inquiry="My heater shows error E3 and will not start. Can you help me?",
         agent=["E3 is usually the temperature sensor. I am checking which sensor your model uses and will come back to you with the exact steps."],
         customer_after=None, expect={"InProgress", "AcknowledgedOnly"}, expect_stage={"InitialResponseReceived"},
     ),
     "C": dict(
-        who="ai.c@customer.example",
+        who=f"ai.c.{base.RUN}@customer.example",
         inquiry="My heater shows error E3 and will not start. Can you help me?",
         agent=["E3 means the sensor lost contact. Switch the heater off for 10 minutes, then reseat the grey sensor plug behind the panel and switch it on again. That clears the error."],
         customer_after="I did exactly that and it works again. Thank you very much, problem solved!",
         expect={"AppearsResolved"}, expect_stage={"PotentiallyResolved"},
     ),
     "D": dict(
-        who="ai.d@customer.example",
+        who=f"ai.d.{base.RUN}@customer.example",
         inquiry="My heater shows error E3 and will not start. Can you help me?",
         agent=["Please reseat the grey sensor plug behind the panel and restart it."],
         customer_after="I reseated it, but now it shows error E7 instead. What does E7 mean and what should I do next?",
         expect={"CustomerWaiting"}, expect_stage={"CustomerFollowUpReceived"},
     ),
     "E": dict(
-        who="ai.e@customer.example",
+        who=f"ai.e.{base.RUN}@customer.example",
         inquiry="My heater shows error E3 and will not start. Can you help me?",
         agent=["Please reseat the grey sensor plug behind the panel and restart it."],
         customer_after="Ok. I will see.",

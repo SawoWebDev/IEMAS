@@ -48,7 +48,21 @@ public class SmtpEscalationEmailSender : IEscalationEmailSender
             mime.From.Add(new MailboxAddress(account.DisplayName ?? "IEMAS", account.EmailAddress));
             foreach (var to in email.To) mime.To.Add(new MailboxAddress(to.Name, to.Address));
             mime.Subject = email.Subject;
-            mime.Body = new TextPart("plain") { Text = email.TextBody };
+            if (string.IsNullOrEmpty(email.HtmlBody))
+            {
+                mime.Body = new TextPart("plain") { Text = email.TextBody };
+            }
+            else
+            {
+                // multipart/alternative (plain text + HTML); pictures are inline parts referenced as cid:.
+                var builder = new BodyBuilder { TextBody = email.TextBody, HtmlBody = email.HtmlBody };
+                foreach (var image in email.InlineImages ?? Array.Empty<InlineImage>())
+                {
+                    var part = builder.LinkedResources.Add(image.ContentId, image.Content, ContentType.Parse(image.ContentType));
+                    part.ContentId = image.ContentId;
+                }
+                mime.Body = builder.ToMessageBody();
+            }
             mime.Headers.Add("Auto-Submitted", "auto-generated");
             mime.MessageId = MimeKit.Utils.MimeUtils.GenerateMessageId(account.EmailAddress.Split('@').Last());
 

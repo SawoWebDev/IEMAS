@@ -18,11 +18,27 @@ public class EscalationsController : ControllerBase
 {
     private readonly EscalationQueryService _queryService;
     private readonly EscalationService _escalationService;
+    private readonly EscalationTestEmailService _testEmailService;
 
-    public EscalationsController(EscalationQueryService queryService, EscalationService escalationService)
+    public EscalationsController(EscalationQueryService queryService, EscalationService escalationService, EscalationTestEmailService testEmailService)
     {
         _queryService = queryService;
         _escalationService = escalationService;
+        _testEmailService = testEmailService;
+    }
+
+    /// <summary>The escalation email as it is sent (sample data, same composer), for the CMS preview. Sends nothing.</summary>
+    [HttpGet("email-preview")]
+    public async Task<ActionResult<EscalationEmailPreview>> EmailPreview([FromQuery] int? level, CancellationToken cancellationToken)
+        => Ok(await _testEmailService.PreviewAsync(level ?? 1, cancellationToken));
+
+    /// <summary>Sends one sample escalation email, marked [TEST], to the agent's level-1 recipient (their supervisor).</summary>
+    [HttpPost("test-email")]
+    [Authorize(Policy = "RequireAdministrator")]
+    public async Task<ActionResult<TestEscalationEmailResult>> SendTestEmail([FromBody] SendTestEscalationEmailRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _testEmailService.SendAsync(request, cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : BadRequest(new { message = result.Error });
     }
 
     [HttpGet]

@@ -238,6 +238,24 @@ public class OpenRouterClassificationProvider : IAiClassificationProvider
         sales pitches are also not "legitimate" for this purpose. Unless a profile rule says
         otherwise, judge relevance this way.
 
+        "email_kind": what the email IS. A Case is opened ONLY for an inquiry, so be strict. One of:
+          "customer_inquiry"  - an end customer, installer, project or prospect asking us about our products, prices, quotes, orders, delivery, parts, support or a complaint;
+          "dealer_inquiry"    - a business wanting to buy, resell, distribute or represent OUR products;
+          "business_correspondence" - everyday business mail that is NOT an inquiry about our products:
+              trade-show / exhibition / event organisers (booth numbers, schedules, passes, invoices,
+              registration), suppliers and vendors we already work with, agencies, freight/logistics and
+              customs, banks/accounting/legal, partners, colleagues, replies inside our own marketing or
+              internal threads, meeting scheduling;
+          "vendor_pitch"      - someone selling their products or services to us;
+          "automated"         - system notifications, receipts, newsletters, alerts, out-of-office, delivery failures;
+          "spam"              - spam, phishing or scams;
+          "other"             - anything else.
+        An email that merely mentions our company, our products or our own campaign (for example a quoted
+        newsletter inside a reply) is NOT a customer inquiry. Someone correcting or confirming details of
+        an event, booking or order that WE placed is business_correspondence, even if a reply is expected.
+        When in doubt between customer_inquiry and business_correspondence, choose business_correspondence
+        and lower your confidence.
+
         "category": a short label (e.g. "Product inquiry", "Dealer / Reseller", "Support",
         "Complaint", "Vendor pitch", "Marketing", "Automated"); use the profile's categories when given.
 
@@ -246,10 +264,13 @@ public class OpenRouterClassificationProvider : IAiClassificationProvider
           phishing, marketing, an automated notification or a test message?
         - "response_expected": does the sender expect a reply from us?
 
+        "relevant" must be true ONLY when email_kind is customer_inquiry or dealer_inquiry.
+
         Respond with ONLY a JSON object matching this exact shape, no other text:
         {
           "relevant": boolean,
           "legitimate": boolean,
+          "email_kind": "customer_inquiry" | "dealer_inquiry" | "business_correspondence" | "vendor_pitch" | "automated" | "spam" | "other",
           "category": string,
           "action_required": boolean,
           "response_expected": boolean,
@@ -323,6 +344,9 @@ public class OpenRouterClassificationProvider : IAiClassificationProvider
             bool? legitimate = root.TryGetProperty("legitimate", out var legitEl) && legitEl.ValueKind is JsonValueKind.True or JsonValueKind.False
                 ? legitEl.ValueKind == JsonValueKind.True
                 : null;
+            var kind = root.TryGetProperty("email_kind", out var kindEl) && kindEl.ValueKind == JsonValueKind.String
+                ? kindEl.GetString()?.Trim().ToLowerInvariant()
+                : null;
 
             // The category is only a display label; a model that leaves it empty (seen with Claude Haiku when no
             // profile categories are configured) still gave a usable relevance/confidence answer. Don't discard it.
@@ -346,7 +370,8 @@ public class OpenRouterClassificationProvider : IAiClassificationProvider
                 priority,
                 confidence,
                 summary ?? string.Empty,
-                legitimate);
+                legitimate,
+                kind);
         }
         catch (JsonException ex)
         {

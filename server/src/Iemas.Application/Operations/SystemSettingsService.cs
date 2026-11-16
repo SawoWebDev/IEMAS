@@ -53,6 +53,7 @@ public static class SystemSettingKeys
 {
     public const string OrganizationName = "general.organization_name";
     public const string DefaultTimeZone = "general.default_time_zone";
+    public const string CmsBaseUrl = "general.cms_base_url";
     public const string PasswordMinLength = "security.password_min_length";
     public const string IgnoredSenders = "email.ignored_senders";
     public const string LegitimacyRules = "ai.legitimacy_rules";
@@ -242,6 +243,9 @@ public class SystemSettingsService
             "Shown in the CMS header.", SettingValueType.Text, "IEMAS", 1, 100),
         new(SystemSettingKeys.DefaultTimeZone, "General", "Default time zone",
             "IANA time zone (e.g. Asia/Manila) used to display dates in notification messages.", SettingValueType.TimeZone, "UTC"),
+        new(SystemSettingKeys.CmsBaseUrl, "General", "CMS web address",
+            "The address people use to open this CMS, e.g. http://172.16.2.68:8191. Escalation emails link to the Case with it. Leave blank for no link.",
+            SettingValueType.Text, "", 0, 200),
         new(SystemSettingKeys.LegitimacyRules, "Email rules", "Counts as legitimate",
             "Signs of a genuine business email.", SettingValueType.RuleList, SystemSettingDefaults.LegitimacyRules, 0, 4000),
         new(SystemSettingKeys.NotLegitimateRules, "Email rules", "Not legitimate",

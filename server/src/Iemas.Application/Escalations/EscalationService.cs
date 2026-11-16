@@ -97,12 +97,12 @@ public class EscalationService
         var owner = targetCase.OwnerEmployeeId is Guid ownerId
             ? await _db.Employees.AsNoTracking().FirstOrDefaultAsync(e => e.Id == ownerId, cancellationToken)
             : null;
-        var reminders = await _db.Reminders.AsNoTracking()
-            .Where(r => r.CaseId == targetCase.Id && r.Status == ReminderStatus.Sent && r.ExecutedAtUtc != null)
-            .OrderBy(r => r.ExecutedAtUtc).Select(r => r.ExecutedAtUtc!.Value).ToListAsync(cancellationToken);
+        var reminders = await SentReminderTimesAsync(targetCase.Id, cancellationToken);
         var zone = await SystemSettingsService.GetDefaultTimeZoneAsync(_db, cancellationToken);
         var email = EscalationEmailComposer.Compose(
-            new EscalationEmailContext(targetCase, owner?.FullName, owner?.Email, level.Level, reason, reminders, zone, now),
+            new EscalationEmailContext(targetCase, owner?.FullName, owner?.Email, level.Level, reason, reminders, zone, now,
+                await SystemSettingsService.GetValueAsync(_db, SystemSettingKeys.OrganizationName, cancellationToken),
+                await SystemSettingsService.GetValueAsync(_db, SystemSettingKeys.CmsBaseUrl, cancellationToken)),
             recipients.Select(r => new EmailRecipient(r.Name, r.Email)).ToList());
 
         var delivery = _emailSender is null
@@ -166,12 +166,12 @@ public class EscalationService
 
             var recipients = await ResolveRecipientListAsync(targetCase, level, cancellationToken);
             var owner = targetCase.OwnerEmployeeId is Guid ownerId ? await _db.Employees.AsNoTracking().FirstOrDefaultAsync(x => x.Id == ownerId, cancellationToken) : null;
-            var reminders = await _db.Reminders.AsNoTracking()
-                .Where(r => r.CaseId == targetCase.Id && r.Status == ReminderStatus.Sent && r.ExecutedAtUtc != null)
-                .OrderBy(r => r.ExecutedAtUtc).Select(r => r.ExecutedAtUtc!.Value).ToListAsync(cancellationToken);
+            var reminders = await SentReminderTimesAsync(targetCase.Id, cancellationToken);
             var zone = await SystemSettingsService.GetDefaultTimeZoneAsync(_db, cancellationToken);
             var result = await _emailSender.SendAsync(EscalationEmailComposer.Compose(
-                new EscalationEmailContext(targetCase, owner?.FullName, owner?.Email, e.Level, e.Trigger, reminders, zone, now),
+                new EscalationEmailContext(targetCase, owner?.FullName, owner?.Email, e.Level, e.Trigger, reminders, zone, now,
+                    await SystemSettingsService.GetValueAsync(_db, SystemSettingKeys.OrganizationName, cancellationToken),
+                    await SystemSettingsService.GetValueAsync(_db, SystemSettingKeys.CmsBaseUrl, cancellationToken)),
                 recipients.Select(r => new EmailRecipient(r.Name, r.Email)).ToList()), cancellationToken);
             if (result.Sent)
             {
@@ -628,4 +628,15 @@ public class EscalationService
 
         return outcome;
     }
+
+    /// <summary>
+    /// When the agent was reminded, for the escalation email's "Previous reminders" line. Overdue
+    /// notices are stored as reminders too, but they are not reminders to reply; counting them made
+    /// the email say "still unanswered after 2 reminder(s)" next to "Previous reminders: 3".
+    /// </summary>
+    private Task<List<DateTimeOffset>> SentReminderTimesAsync(Guid caseId, CancellationToken cancellationToken) =>
+        _db.Reminders.AsNoTracking()
+            .Where(r => r.CaseId == caseId && r.Status == ReminderStatus.Sent && r.ExecutedAtUtc != null
+                && r.Trigger != ReminderTrigger.ResolutionOverdue)
+            .OrderBy(r => r.ExecutedAtUtc).Select(r => r.ExecutedAtUtc!.Value).ToListAsync(cancellationToken);
 }

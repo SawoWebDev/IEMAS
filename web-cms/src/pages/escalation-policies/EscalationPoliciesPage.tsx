@@ -13,6 +13,7 @@ import type {
 } from "../../api/types";
 import { CLASSIFICATION_PRIORITY_LABELS, ESCALATION_RECIPIENT_TYPE_LABELS } from "../../api/types";
 import { InfoTip, TipLabel } from "../../components/help/Tooltip";
+import EscalationEmailPreview from "./EscalationEmailPreview";
 
 function timeSpanToHours(ts: string): number {
   // .NET serializes TimeSpan as "d.hh:mm:ss" for durations >= 1 day, "hh:mm:ss" otherwise.
@@ -281,8 +282,9 @@ export default function EscalationPoliciesPage() {
       <h1>Escalation Policies</h1>
       <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
         When a Case still has no reply after its reminders: after how many reminders, the grace period, and up to 3
-        levels with a recipient each. The Case is marked Escalated and the owner gets an Escalation pop-up; the
-        recipient is recorded in Escalation History but is not contacted automatically yet. One policy is the default.
+        levels with a recipient each. The Case is marked Escalated, the owner gets an Escalation pop-up, and each
+        recipient is sent an email from the Outbound Email account (see the preview below). Every escalation is
+        recorded in Escalation History. One policy is the default.
       </p>
 
       {error && <div className="form-error">{error}</div>}
@@ -488,6 +490,8 @@ export default function EscalationPoliciesPage() {
           </div>
         </form>
       )}
+
+      <EscalationEmailPreview />
     </div>
   );
 }

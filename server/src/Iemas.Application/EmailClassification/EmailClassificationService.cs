@@ -369,7 +369,8 @@ public class EmailClassificationService
             response.Relevant, response.Confidence,
             profile?.HighConfidenceThreshold, profile?.MediumConfidenceThreshold, profile?.TreatMediumConfidenceAsReviewRequired,
             response.Legitimate, response.ResponseExpected,
-            await SystemSettingsService.GetBoolAsync(_db, SystemSettingKeys.RequireResponseForCase, cancellationToken));
+            await SystemSettingsService.GetBoolAsync(_db, SystemSettingKeys.RequireResponseForCase, cancellationToken),
+            response.Kind);
 
         var classification = await GetOrCreateClassificationAsync(message.Id, cancellationToken);
         classification.ClassificationProfileId = profile?.Id;

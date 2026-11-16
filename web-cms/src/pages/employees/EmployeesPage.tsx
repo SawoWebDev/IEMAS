@@ -115,6 +115,23 @@ export default function EmployeesPage() {
     }
   }
 
+  async function handleTestEscalation(emp: EmployeeDto) {
+    if (!window.confirm(`Send a sample escalation email, marked [TEST], to ${emp.supervisorEmployeeName} (${emp.fullName}'s supervisor)? No Case is changed.`)) return;
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await apiClient.post<{ sent: boolean; recipientName: string; recipientEmail: string; error: string | null }>(
+        "/escalations/test-email", { agentEmployeeId: emp.id });
+      if (res.data.sent) {
+        setNotice(`Test escalation email sent to ${res.data.recipientName} <${res.data.recipientEmail}>.`);
+      } else {
+        setError(`The test email could not be sent: ${res.data.error ?? "unknown error"}. Check Outbound Email.`);
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message ?? "Failed to send the test escalation email.");
+    }
+  }
+
   if (loading) return <p>Loading...</p>;
 
   return (
@@ -233,6 +250,15 @@ export default function EmployeesPage() {
                   <button onClick={() => startEdit(emp)} disabled={editingId !== null} data-tip="Change name, email, department or supervisor.">Edit</button>
                   <button onClick={() => handleToggleActive(emp)} style={{ minWidth: 80 }} data-tip="Deactivate someone who left: they get no new work, history is kept. Activate brings them back.">
                     {emp.isActive ? "Deactivate" : "Activate"}
+                  </button>
+                  <button
+                    onClick={() => handleTestEscalation(emp)}
+                    disabled={!emp.supervisorEmployeeName}
+                    data-tip={emp.supervisorEmployeeName
+                      ? `Send a sample escalation email, marked [TEST], to ${emp.supervisorEmployeeName}. Checks that escalations for this employee reach their supervisor.`
+                      : "Set a supervisor first: level-1 escalations go to the supervisor."}
+                  >
+                    Test escalation
                   </button>
                   <button
                     className="btn-danger"

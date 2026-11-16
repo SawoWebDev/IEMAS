@@ -32,7 +32,8 @@ public static class ClassificationDecisionPolicy
         bool? treatMediumAsReviewRequired,
         bool? legitimate = null,
         bool responseExpected = true,
-        bool requireResponseForCase = false)
+        bool requireResponseForCase = false,
+        string? kind = null)
     {
         var high = highThreshold ?? DefaultHighThreshold;
         var medium = mediumThreshold ?? DefaultMediumThreshold;
@@ -53,6 +54,14 @@ public static class ClassificationDecisionPolicy
         {
             return new DecisionPolicyResult(band, ImportanceDecision.ReviewRequired,
                 $"Low confidence (confidence {confidence:P0} < {medium:P0}); needs a person to review it.");
+        }
+
+        // Only a customer or dealer inquiry becomes a Case. Event organisers, suppliers, agencies,
+        // automated notices and the like are stored and visible, but never open a Case.
+        if (!string.IsNullOrWhiteSpace(kind) && kind is not ("customer_inquiry" or "dealer_inquiry"))
+        {
+            return new DecisionPolicyResult(band, ImportanceDecision.NotImportant,
+                $"The AI judged this as \"{kind.Replace('_', ' ')}\", not a customer or dealer inquiry; stored without creating a Case.");
         }
 
         if (legitimate == false)

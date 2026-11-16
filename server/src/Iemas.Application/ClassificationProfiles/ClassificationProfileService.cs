@@ -228,7 +228,8 @@ public class ClassificationProfileService
             attempt.Response.Relevant, attempt.Response.Confidence,
             profile?.HighConfidenceThreshold, profile?.MediumConfidenceThreshold, profile?.TreatMediumConfidenceAsReviewRequired,
             attempt.Response.Legitimate, attempt.Response.ResponseExpected,
-            await Operations.SystemSettingsService.GetBoolAsync(_db, Operations.SystemSettingKeys.RequireResponseForCase, cancellationToken));
+            await Operations.SystemSettingsService.GetBoolAsync(_db, Operations.SystemSettingKeys.RequireResponseForCase, cancellationToken),
+            attempt.Response.Kind);
 
         return Result<TestClassificationResult>.Success(new TestClassificationResult(
             attempt.Response.Relevant, attempt.Response.Category, attempt.Response.ActionRequired,

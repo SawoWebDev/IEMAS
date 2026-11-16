@@ -100,6 +100,61 @@ public class ReminderPolicyServiceTests
         Assert.Equal("Renamed", updated.Value!.Name);
     }
 
+    /// <summary>
+    /// The CMS saves the whole holiday list on every edit. In a new request the policy is loaded
+    /// fresh, and new holiday rows must be inserted (they were previously sent as UPDATEs of rows that
+    /// did not exist, and the save failed with a misleading "name already exists").
+    /// </summary>
+    [Fact]
+    public async Task UpdateAsync_InNewRequest_ReplacesHolidays()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        Guid id;
+        using (var db = TestDbContext.CreateNew(dbName))
+        {
+            var created = await CreateService(db).CreateAsync(CreateRequest(holidays: new List<ReminderPolicyHolidayDto>
+            {
+                new(Guid.Empty, new DateOnly(2026, 12, 24), "Christmas Eve"),
+                new(Guid.Empty, new DateOnly(2026, 12, 25), "Christmas"),
+            }), CancellationToken.None);
+            id = created.Value!.Id;
+        }
+
+        using (var db = TestDbContext.CreateNew(dbName))
+        {
+            var updated = await CreateService(db).UpdateAsync(id, CreateRequest(holidays: new List<ReminderPolicyHolidayDto>
+            {
+                new(Guid.Empty, new DateOnly(2026, 12, 25), "Christmas"),
+                new(Guid.Empty, new DateOnly(2027, 1, 1), "New Year"),
+            }), CancellationToken.None);
+
+            Assert.True(updated.Succeeded, updated.Error);
+        }
+
+        using (var db = TestDbContext.CreateNew(dbName))
+        {
+            var dates = await db.Set<ReminderPolicyHoliday>().Where(h => h.ReminderPolicyId == id).OrderBy(h => h.Date).Select(h => h.Date).ToListAsync();
+            Assert.Equal(new[] { new DateOnly(2026, 12, 25), new DateOnly(2027, 1, 1) }, dates);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateAsync_DuplicateHolidayDate_FailsWithClearMessage()
+    {
+        using var db = TestDbContext.CreateNew();
+        var service = CreateService(db);
+        var created = await service.CreateAsync(CreateRequest(), CancellationToken.None);
+
+        var result = await service.UpdateAsync(created.Value!.Id, CreateRequest(holidays: new List<ReminderPolicyHolidayDto>
+        {
+            new(Guid.Empty, new DateOnly(2026, 12, 25), "Christmas"),
+            new(Guid.Empty, new DateOnly(2026, 12, 25), "Again"),
+        }), CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("2026-12-25", result.Error);
+    }
+
     [Fact]
     public async Task UpdateAsync_UnknownId_Fails()
     {

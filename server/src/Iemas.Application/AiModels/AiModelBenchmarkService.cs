@@ -136,7 +136,7 @@ public class AiModelBenchmarkService
             }
 
             var r = attempt.Response;
-            var decision = ClassificationDecisionPolicy.Decide(r.Relevant, r.Confidence, null, null, null, r.Legitimate, r.ResponseExpected, requireResponse).Decision;
+            var decision = ClassificationDecisionPolicy.Decide(r.Relevant, r.Confidence, null, null, null, r.Legitimate, r.ResponseExpected, requireResponse, r.Kind).Decision;
             var expected = sample.IsInquiry ? ImportanceDecision.Important : ImportanceDecision.NotImportant;
             if (decision == expected) correct++;
             else
