@@ -24,6 +24,9 @@ interface Availability {
 }
 
 const EVERYONE = "";
+// The installer does not expire and has no PC limit; an administrator can still withdraw it below.
+const NO_EXPIRY_DAYS = 36500;
+const NO_LIMIT_PCS = 100000;
 
 /**
  * One-click installer for employees' PCs: a zip with the Agent, Install-IEMAS-Agent.bat and a setup file that
@@ -37,10 +40,7 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
 
   const [forEmail, setForEmail] = useState(EVERYONE);
   const [serverUrl, setServerUrl] = useState(window.location.origin);
-  const [allowSelfSigned, setAllowSelfSigned] = useState(window.location.protocol === "https:");
-  const [validDays, setValidDays] = useState(7);
-  const [maxUses, setMaxUses] = useState(25);
-  const [busy, setBusy] = useState(false);
+    const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,7 +72,6 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
 
   function choose(email: string) {
     setForEmail(email);
-    setMaxUses(email === EVERYONE ? 25 : 2);
   }
 
   async function download() {
@@ -82,7 +81,7 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
     try {
       const res = await apiClient.post(
         "/agent-installers/package",
-        { emailAddress: forEmail || null, serverUrl, allowSelfSignedCertificate: allowSelfSigned, validDays, maxUses },
+        { emailAddress: forEmail || null, serverUrl, allowSelfSignedCertificate: serverUrl.trim().toLowerCase().startsWith("https:"), validDays: NO_EXPIRY_DAYS, maxUses: NO_LIMIT_PCS },
         { responseType: "blob" },
       );
       const who = forEmail ? forEmail.split("@")[0] : "everyone";
@@ -167,26 +166,12 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
               "localhost" only works on this PC. Use the server's network address, for example https://172.16.2.68:8443.
             </div>
           )}
-          <label style={{ ...labelStyle, flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <input type="checkbox" id="installer-selfsigned" checked={allowSelfSigned} onChange={(e) => setAllowSelfSigned(e.target.checked)} />
-            <span>Server uses its own certificate (an IP address, no public domain)</span>
-          </label>
-          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-            <label style={labelStyle}>
-              <span>Valid for (days)<InfoTip text="After this the installer no longer connects PCs automatically; they then wait for approval below." /></span>
-              <input id="installer-days" type="number" min={1} max={90} value={validDays} onChange={(e) => setValidDays(Number(e.target.value))} style={{ width: 110 }} />
-            </label>
-            <label style={labelStyle}>
-              <span>Number of PCs<InfoTip text="How many PCs the installer may connect. Reinstalling a PC counts again." /></span>
-              <input id="installer-uses" type="number" min={1} max={500} value={maxUses} onChange={(e) => setMaxUses(Number(e.target.value))} style={{ width: 110 }} />
-            </label>
-          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <button className="btn-primary" onClick={download} disabled={busy || !serverUrl.trim()}>
               {busy ? "Preparing..." : "Download zip"}
             </button>
             <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>
-              About 25 MB. Treat it like a password: anyone with it can connect a PC until it expires.
+              About 25 MB. Treat it like a password: anyone with it can connect a PC until you withdraw it.
             </span>
           </div>
         </div>
@@ -211,8 +196,8 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
                 <tr key={k.id}>
                   <td>{k.emailAddress ? `${k.ownerName ?? ""} (${k.emailAddress})` : "Everyone"}</td>
                   <td>{fmt(k.createdAt)}{k.createdBy ? ` · ${k.createdBy}` : ""}</td>
-                  <td>{fmt(k.expiresAt)}</td>
-                  <td>{k.useCount} of {k.maxUses}</td>
+                  <td>{k.expiresAt && new Date(k.expiresAt).getFullYear() > 2100 ? "Never" : fmt(k.expiresAt)}</td>
+                  <td>{k.useCount}{k.maxUses >= NO_LIMIT_PCS ? "" : ` of ${k.maxUses}`}</td>
                   <td>{k.revokedAt ? "Withdrawn" : k.usable ? "Usable" : new Date(k.expiresAt) < new Date() ? "Expired" : "Used up"}</td>
                   <td>
                     {k.usable && (

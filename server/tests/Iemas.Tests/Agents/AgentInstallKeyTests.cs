@@ -135,9 +135,9 @@ public class AgentInstallKeyTests
 
     [Theory]
     [InlineData(0, 3)]
-    [InlineData(91, 3)]
+    [InlineData(36501, 3)]
     [InlineData(7, 0)]
-    [InlineData(7, 501)]
+    [InlineData(7, 100001)]
     public async Task OutOfRangeLimits_AreRefused(int days, int uses)
     {
         var (db, _) = await SeedAsync();

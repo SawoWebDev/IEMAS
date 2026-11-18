@@ -14,8 +14,8 @@ namespace Iemas.Application.Agents;
 /// </summary>
 public class AgentInstallKeyService
 {
-    public const int MaxValidDays = 90;
-    public const int MaxUsesLimit = 500;
+    public const int MaxValidDays = 36500;
+    public const int MaxUsesLimit = 100000;
 
     private readonly IAppDbContext _db;
     private readonly IAuditService _auditService;
