@@ -8,7 +8,7 @@ public sealed record CaseStatusInfo(string Label, string Foreground, string Back
 public static class CaseStatusText
 {
     private const string ReplyHint =
-        "Reply to the customer from your mailbox, by answering their email. IEMAS finds your reply in the Sent folder by itself (within about 5 minutes).";
+        "Reply to the customer from your mailbox, by answering their email. IEMAS finds your reply in the Sent folder by itself (within about 2 minutes).";
 
     public static CaseStatusInfo For(CaseDto c)
     {

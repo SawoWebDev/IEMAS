@@ -392,8 +392,14 @@ Code and tests changed on branch `feature/inquiry-supervision`. This section rec
 - The escalation unique index is created only if existing data has no duplicates.
 - Job-monitoring history is in memory and is lost on restart.
 - Analytics uses wall-clock time, not business hours.
-- The new prompts have not been validated against a live model.
-- The Windows Agent GUI is still untested by automation.
-- **A live re-run of `live-test/live_simulation.py` is needed** to confirm the fixes above end to end.
+- The Windows Agent GUI was driven once through UI Automation on Windows 11 (register, settings, approval, live list, pop-ups, inquiry window) but has no automated test suite.
+- Before go-live an administrator must set real business hours, time zone and holidays on the default Reminder Policy (the Setup Checklist flags it).
 
-**Still not production-ready until the live re-run and the real-AI validation are done.**
+### Live re-run (2026-11-18)
+- `live-test/live_simulation.py` against the rebuilt stack with the real OpenRouter models (qwen3-30b-a3b-instruct, fallback mistral-small-3.2): **run 4 41/42** (the one failure was the test's own wrong expectation about the review queue, since corrected), **run 5 42/42** on the code merged to `main`.
+- Found and fixed during these runs: agent's final reply lost when confirmed before the Sent-folder sync; AI calling a case resolved when the agent's last message asked the customer a question; escalation email failing entirely when one recipient was refused; Sent-folder sync every 5 → 2 minutes.
+- Settings restored after each run (test clock off, real accounts active).
+
+### Rollout
+- Illustrated deployment and first-use guide with an alert simulator: `deploy/rollout-guide/index.html` (screenshots from the live test system).
+- Ready-to-copy Agent: `windows-client/agent-release/IemasAgent.exe` (1.1.1, needs the .NET 8 Desktop Runtime).

@@ -77,7 +77,7 @@ export default function ReplyVerificationPage() {
   }
 
   const stages: Stage[] = overview ? [
-    { label: "Not checked yet", count: overview.awaitingFirstCheck, hint: "new Cases, first check within 5 min", filter: "AwaitingReply", help: "New Cases whose Sent folder has not been looked at yet. The first check happens within 5 minutes." },
+    { label: "Not checked yet", count: overview.awaitingFirstCheck, hint: "new Cases, first check within 2 min", filter: "AwaitingReply", help: "New Cases whose Sent folder has not been looked at yet. The first check happens within 2 minutes." },
     { label: "No reply yet", count: overview.noReplyYet, hint: "Sent folder checked — nothing to the customer; reminders continue", filter: "NoReplyFound", tone: overview.noReplyYet > 0 ? "warn" : undefined, help: "The Sent folder was checked and nothing has been sent to the customer yet. Reminders keep going to the owner until a reply appears." },
     { label: "Reply found", count: overview.replyFound, hint: "reply confirmed in Sent — reminders stop", filter: "Replied", help: "A real reply to the customer was found in the Sent folder. The no-reply reminders for this Case stop." },
   ] : [];
@@ -92,7 +92,7 @@ export default function ReplyVerificationPage() {
         <h1>Reply Verification</h1>
         <p style={mutedStyle}>
           Did the employee really reply to the customer? IEMAS looks in each mailbox's <strong>Sent</strong> folder for a reply
-          to every open Case, every 5 minutes, until one is found. Clicking “Already replied” on the PC is only a claim until
+          to every open Case, every 2 minutes, until one is found. Clicking “Already replied” on the PC is only a claim until
           the reply is found here. Once found, reminders and escalation stop for that Case.
         </p>
         {error && <div className="form-error">{error}</div>}
@@ -146,7 +146,7 @@ export default function ReplyVerificationPage() {
           <div>
             <h2 style={sectionTitle}>Check now</h2>
             <p style={mutedStyle}>
-              Runs by itself every 5 minutes. Check Now looks in the Sent folders immediately (up to 100 Cases, least recently
+              Runs by itself every 2 minutes. Check Now looks in the Sent folders immediately (up to 100 Cases, least recently
               checked first) — useful right after an employee says they replied.
             </p>
           </div>

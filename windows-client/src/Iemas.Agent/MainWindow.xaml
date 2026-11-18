@@ -168,7 +168,7 @@
                             <TextBlock Style="{StaticResource HelpText}" Text="1. IEMAS checks your mailbox for new email every minute."/>
                             <TextBlock Style="{StaticResource HelpText}" Text="2. The AI reads it straight away: is it a real business email, and does it need a reply? Newsletters, auto-replies and similar do not become Cases."/>
                             <TextBlock Style="{StaticResource HelpText}" Text="3. If it needs a reply, a Case is created and you get a pop-up. Follow-up emails from the same customer about the same topic are added to the same Case. This usually happens within about a minute of the email arriving (a little longer if the AI service is slow)."/>
-                            <TextBlock Style="{StaticResource HelpText}" Text="4. Every 5 minutes IEMAS looks in the mailbox's Sent folder for your reply. Once it is found, the Case is marked replied and reminders stop."/>
+                            <TextBlock Style="{StaticResource HelpText}" Text="4. Every 2 minutes IEMAS looks in the mailbox's Sent folder for your reply. Once it is found, the Case is marked replied and reminders stop."/>
                             <TextBlock Style="{StaticResource HelpText}" Text="5. No reply yet? You get reminder pop-ups (how often is set by your administrator). After enough reminders the Case becomes Escalated and your supervisor's details are recorded for it."/>
                         </StackPanel>
                     </Border>
@@ -229,7 +229,7 @@
                             <TextBlock Style="{StaticResource HelpHeading}" Text="Working on an inquiry"/>
                             <TextBlock Style="{StaticResource HelpText}" Text="Click Open on an inquiry. The coloured box tells you where it stands and what to do next. Hover over any button to see what it does."/>
                             <TextBlock Style="{StaticResource HelpTerm}" Text="Reply in email"/>
-                            <TextBlock Style="{StaticResource HelpText}" Text="Opens your email program. Reply to the customer's email from the same mailbox. IEMAS finds your reply by itself within about 5 minutes; you do not need to click anything afterwards."/>
+                            <TextBlock Style="{StaticResource HelpText}" Text="Opens your email program. Reply to the customer's email from the same mailbox. IEMAS finds your reply by itself within about 2 minutes; you do not need to click anything afterwards."/>
                             <TextBlock Style="{StaticResource HelpTerm}" Text="Mark as resolved"/>
                             <TextBlock Style="{StaticResource HelpText}" Text="The customer's request is fully handled. IEMAS stops watching it: no more reminders, no escalation. A first reply alone does not close an inquiry - IEMAS keeps watching the conversation until you mark it resolved."/>
                             <TextBlock Style="{StaticResource HelpTerm}" Text="Looks resolved - please confirm"/>
@@ -258,7 +258,7 @@
                         <StackPanel>
                             <TextBlock Style="{StaticResource HelpHeading}" Text="Something is not right?"/>
                             <TextBlock Style="{StaticResource HelpTerm}" Text="I replied but still get reminders"/>
-                            <TextBlock Style="{StaticResource HelpText}" Text="Wait up to 5 minutes for the Sent-folder check. Make sure you replied from the mailbox the customer wrote to, by replying to their email (not a new email). If you answered by phone or from another address, complete the Case with the matching reason."/>
+                            <TextBlock Style="{StaticResource HelpText}" Text="Wait up to 2 minutes for the Sent-folder check. Make sure you replied from the mailbox the customer wrote to, by replying to their email (not a new email). If you answered by phone or from another address, complete the Case with the matching reason."/>
                             <TextBlock Style="{StaticResource HelpTerm}" Text="A customer email did not become a Case"/>
                             <TextBlock Style="{StaticResource HelpText}" Text="Allow a few minutes. The AI may have decided it needs no reply, or the sender may be on the ignored list. Ask your administrator to check Case Workflow in the CMS."/>
                             <TextBlock Style="{StaticResource HelpTerm}" Text="No pop-ups appear"/>
@@ -275,8 +275,8 @@
             <StackPanel x:Name="SettingsPanel" Visibility="Collapsed" Margin="16">
                 <TextBlock Text="Server URL" FontSize="12" Foreground="#4B5563"/>
                 <TextBox x:Name="ServerUrlTextBox" Margin="0,4,0,10" Padding="6"/>
-                <CheckBox x:Name="AllowInsecureTlsCheckBox" Content="Allow self-signed certificates (dev only)" Margin="0,0,0,10"/>
-                <CheckBox x:Name="StartWithWindowsCheckBox" Content="Start with Windows (recommended - pop-ups only arrive while the Agent is running)" Margin="0,0,0,14"/>
+                <CheckBox x:Name="AllowInsecureTlsCheckBox" Content="Allow self-signed certificates (only if your administrator tells you to)" Margin="0,0,0,10"/>
+                <CheckBox x:Name="StartWithWindowsCheckBox" Content="Start with Windows (recommended)" ToolTip="Pop-ups only arrive while the Agent is running." Margin="0,0,0,14"/>
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Save" Style="{StaticResource ActionButton}" Click="SaveSettingsButton_Click"/>
                     <Button Content="Sign Out / Re-register" Style="{StaticResource SecondaryButton}" Click="SignOutButton_Click"/>

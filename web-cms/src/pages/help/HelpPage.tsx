@@ -8,7 +8,7 @@ const FLOW = [
   { title: "AI reads it", text: "Straight away: is it relevant, a legitimate business email, and does it need a reply?" },
   { title: "Case created", text: "Straight away, only for email that needs work; owned by the mailbox's owner. Usually within about a minute of arriving." },
   { title: "Employee alerted", text: "A pop-up appears on the owner's PC through the Windows Agent." },
-  { title: "Reply checked", text: "Every 5 minutes the mailbox's Sent folder is checked for the reply." },
+  { title: "Reply checked", text: "Every 2 minutes the mailbox's Sent folder is checked for the reply." },
   { title: "Reminders", text: "No reply yet? The owner gets reminder pop-ups until one is found." },
   { title: "Escalation", text: "Still no reply? The Case is marked Escalated and the owner is warned; who it should go to is recorded in Escalation History." },
 ];

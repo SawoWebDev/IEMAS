@@ -81,7 +81,7 @@ export const NAV_SECTIONS: NavSection[] = [
       {
         label: "Reply Verification",
         path: "/reply-verification",
-        help: "Did the employee really reply? Every 5 minutes IEMAS looks in each mailbox's Sent folder for a reply to every open Case, and keeps looking until one is found. Clicking \"Already replied\" on the PC is only a claim until the reply is found. Once found, reminders and escalation stop. If a mailbox can't be reached the Case shows \"Couldn't check\", never a false \"no reply\".",
+        help: "Did the employee really reply? Every 2 minutes IEMAS looks in each mailbox's Sent folder for a reply to every open Case, and keeps looking until one is found. Clicking \"Already replied\" on the PC is only a claim until the reply is found. Once found, reminders and escalation stop. If a mailbox can't be reached the Case shows \"Couldn't check\", never a false \"no reply\".",
         tasks: ["See which Cases still have no reply, and who owns them", "Check Now right after an employee says they replied", "Spot a mailbox whose Sent folder can't be read"],
       },
       {
@@ -170,7 +170,7 @@ export const NAV_SECTIONS: NavSection[] = [
       {
         label: "Reminder Policies",
         path: "/reminder-policies",
-        help: "How often the Case owner is reminded (by pop-up) while no reply has been found in the Sent folder: delay before the first reminder, time between reminders, maximum number of reminders, optional expiry, business hours with time zone, and whether weekends count. Checked every 5 minutes; reminders stop as soon as a reply is found. Holidays can't be entered in the CMS yet.",
+        help: "How often the Case owner is reminded (by pop-up) while no reply has been found in the Sent folder: delay before the first reminder, time between reminders, maximum number of reminders, optional expiry, business hours with time zone, and whether weekends count. Checked every 5 minutes; reminders stop as soon as a reply is found. Holidays are entered on the policy as well.",
       },
       {
         label: "Escalation Policies",

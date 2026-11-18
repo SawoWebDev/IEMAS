@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IEMAS Rollout Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single reading column with a sticky part index; screenshots sit in "screen" frames, the alert simulator is a mock Windows desktop. */
+:root {
+  --bg: #f6f8fb;
+  --surface: #ffffff;
+  --fg: #142033;
+  --muted: #5a6880;
+  --line: #dde3ec;
+  --accent: #2563eb;
+  --accent-soft: #e3ecfd;
+  --code-bg: #eef2f8;
+  --ok: #059669;
+  --warn: #d97706;
+  --bad: #dc2626;
+  --desk-a: #1f3b6e;
+  --desk-b: #3a6fb5;
+  --popup-bg: #ffffff;
+  --popup-fg: #111827;
+  --popup-text: #374151;
+  --popup-muted: #6b7280;
+  --popup-btn: #e5e7eb;
+  --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", Consolas, monospace;
+  --font-win: "Segoe UI", "Inter", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1522; --surface: #151f30; --fg: #e6ecf5; --muted: #9aa8bf; --line: #26344b;
+    --accent: #6c9cff; --accent-soft: #1c2c4d; --code-bg: #1b2738; --ok: #34d399; --warn: #fbbf24; --bad: #f87171;
+    --desk-a: #0f1d38; --desk-b: #22457a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1522; --surface: #151f30; --fg: #e6ecf5; --muted: #9aa8bf; --line: #26344b;
+  --accent: #6c9cff; --accent-soft: #1c2c4d; --code-bg: #1b2738; --ok: #34d399; --warn: #fbbf24; --bad: #f87171;
+  --desk-a: #0f1d38; --desk-b: #22457a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+.wrap { max-width: 980px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.2; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2rem, 5vw, 2.8rem); letter-spacing: -0.02em; }
+h2 { font-size: 1.7rem; letter-spacing: -0.01em; }
+h3 { font-size: 1.15rem; }
+p { margin: 0; max-width: 68ch; }
+a { color: var(--accent); }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 6px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { font-family: var(--font-mono); font-size: 0.85rem; background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto; margin: 0; line-height: 1.5; }
+.eyebrow { font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; color: var(--accent); }
+.lede { font-size: 1.12rem; color: var(--muted); }
+header.top { display: grid; gap: 14px; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 0.9rem; color: var(--muted); }
+
+nav.parts { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding: 12px 0; border-bottom: 1px solid var(--line); display: flex; gap: 6px; overflow-x: auto; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+nav.parts a { flex: none; text-decoration: none; color: var(--muted); font-size: 0.88rem; font-weight: 500; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
+nav.parts a:hover, nav.parts a:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+
+section.part { padding-top: 56px; display: grid; gap: 22px; scroll-margin-top: 64px; }
+.part-head { display: grid; gap: 8px; }
+.part-head .who { font-size: 0.9rem; color: var(--muted); }
+.who b { color: var(--fg); }
+
+.overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 28px; }
+.ov { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: grid; gap: 6px; align-content: start; }
+.ov .n { font-family: var(--font-display); font-weight: 700; color: var(--accent); font-size: 0.85rem; letter-spacing: .06em; }
+.ov h3 { font-size: 1.05rem; }
+.ov p { font-size: 0.92rem; color: var(--muted); }
+.ov .time { font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 26px; counter-reset: s; }
+ol.steps > li { counter-increment: s; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 4px 14px; }
+ol.steps > li::before { content: counter(s); grid-row: span 3; width: 32px; height: 32px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-family: var(--font-display); font-weight: 700; display: grid; place-items: center; font-size: 0.95rem; }
+ol.steps > li > * { grid-column: 2; }
+ol.steps h3 { margin-top: 4px; }
+.step-body { display: grid; gap: 10px; min-width: 0; }
+.step-body ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+
+figure.screen { margin: 4px 0 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+figure.screen .bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 0.78rem; color: var(--muted); font-family: var(--font-mono); }
+figure.screen .bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); display: inline-block; }
+figure.screen img { display: block; width: 100%; height: auto; }
+figure.screen figcaption { padding: 10px 14px; font-size: 0.88rem; color: var(--muted); border-top: 1px solid var(--line); }
+.shots-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; align-items: start; }
+
+.note { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 0.93rem; }
+.note.warn { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, var(--surface)); }
+.note b { font-weight: 600; }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.75rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+td.k { white-space: nowrap; font-family: var(--font-mono); font-size: 0.84rem; }
+
+/* Architecture diagram */
+.diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; overflow-x: auto; }
+.diagram svg { display: block; min-width: 760px; width: 100%; height: auto; }
+.diagram text { font-family: var(--font-body); fill: var(--fg); }
+.diagram .sub { fill: var(--muted); font-size: 12px; }
+.diagram .box { fill: var(--bg); stroke: var(--line); stroke-width: 1.5; }
+.diagram .server { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+.diagram .inner { fill: var(--surface); stroke: var(--line); }
+.diagram .flow { stroke: var(--accent); stroke-width: 2; fill: none; }
+.diagram .flow2 { stroke: var(--muted); stroke-width: 1.6; fill: none; stroke-dasharray: 5 4; }
+.diagram .lbl { font-size: 11.5px; fill: var(--muted); }
+.diagram .arrow { fill: var(--accent); }
+.diagram .arrow2 { fill: var(--muted); }
+
+/* Alert simulator */
+.sim { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 760px) { .sim { grid-template-columns: 1fr; } }
+.controls { display: grid; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+.controls h3 { font-size: 0.95rem; }
+.controls .hint { font-size: 0.82rem; color: var(--muted); }
+.btn { font: inherit; font-size: 0.9rem; cursor: pointer; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); padding: 8px 12px; text-align: left; display: flex; align-items: center; gap: 10px; }
+.btn:hover { border-color: var(--accent); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); justify-content: center; font-weight: 600; }
+.btn.ghost { justify-content: center; }
+.desk { position: relative; border-radius: 12px; min-height: 560px; overflow: hidden; background: linear-gradient(135deg, var(--desk-a), var(--desk-b)); border: 1px solid var(--line); }
+.desk .stack { position: absolute; right: 10px; bottom: 50px; display: flex; flex-direction: column; gap: 0; align-items: flex-end; max-width: calc(100% - 20px); }
+.taskbar { position: absolute; left: 0; right: 0; bottom: 0; height: 42px; background: rgba(20, 28, 44, .82); display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 0 14px; color: #e6ecf5; font-family: var(--font-win); font-size: 12px; }
+.tray-ic { width: 22px; height: 22px; border-radius: 5px; background: #2563eb; display: grid; place-items: center; font-weight: 700; font-size: 11px; color: #fff; position: relative; }
+.tray-ic .live { position: absolute; right: -3px; bottom: -3px; width: 9px; height: 9px; border-radius: 50%; background: #22c55e; border: 2px solid rgba(20,28,44,.9); }
+.desk .empty { position: absolute; inset: 0 0 42px 0; display: grid; place-items: center; color: rgba(255,255,255,.75); font-size: 0.92rem; text-align: center; padding: 20px; }
+
+.popup { width: 344px; max-width: 100%; margin: 8px 0 0; background: var(--popup-bg); border-left: 6px solid #2563eb; border-radius: 6px; box-shadow: 0 6px 22px rgba(0,0,0,.35); padding: 12px 16px 14px; font-family: var(--font-win); font-size: 13px; color: var(--popup-text); animation: slide .28s ease-out; }
+@keyframes slide { from { transform: translateX(40px); opacity: .2; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .popup { animation: none; } }
+.popup .row { display: flex; align-items: center; gap: 6px; }
+.popup .badge { font-weight: 700; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+.popup .count { font-weight: 700; font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #e11d48; color: #fff; }
+.popup .x { margin-left: auto; background: none; border: 0; cursor: pointer; font-size: 14px; color: var(--popup-fg); padding: 0 4px; }
+.popup .t { font-weight: 700; font-size: 14px; color: var(--popup-fg); margin: 4px 0; }
+.popup .m { line-height: 1.4; }
+.popup .c { font-size: 11px; color: var(--popup-muted); margin-top: 6px; }
+.popup .b { display: flex; gap: 8px; margin-top: 12px; }
+.popup .b button { font-family: var(--font-win); font-size: 13px; border: 0; padding: 6px 12px; cursor: pointer; border-radius: 2px; }
+.popup .b .ack { background: var(--popup-btn); color: var(--popup-fg); }
+.toast-msg { position: absolute; left: 12px; top: 12px; right: 12px; background: rgba(15,23,42,.88); color: #f1f5f9; font-size: 0.85rem; padding: 8px 12px; border-radius: 8px; font-family: var(--font-win); }
+
+.legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.legend div { display: grid; grid-template-columns: 14px minmax(0,1fr); gap: 4px 10px; font-size: 0.88rem; align-items: start; }
+.legend span.sw { width: 14px; height: 14px; border-radius: 3px; margin-top: 4px; }
+.legend b { font-weight: 600; }
+.legend p { grid-column: 2; color: var(--muted); font-size: 0.82rem; }
+
+.timeline { display: grid; gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 6px 0; }
+.tl { display: grid; grid-template-columns: 96px 18px minmax(0, 1fr); gap: 12px; padding: 10px 16px; align-items: start; opacity: .55; transition: opacity .2s; }
+.tl.on { opacity: 1; }
+.tl .when { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); text-align: right; padding-top: 2px; font-variant-numeric: tabular-nums; }
+.tl .pin { width: 12px; height: 12px; border-radius: 50%; margin-top: 6px; background: var(--line); }
+.tl.on .pin { background: var(--accent); }
+.tl .what b { font-weight: 600; }
+.tl .what p { font-size: 0.88rem; color: var(--muted); }
+@media (max-width: 520px) { .tl { grid-template-columns: 70px 14px minmax(0,1fr); gap: 8px; } }
+
+.check { display: grid; gap: 4px; }
+.check label { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; font-size: 0.93rem; }
+.check input { width: 17px; height: 17px; margin-top: 3px; accent-color: var(--accent); }
+.check label:has(input:checked) span { color: var(--muted); text-decoration: line-through; }
+.progress { font-size: 0.88rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+details.faq { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 10px 14px; }
+details.faq summary { cursor: pointer; font-weight: 600; }
+details.faq p { margin-top: 8px; color: var(--muted); font-size: 0.93rem; }
+footer { margin-top: 60px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 0.85rem; color: var(--muted); }
+</style>
+
+<div class="wrap">
+<header class="top">
+  <div class="eyebrow">SAWO · IEMAS Inquiry Monitoring</div>
+  <h1>IEMAS rollout guide</h1>
+  <p class="lede">How to put IEMAS live: set up the server PC once, install the IEMAS Agent on each employee's PC, connect the two, and learn what the alerts look like before the first real customer email arrives.</p>
+  <div class="meta"><span>For: IT / system administrator, and each employee for Parts 4–5</span><span>Version: main branch, Agent 1.1.1</span></div>
+</header>
+
+<div class="overview">
+  <div class="ov"><span class="n">PART 1</span><h3>Server PC</h3><p>Install Docker, fill in one settings file, double-click Build-IEMAS.</p><span class="time">≈ 30 min · once</span></div>
+  <div class="ov"><span class="n">PART 2</span><h3>Configure in the CMS</h3><p>Mailboxes, employees, managers, working hours.</p><span class="time">≈ 30 min · once</span></div>
+  <div class="ov"><span class="n">PART 3</span><h3>Each employee PC</h3><p>Copy the Agent app, point it at the server, register, approve.</p><span class="time">≈ 5 min per PC</span></div>
+  <div class="ov"><span class="n">PART 4–5</span><h3>First use and alerts</h3><p>What employees see, and a live simulator of every pop-up.</p><span class="time">≈ 10 min per person</span></div>
+</div>
+
+<nav class="parts" aria-label="Parts">
+  <a href="#how">How it fits together</a>
+  <a href="#server">1 · Server PC</a>
+  <a href="#cms">2 · CMS setup</a>
+  <a href="#pcs">3 · Employee PCs</a>
+  <a href="#use">4 · First use</a>
+  <a href="#alerts">5 · Alert simulator</a>
+  <a href="#golive">6 · Go-live checklist</a>
+  <a href="#help">Troubleshooting</a>
+</nav>
+
+<!-- ───────────── How it fits together ───────────── -->
+<section class="part" id="how">
+  <div class="part-head">
+    <div class="eyebrow">Before you start</div>
+    <h2>How it fits together</h2>
+    <p>One <b>server PC</b> runs IEMAS in Docker. It reads the company mailboxes, decides which emails are customer inquiries, and tracks every inquiry until the employee confirms it is resolved. Each employee's PC runs the small <b>IEMAS Agent</b> app, which receives the pop-ups. Managers only get an email when an inquiry is escalated.</p>
+  </div>
+  <div class="diagram" role="img" aria-label="Mail server and employee PCs connect to the IEMAS server PC; the server emails managers on escalation.">
+    <svg viewBox="0 0 900 360" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="arrow"/></marker>
+        <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="arrow2"/></marker>
+      </defs>
+      <!-- mail server -->
+      <rect x="20" y="40" width="190" height="110" rx="10" class="box"/>
+      <text x="40" y="72" font-weight="600" font-size="15">Company mail server</text>
+      <text x="40" y="94" class="sub">Each employee's mailbox</text>
+      <text x="40" y="112" class="sub">Inbox + Sent folder (IMAP)</text>
+      <text x="40" y="130" class="sub">SMTP for escalation email</text>
+      <!-- AI -->
+      <rect x="20" y="210" width="190" height="90" rx="10" class="box"/>
+      <text x="40" y="242" font-weight="600" font-size="15">OpenRouter AI</text>
+      <text x="40" y="264" class="sub">Only for unclear emails and</text>
+      <text x="40" y="282" class="sub">"looks resolved?" checks</text>
+      <!-- server -->
+      <rect x="290" y="20" width="320" height="320" rx="14" class="server"/>
+      <text x="310" y="50" font-weight="700" font-size="16">Server PC (Docker)</text>
+      <text x="310" y="70" class="sub">Build-IEMAS.bat starts all four</text>
+      <rect x="310" y="86" width="280" height="50" rx="8" class="inner"/>
+      <text x="324" y="108" font-weight="600" font-size="13.5">HTTPS proxy</text>
+      <text x="324" y="126" class="sub">https://&lt;server-ip&gt;:8443 — the only door</text>
+      <rect x="310" y="146" width="135" height="80" rx="8" class="inner"/>
+      <text x="322" y="170" font-weight="600" font-size="13.5">API + jobs</text>
+      <text x="322" y="188" class="sub">reads mail every</text>
+      <text x="322" y="204" class="sub">minute, reminders</text>
+      <rect x="455" y="146" width="135" height="80" rx="8" class="inner"/>
+      <text x="467" y="170" font-weight="600" font-size="13.5">CMS website</text>
+      <text x="467" y="188" class="sub">admins and</text>
+      <text x="467" y="204" class="sub">supervisors</text>
+      <rect x="310" y="236" width="280" height="50" rx="8" class="inner"/>
+      <text x="324" y="258" font-weight="600" font-size="13.5">Database (PostgreSQL)</text>
+      <text x="324" y="276" class="sub">inquiries, history, settings</text>
+      <text x="310" y="316" class="sub">Back it up daily: scripts/backup-database.sh</text>
+      <!-- PCs -->
+      <rect x="690" y="40" width="190" height="130" rx="10" class="box"/>
+      <text x="710" y="72" font-weight="600" font-size="15">Employee PCs</text>
+      <text x="710" y="94" class="sub">IEMAS Agent app</text>
+      <text x="710" y="112" class="sub">pop-ups, "my inquiries",</text>
+      <text x="710" y="130" class="sub">confirm resolved</text>
+      <text x="710" y="150" class="sub">+ Outlook as usual</text>
+      <!-- manager -->
+      <rect x="690" y="210" width="190" height="90" rx="10" class="box"/>
+      <text x="710" y="242" font-weight="600" font-size="15">Managers</text>
+      <text x="710" y="264" class="sub">Escalation email only;</text>
+      <text x="710" y="282" class="sub">CMS for the overview</text>
+      <!-- flows -->
+      <path d="M210 95 H 290" class="flow" marker-end="url(#a1)"/>
+      <text x="216" y="86" class="lbl">reads mail</text>
+      <path d="M290 255 H 210" class="flow2" marker-end="url(#a2)"/>
+      <text x="222" y="248" class="lbl">asks if unsure</text>
+      <path d="M610 100 H 690" class="flow" marker-end="url(#a1)" marker-start="url(#a1)"/>
+      <text x="618" y="92" class="lbl">live pop-ups</text>
+      <path d="M610 255 H 690" class="flow2" marker-end="url(#a2)"/>
+      <text x="620" y="248" class="lbl">escalation</text>
+    </svg>
+  </div>
+  <div class="note"><b>Nothing to install in Outlook.</b> Employees keep replying from Outlook as they do today. IEMAS sees the reply in the mailbox's Sent folder within about 2 minutes and stops the reminders by itself.</div>
+</section>
+
+<!-- ───────────── Part 1 ───────────── -->
+<section class="part" id="server">
+  <div class="part-head">
+    <div class="eyebrow">Part 1 · once</div>
+    <h2>Set up the server PC</h2>
+    <p class="who">Who: <b>IT administrator</b>. Use an always-on Windows PC or server with at least 8 GB RAM and a fixed IP address on the office network (in this guide, <code>172.16.2.68</code>).</p>
+  </div>
+  <ol class="steps">
+    <li><h3>Install Docker Desktop</h3>
+      <div class="step-body">
+        <p>Download Docker Desktop for Windows from <a href="https://www.docker.com/products/docker-desktop/" target="_blank" rel="noopener">docker.com</a>, install it with the default WSL 2 option, restart, and start Docker Desktop once. In Docker Desktop's <b>Settings → General</b>, tick <b>Start Docker Desktop when you sign in</b> so IEMAS comes back after a reboot.</p>
+      </div></li>
+    <li><h3>Get the IEMAS files</h3>
+      <div class="step-body">
+        <p>Install <a href="https://git-scm.com/download/win" target="_blank" rel="noopener">Git for Windows</a>, then in a command prompt:</p>
+<pre>cd C:\
+git clone https://github.com/arnielmontero/Intelligent-Email-Monitoring-Alert-System-v2.git IEMAS
+cd IEMAS</pre>
+        <p>Later updates are <code>git pull</code> followed by double-clicking <b>Build-IEMAS.bat</b> again.</p>
+      </div></li>
+    <li><h3>Fill in the settings file</h3>
+      <div class="step-body">
+        <p>Copy <code>.env.example</code> to <code>.env</code> in the same folder and open it in Notepad. Fill in these lines:</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Setting</th><th>What to put</th></tr></thead>
+          <tbody>
+            <tr><td class="k">POSTGRES_PASSWORD</td><td>A long random password for the database.</td></tr>
+            <tr><td class="k">JWT_SECRET</td><td>Random, at least 32 characters. IEMAS refuses to start with a short one.</td></tr>
+            <tr><td class="k">AGENT_JWT_SECRET</td><td>Another random value, different from JWT_SECRET.</td></tr>
+            <tr><td class="k">CREDENTIAL_ENCRYPTION_KEY</td><td>Random 32 bytes in base64. Encrypts the stored mailbox passwords. <b>Keep a copy safe</b>: losing it means re-entering every mailbox password.</td></tr>
+            <tr><td class="k">BOOTSTRAP_ADMIN_EMAIL / _PASSWORD</td><td>Your own CMS login. Created on the first start only.</td></tr>
+            <tr><td class="k">OPENROUTER_API_KEY</td><td>The AI key from openrouter.ai/keys.</td></tr>
+            <tr><td class="k">DOMAIN</td><td>The server's IP address, for example <code>172.16.2.68</code> (or a DNS name if you have one).</td></tr>
+            <tr><td class="k">CORS_ORIGIN</td><td><code>https://172.16.2.68:8443</code> (the address people open the CMS on).</td></tr>
+            <tr><td class="k">ASPNETCORE_ENVIRONMENT</td><td>Leave as <code>Production</code>.</td></tr>
+          </tbody>
+        </table></div>
+        <p>To make the random values, run this in PowerShell once per secret and paste the result:</p>
+<pre>[Convert]::ToBase64String((1..48 | % { Get-Random -Max 256 }) -as [byte[]])</pre>
+        <p>For <code>CREDENTIAL_ENCRYPTION_KEY</code> use <code>1..32</code> instead of <code>1..48</code>.</p>
+      </div></li>
+    <li><h3>Double-click Build-IEMAS.bat</h3>
+      <div class="step-body">
+        <p>It builds and starts the database, the API, the CMS website and the HTTPS proxy, then checks each one. The first build takes 5–10 minutes. It ends with <b>Done.</b> and lists anything that failed. A full log is written to the <code>logs</code> folder.</p>
+        <div class="note">The proxy listens on ports <b>8080</b> and <b>8443</b>. On a dedicated server you can use 80/443 instead by adding <code>PROXY_HTTP_PORT=80</code> and <code>PROXY_HTTPS_PORT=443</code> to <code>.env</code>.</div>
+      </div></li>
+    <li><h3>Open the firewall</h3>
+      <div class="step-body">
+        <p>Employee PCs must reach the server on port 8443. In PowerShell as administrator:</p>
+<pre>New-NetFirewallRule -DisplayName "IEMAS HTTPS" -Direction Inbound -Protocol TCP -LocalPort 8443 -Action Allow</pre>
+      </div></li>
+    <li><h3>Log in to the CMS</h3>
+      <div class="step-body">
+        <p>From any PC open <code>https://172.16.2.68:8443</code>. The browser warns about the certificate the first time because the server made its own; choose <b>Advanced → Continue</b>. Log in with the admin email and password from <code>.env</code>.</p>
+        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;https://172.16.2.68:8443/login</div><img src="img/cms-login.png" alt="IEMAS CMS login page" loading="lazy"><figcaption>The CMS login page.</figcaption></figure>
+      </div></li>
+    <li><h3>Schedule a daily backup</h3>
+      <div class="step-body">
+        <p>Add a daily Windows Task Scheduler job that runs <code>scripts\backup-database.sh</code> from Git Bash. Backups land in the <code>backups</code> folder; copy them off the server.</p>
+      </div></li>
+  </ol>
+</section>
+
+<!-- ───────────── Part 2 ───────────── -->
+<section class="part" id="cms">
+  <div class="part-head">
+    <div class="eyebrow">Part 2 · once</div>
+    <h2>Configure IEMAS in the CMS</h2>
+    <p class="who">Who: <b>IT administrator</b>, with the list of mailboxes, employees and managers. <b>System → Setup Checklist</b> shows what is still missing; work down it until every line is green.</p>
+  </div>
+  <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;System → Setup Checklist</div><img src="img/cms-setup.png" alt="Setup checklist page" loading="lazy"><figcaption>The Setup Checklist lists every missing setting with a Fix link. Here, only business hours are left.</figcaption></figure>
+  <ol class="steps">
+    <li><h3>Add the employees</h3>
+      <div class="step-body">
+        <p><b>People &amp; Devices → Employees.</b> One row per person, with the company email address they will register the Agent with.</p>
+        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;People &amp; Devices → Employees</div><img src="img/cms-employees.png" alt="Employees page" loading="lazy"></figure>
+      </div></li>
+    <li><h3>Add each mailbox and choose its owner</h3>
+      <div class="step-body">
+        <p><b>Email → Email Accounts → Add.</b> Enter the mailbox address, the IMAP server and its password, and choose the <b>owner</b>: the employee whose PC gets the alerts for this mailbox. Press <b>Test connection</b> and make sure the <b>Sent folder</b> is found; IEMAS needs it to see the replies.</p>
+        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Email → Email Accounts</div><img src="img/cms-email-accounts.png" alt="Email accounts page" loading="lazy"></figure>
+      </div></li>
+    <li><h3>Set the outgoing mail account</h3>
+      <div class="step-body">
+        <p><b>Email → Outbound Email.</b> One SMTP account IEMAS uses to send escalation emails. <b>Test connection</b> checks the login without sending anything. After the next step, use <b>Test escalation</b> on an employee's row (Employees page) to send a real sample to their manager.</p>
+        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Email → Outbound Email</div><img src="img/cms-outbound-email.png" alt="Outbound email page" loading="lazy"></figure>
+      </div></li>
+    <li><h3>Set who gets escalations</h3>
+      <div class="step-body">
+        <p>Managers are added as employees too. On <b>Employees</b>, set each person's <b>Supervisor</b>: escalation emails go to the supervisor. To reach a whole team instead (for example "Sales managers"), create it under <b>Alerts &amp; Escalation → Escalation Groups</b> and name it in <b>Escalation Policies</b>.</p>
+        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Alerts &amp; Escalation → Escalation Groups</div><img src="img/cms-escalation-groups.png" alt="Escalation groups page" loading="lazy"></figure>
+      </div></li>
+    <li><h3>Set working hours and holidays</h3>
+      <div class="step-body">
+        <p><b>Alerts &amp; Escalation → Reminder Policies → Default.</b> Set the office hours, time zone, whether weekends count, and the public holidays. Every deadline (first reply within 4 working hours, reminders, escalation, the 5-day resolution target) counts only these hours.</p>
+        <div class="note warn"><b>Do this before go-live.</b> Out of the box the default policy counts around the clock, so an email on Friday evening would escalate during the weekend.</div>
+        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Alerts &amp; Escalation → Reminder Policies</div><img src="img/cms-reminder-policies.png" alt="Reminder policies page" loading="lazy"></figure>
+      </div></li>
+    <li><h3>Check the system is healthy</h3>
+      <div class="step-body">
+        <p><b>System → System Health.</b> All background jobs should show a recent successful run. In <b>System → System Settings</b>, set <b>CMS web address</b> to <code>https://172.16.2.68:8443</code> (the "Open case" button in escalation emails uses it), and make sure <b>TEST MODE: count hours as minutes</b> is off.</p>
+        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;System → System Health</div><img src="img/cms-system-health.png" alt="System health page" loading="lazy"></figure>
+      </div></li>
+  </ol>
+</section>
+
+<!-- ───────────── Part 3 ───────────── -->
+<section class="part" id="pcs">
+  <div class="part-head">
+    <div class="eyebrow">Part 3 · on every employee PC</div>
+    <h2>Install the IEMAS Agent</h2>
+    <p class="who">Who: <b>IT</b> or the <b>employee</b>, with an administrator ready to approve in the CMS. About 5 minutes per PC.</p>
+  </div>
+  <ol class="steps">
+    <li><h3>Install the .NET 8 Desktop Runtime (once per PC)</h3>
+      <div class="step-body">
+        <p>In a command prompt:</p>
+<pre>winget install Microsoft.DotNet.DesktopRuntime.8</pre>
+        <p>Or download <b>.NET Desktop Runtime 8.0 – Windows x64</b> from <a href="https://dotnet.microsoft.com/download/dotnet/8.0" target="_blank" rel="noopener">dotnet.microsoft.com</a>.</p>
+      </div></li>
+    <li><h3>Copy the app</h3>
+      <div class="step-body">
+        <p>Create the folder <code>C:\Program Files\IEMAS Agent</code> and copy <code>IemasAgent.exe</code> into it from the server's <code>windows-client\agent-release</code> folder (or a shared network folder). It is a single file. Start it once; it puts an <b>IEMAS icon</b> next to the clock.</p>
+      </div></li>
+    <li><h3>Point it at the server</h3>
+      <div class="step-body">
+        <p>Click <b>Settings</b>. Set <b>Server URL</b> to <code>https://172.16.2.68:8443</code>, tick <b>Allow self-signed certificates</b> (the server uses its own certificate on the office network), leave <b>Start with Windows</b> ticked, and press <b>Save</b>.</p>
+        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;IEMAS Agent → Settings</div><img src="img/agent-settings.png" alt="IEMAS Agent settings screen" loading="lazy"></figure>
+      </div></li>
+    <li><h3>Register this PC</h3>
+      <div class="step-body">
+        <p>On the register screen enter the employee's company email (the mailbox IEMAS watches for them). The PC name is filled in. Press <b>Register</b>. The status changes to <b>Awaiting Approval</b>.</p>
+        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;IEMAS Agent → first start</div><img src="img/agent-register.png" alt="IEMAS Agent register screen" loading="lazy"></figure>
+      </div></li>
+    <li><h3>Approve it in the CMS</h3>
+      <div class="step-body">
+        <p>Administrator: <b>People &amp; Devices → Windows Agents</b>. The new PC is listed as <b>Pending</b>. Choose the employee who uses it and press <b>Approve</b>. Within a few seconds the Agent turns <b>● Connected</b> by itself; nothing to copy or type.</p>
+        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;People &amp; Devices → Windows Agents</div><img src="img/cms-agents.png" alt="Windows agents page with approved PCs" loading="lazy"><figcaption>Approved PCs show Connected and the time they last checked in. Revoke cuts a lost or replaced PC off at once.</figcaption></figure>
+      </div></li>
+  </ol>
+  <div class="note"><b>Updating the Agent later:</b> right-click the tray icon → Exit, replace <code>IemasAgent.exe</code>, start it again. Registration is kept.</div>
+</section>
+
+<!-- ───────────── Part 4 ───────────── -->
+<section class="part" id="use">
+  <div class="part-head">
+    <div class="eyebrow">Part 4 · for every employee</div>
+    <h2>Using the Agent the first time</h2>
+    <p>The Agent shows the inquiries that need you. You still answer customers in Outlook. When the customer's request is fully handled, you confirm it in the Agent.</p>
+  </div>
+  <div class="shots-2">
+    <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;IEMAS Agent</div><img src="img/agent-main.png" alt="IEMAS Agent main window with the Action Required list" loading="lazy"><figcaption><b>Action Required</b> lists every open inquiry that still needs you. The light at the top left must be green.</figcaption></figure>
+    <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;IEMAS Agent → inquiry</div><img src="img/agent-case.png" alt="An inquiry opened in the Agent" loading="lazy"><figcaption>Click <b>Open</b> on an inquiry to see the latest customer email and what to do next.</figcaption></figure>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Button</th><th>When to use it</th></tr></thead>
+    <tbody>
+      <tr><td><b>✉ Reply in email</b></td><td>Opens Outlook. Reply to the customer's email from the same mailbox. IEMAS finds your reply by itself within about 2 minutes.</td></tr>
+      <tr><td><b>✓ Mark as resolved</b></td><td>The customer's request is fully handled. A first reply alone does not close an inquiry.</td></tr>
+      <tr><td><b>Yes, it's resolved / Not resolved yet</b></td><td>Shown when IEMAS thinks the conversation is finished. IEMAS never closes an inquiry by itself; you decide.</td></tr>
+      <tr><td><b>I'm working on it</b></td><td>Shows you picked it up. Reminders continue until your reply is found.</td></tr>
+      <tr><td><b>Waiting on a colleague</b></td><td>You need information from someone inside the company first. It moves to the Waiting tab and you get more time.</td></tr>
+      <tr><td><b>Remind me in 1 hour</b></td><td>Pops it up again in an hour. Deadlines still apply.</td></tr>
+      <tr><td><b>Not a customer inquiry</b></td><td>For emails flagged by mistake (spam, newsletters, personal mail). Closes it.</td></tr>
+      <tr><td><b>Add a note</b></td><td>A short note for your manager. Never sent to the customer.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note"><b>Closing the window does not stop the app.</b> It hides to the tray icon next to the clock, and pop-ups keep coming. Only <b>right-click → Exit</b> stops it.</div>
+</section>
+
+<!-- ───────────── Part 5: simulator ───────────── -->
+<section class="part" id="alerts">
+  <div class="part-head">
+    <div class="eyebrow">Part 5 · try it</div>
+    <h2>Alert simulator</h2>
+    <p>These are the real pop-up designs and wording the Agent uses. Press a button to see one appear in the bottom-right corner, or play one inquiry from start to finish. Pop-ups stay on top until you act on them, even with Windows "Do not disturb" on, and play a short sound.</p>
+  </div>
+  <div class="sim">
+    <div class="controls">
+      <h3>Show one alert</h3>
+      <div id="alertButtons" style="display:grid;gap:6px"></div>
+      <h3 style="margin-top:10px">Or play an inquiry</h3>
+      <p class="hint">Follows one customer email through the default timings, about 4 seconds per step.</p>
+      <button class="btn primary" id="play" type="button">▶ Play one inquiry</button>
+      <button class="btn ghost" id="clear" type="button">Clear the screen</button>
+    </div>
+    <div>
+      <div class="desk" id="desk" aria-live="polite">
+        <div class="empty" id="deskEmpty">Your desktop. Pop-ups appear in this corner ↘</div>
+        <div class="stack" id="stack"></div>
+        <div class="taskbar"><span>ENG</span><span class="tray-ic" title="IEMAS Agent, connected">IE<span class="live"></span></span><span id="clock">09:12</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="shots-2">
+    <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Real pop-up · new email</div><img src="img/popup-real-1.png" alt="Real New Email pop-up from the Agent" loading="lazy"></figure>
+    <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Real pop-up · escalation warning</div><img src="img/popup-real-2.png" alt="Real Escalation Warning pop-up from the Agent" loading="lazy"></figure>
+  </div>
+  <p class="who">Above: two real pop-ups captured from the Agent during the live test, for comparison with the simulator.</p>
+  <div class="timeline" id="timeline" aria-label="Inquiry timeline"></div>
+
+  <h3>What each colour means</h3>
+  <div class="legend" id="legend"></div>
+
+  <h3>The email a manager receives on escalation</h3>
+  <p>Sent only to the supervisor or escalation group, only when an inquiry stays neglected after the reminders. It has the facts a manager needs to step in, and a link to the inquiry in the CMS.</p>
+  <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Outlook · manager's inbox</div><img src="img/escalation-email.png" alt="Escalation email received by a manager" loading="lazy"><figcaption>A real escalation email from the live test. The test ran in test mode, so its times are minutes; live, they are working hours.</figcaption></figure>
+</section>
+
+<!-- ───────────── Part 6 ───────────── -->
+<section class="part" id="golive">
+  <div class="part-head">
+    <div class="eyebrow">Part 6</div>
+    <h2>Go-live checklist</h2>
+    <p>Tick each line as you finish it. The ticks are saved in this browser only.</p>
+  </div>
+  <div class="check" id="checklist"></div>
+  <div class="progress" id="progress"></div>
+</section>
+
+<section class="part" id="help">
+  <div class="part-head">
+    <div class="eyebrow">If something is not right</div>
+    <h2>Troubleshooting</h2>
+  </div>
+  <details class="faq"><summary>The Agent stays on "Connecting…"</summary><p>Check the Server URL in Settings (https, port 8443) and that "Allow self-signed certificates" is ticked. From the PC, open https://172.16.2.68:8443 in a browser: if that fails too, check the server's firewall rule and that Docker Desktop is running on the server.</p></details>
+  <details class="faq"><summary>Registration fails</summary><p>The email must belong to an employee in the CMS whose mailbox IEMAS watches. Check People &amp; Devices → Employees.</p></details>
+  <details class="faq"><summary>I replied but still get reminders</summary><p>Wait 2 minutes for the Sent-folder check. Reply to the customer's own email (not a new email) from the mailbox the customer wrote to. If you answered by phone, open the inquiry and use Mark as resolved or add a note.</p></details>
+  <details class="faq"><summary>A customer email did not become an inquiry</summary><p>Allow a couple of minutes. Newsletters, auto-replies and internal mail are filtered out on purpose. Emails the AI was unsure about wait for a supervisor in the Review queue (Email → Email Classification).</p></details>
+  <details class="faq"><summary>No pop-ups appear</summary><p>The tray icon's dot must be green. Pop-ups go to the owner of the mailbox the email arrived in. Pop-ups missed while the PC was off are shown when it connects again.</p></details>
+  <details class="faq"><summary>Nothing works after the server restarted</summary><p>Docker Desktop must be running. Double-click Build-IEMAS.bat again; it starts everything and reports what is wrong.</p></details>
+</section>
+
+<footer>IEMAS · Intelligent Email Monitoring &amp; Alert System. Screenshots are from the live test system and show test data.</footer>
+</div>
+
+<script>
+const ALERTS = [
+  { key: "new", label: "New email", badge: "NEW EMAIL", accent: "#2563EB", tint: "#DBEAFE", text: "#1E40AF",
+    title: "New Email", msg: 'Hey Maria, you have a new email received from henrik.berg@example.com: "Quote for 3 sauna heaters for our spa". Please check.' },
+  { key: "rem", label: "Reminder", badge: "REMINDER", accent: "#D97706", tint: "#FEF3C7", text: "#92400E",
+    title: "Reminder", msg: 'Hey Maria, you haven\'t replied to the email "Quote for 3 sauna heaters for our spa" from henrik.berg@example.com. Please reply.' },
+  { key: "again", label: "Customer wrote again", badge: "NEEDS RESPONSE", accent: "#E11D48", tint: "#FFE4E6", text: "#9F1239", count: 2,
+    title: "Customer follow-up: still needs your response", msg: 'Hey Maria, Henrik Berg wrote again on CASE-000052 and is still waiting for your reply (2 unanswered email(s), first one 3h 10m ago). Latest: "Re: Quote for 3 sauna heaters".' },
+  { key: "warn", label: "Escalation warning", badge: "ESCALATION WARNING", accent: "#EA580C", tint: "#FFEDD5", text: "#9A3412",
+    title: "Escalation Warning", msg: 'Hey Maria, "Quote for 3 sauna heaters for our spa" (CASE-000052) is still unresolved after 2 reminder(s). It will be escalated if it remains unresolved.' },
+  { key: "esc", label: "Escalated", badge: "ESCALATED", accent: "#DC2626", tint: "#FEE2E2", text: "#991B1B",
+    title: "Escalated", msg: '"Quote for 3 sauna heaters for our spa" (CASE-000052) from henrik.berg@example.com has been escalated to management because it still needs your attention.' },
+  { key: "over", label: "Overdue", badge: "OVERDUE", accent: "#DC2626", tint: "#FEE2E2", text: "#991B1B",
+    title: "Overdue", msg: 'Overdue: "Quote for 3 sauna heaters for our spa" from Henrik Berg (henrik.berg@example.com), received 2026-11-18 09:12, outstanding for 5 working days. Summary: Spa owner asks for a price on three 9 kW heaters.' },
+  { key: "update", label: "Update needed", badge: "FOLLOW UP", accent: "#7C3AED", tint: "#EDE9FE", text: "#5B21B6",
+    title: "Update needed", msg: 'Hey Maria, "Quote for 3 sauna heaters for our spa" (CASE-000052) from henrik.berg@example.com has had no progress for 1 working day. Please reply to the customer or update the inquiry.' },
+  { key: "follow", label: "Customer gone quiet", badge: "FOLLOW UP", accent: "#7C3AED", tint: "#EDE9FE", text: "#5B21B6",
+    title: "Follow-up may be needed", msg: 'Hey Maria, henrik.berg@example.com has not replied to you about "Quote for 3 sauna heaters for our spa" (CASE-000052) for 3 days. Please follow up, or close the inquiry if it is settled.' },
+  { key: "conf", label: "Looks resolved", badge: "PLEASE CONFIRM", accent: "#059669", tint: "#D1FAE5", text: "#065F46",
+    title: "Please confirm: resolved?", msg: 'Hey Maria, "Quote for 3 sauna heaters for our spa" (CASE-000052) from henrik.berg@example.com looks resolved. Please confirm it is resolved, or reject so monitoring continues.' },
+];
+const MEANING = {
+  new: "A customer email needs a reply. Arrives within about a minute of the email.",
+  rem: "No reply found yet after the first deadline (default 4 working hours), then every 2 hours.",
+  again: "The customer chased an inquiry you still haven't answered. The pill counts their unanswered emails.",
+  warn: "Last call: the next missed deadline sends it to your manager.",
+  esc: "Your manager has been emailed. Reply as soon as you can; nothing more is sent once you do.",
+  over: "Past the resolution target (default 5 working days).",
+  update: "You replied, but nothing has moved for a working day.",
+  follow: "You're waiting on the customer and they have gone quiet for 3 days.",
+  conf: "The AI thinks the conversation is finished. You confirm or reject; it never closes by itself.",
+};
+const stack = document.getElementById("stack");
+const deskEmpty = document.getElementById("deskEmpty");
+const desk = document.getElementById("desk");
+let seq = 0;
+
+function esc(s) { return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function note(text) {
+  const old = desk.querySelector(".toast-msg"); if (old) old.remove();
+  const d = document.createElement("div"); d.className = "toast-msg"; d.textContent = text; desk.appendChild(d);
+  setTimeout(() => d.remove(), 2600);
+}
+function showAlert(a) {
+  // Newest alert for the same inquiry replaces the older one; at most 4 on screen (as in the Agent).
+  [...stack.children].forEach(p => p.remove());
+  const p = document.createElement("div");
+  p.className = "popup"; p.style.borderLeftColor = a.accent; p.id = "p" + (++seq);
+  p.innerHTML = `<div class="row"><span class="badge" style="background:${a.tint};color:${a.text}">${a.badge}</span>${a.count ? `<span class="count">${a.count} UNANSWERED</span>` : ""}<button class="x" title="Dismiss" aria-label="Dismiss">✕</button></div>
+    <div class="t">${esc(a.title)}</div><div class="m">${esc(a.msg)}</div><div class="c">CASE-000052</div>
+    <div class="b"><button class="open" style="background:${a.accent};color:#fff">Open Case</button><button class="ack">Acknowledge</button></div>`;
+  p.querySelector(".x").onclick = () => { p.remove(); sync(); };
+  p.querySelector(".open").onclick = () => { p.remove(); sync(); note("The inquiry opens in the Agent window."); };
+  p.querySelector(".ack").onclick = () => { p.remove(); sync(); note("Recorded as seen. Reminders continue until your reply is found."); };
+  stack.appendChild(p); sync();
+}
+function sync() { deskEmpty.hidden = stack.children.length > 0; }
+
+const box = document.getElementById("alertButtons");
+ALERTS.forEach(a => {
+  const b = document.createElement("button"); b.type = "button"; b.className = "btn";
+  b.innerHTML = `<span class="dot" style="background:${a.accent}"></span>${a.label}`;
+  b.onclick = () => { stopPlay(); showAlert(a); };
+  box.appendChild(b);
+});
+const legend = document.getElementById("legend");
+const seen = new Set();
+ALERTS.forEach(a => {
+  if (seen.has(a.badge)) return; seen.add(a.badge);
+  const keys = ALERTS.filter(x => x.badge === a.badge).map(x => MEANING[x.key]).join(" ");
+  const d = document.createElement("div");
+  d.innerHTML = `<span class="sw" style="background:${a.accent}"></span><b>${a.badge}</b><p>${keys}</p>`;
+  legend.appendChild(d);
+});
+
+// One inquiry, start to finish, using the default timings.
+const STEPS = [
+  { when: "Mon 09:12", clock: "09:12", t: "Henrik emails Maria's mailbox", d: "IEMAS reads it within a minute. The filter recognises a price request; no AI needed.", alert: "new" },
+  { when: "Mon 13:12", clock: "13:12", t: "No reply after 4 working hours", d: "First reminder pop-up.", alert: "rem" },
+  { when: "Mon 14:05", clock: "14:05", t: "Henrik writes again", d: "Joined to the same inquiry; Maria is told the customer is still waiting.", alert: "again" },
+  { when: "Mon 15:12", clock: "15:12", t: "Still no reply after 2 reminders", d: "Escalation warning pop-up.", alert: "warn" },
+  { when: "Mon 17:12", clock: "17:12", t: "Escalated", d: "Maria's supervisor gets the email shown below. Maria gets a red pop-up.", alert: "esc" },
+  { when: "Tue 08:40", clock: "08:40", t: "Maria replies in Outlook", d: "IEMAS sees the reply in the Sent folder within 2 minutes. Reminders stop, no further escalation.", alert: null },
+  { when: "Tue 10:02", clock: "10:02", t: "Henrik: \"Thanks, ordered!\"", d: "The AI reads the conversation and thinks it is finished, so it asks Maria to confirm.", alert: "conf" },
+  { when: "Tue 10:05", clock: "10:05", t: "Maria clicks \"Yes, it's resolved\"", d: "The inquiry is closed and counted in the reports. Only Maria (or a supervisor) can close it.", alert: null },
+];
+const tl = document.getElementById("timeline");
+STEPS.forEach((s, i) => {
+  const r = document.createElement("div"); r.className = "tl on"; r.id = "tl" + i;
+  r.innerHTML = `<div class="when">${s.when}</div><div class="pin"></div><div class="what"><b>${esc(s.t)}</b><p>${esc(s.d)}</p></div>`;
+  tl.appendChild(r);
+});
+let timer = null;
+function stopPlay() { if (timer) { clearTimeout(timer); timer = null; } document.getElementById("play").textContent = "▶ Play one inquiry"; }
+function play(i) {
+  if (i === 0) { stack.innerHTML = ""; sync(); STEPS.forEach((_, k) => document.getElementById("tl" + k).classList.remove("on")); }
+  if (i >= STEPS.length) { stopPlay(); return; }
+  const s = STEPS[i];
+  document.getElementById("tl" + i).classList.add("on");
+  document.getElementById("clock").textContent = s.clock;
+  if (s.alert) showAlert(ALERTS.find(a => a.key === s.alert)); else { stack.innerHTML = ""; sync(); note(s.t + ". " + s.d); }
+  timer = setTimeout(() => play(i + 1), 4000);
+}
+document.getElementById("play").onclick = () => {
+  if (timer) { stopPlay(); return; }
+  document.getElementById("play").textContent = "■ Stop";
+  play(0);
+};
+document.getElementById("clear").onclick = () => { stopPlay(); stack.innerHTML = ""; sync(); STEPS.forEach((_, k) => document.getElementById("tl" + k).classList.add("on")); };
+showAlert(ALERTS[0]);
+
+// Go-live checklist (ticks kept in this browser only).
+const ITEMS = [
+  "Server PC: Docker Desktop starts with Windows",
+  ".env filled in with new random secrets; CREDENTIAL_ENCRYPTION_KEY copied somewhere safe",
+  "Build-IEMAS.bat ends with Done. and no FAIL lines",
+  "Firewall allows port 8443; the CMS opens from another PC",
+  "Every mailbox added, connection tested, Sent folder found",
+  "Outbound email set; Test escalation (Employees page) reached a manager",
+  "Every employee added with the right mailbox",
+  "Every employee has the right supervisor (and escalation groups, if used)",
+  "Default reminder policy: office hours, time zone, weekends and holidays set",
+  "System Settings: CMS web address set; TEST MODE (count hours as minutes) is off",
+  "Every employee PC: Agent installed, approved, light is green, Start with Windows ticked",
+  "Each employee has opened the Agent's Help tab once and tried the alert simulator",
+  "Daily database backup scheduled and one restore tested",
+];
+const KEY = "iemas-golive-v1";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { state = {}; }
+const cl = document.getElementById("checklist");
+function progress() {
+  const n = ITEMS.filter((_, i) => state[i]).length;
+  document.getElementById("progress").textContent = `${n} of ${ITEMS.length} done`;
+}
+ITEMS.forEach((t, i) => {
+  const l = document.createElement("label");
+  l.innerHTML = `<input type="checkbox" id="chk${i}" ${state[i] ? "checked" : ""}><span>${esc(t)}</span>`;
+  l.querySelector("input").onchange = e => { state[i] = e.target.checked; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (err) {} progress(); };
+  cl.appendChild(l);
+});
+progress();
+</script>

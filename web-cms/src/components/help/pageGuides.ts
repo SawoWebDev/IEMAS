@@ -49,7 +49,7 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     ],
   },
   "/reply-verification": {
-    intro: "Checks whether employees really replied. Every 5 minutes IEMAS looks in each mailbox's Sent folder for a reply to every open Case. This is where you fix \"no reply\" problems.",
+    intro: "Checks whether employees really replied. Every 2 minutes IEMAS looks in each mailbox's Sent folder for a reply to every open Case. This is where you fix \"no reply\" problems.",
     steps: [
       "Click a card to list those Cases, e.g. \"No reply yet\".",
       "After an employee says they replied, press Check Now to look in the Sent folders straight away.",
