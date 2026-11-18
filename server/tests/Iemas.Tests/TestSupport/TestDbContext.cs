@@ -49,6 +49,7 @@ public class TestDbContext : DbContext, IAppDbContext
     public DbSet<ReplyVerificationAttempt> ReplyVerificationAttempts => Set<ReplyVerificationAttempt>();
     public DbSet<Agent> Agents => Set<Agent>();
     public DbSet<AgentCredential> AgentCredentials => Set<AgentCredential>();
+    public DbSet<AgentInstallKey> AgentInstallKeys => Set<AgentInstallKey>();
     public DbSet<AgentLog> AgentLogs => Set<AgentLog>();
     public DbSet<AgentCaseAction> AgentCaseActions => Set<AgentCaseAction>();
     public DbSet<ReminderPolicy> ReminderPolicies => Set<ReminderPolicy>();
