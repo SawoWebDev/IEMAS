@@ -1,7 +1,9 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IEMAS Rollout Guide</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
@@ -176,7 +178,16 @@ details.faq summary { cursor: pointer; font-weight: 600; }
 details.faq p { margin-top: 8px; color: var(--muted); font-size: 0.93rem; }
 footer { margin-top: 60px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 0.85rem; color: var(--muted); }
 </style>
-
+<style>body { margin: 0; }</style>
+<script>
+  // Opened from the CMS as /rollout-guide/?theme=light|dark: follow the CMS's theme choice.
+  (function () {
+    var t = new URLSearchParams(location.search).get("theme");
+    if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
+</head>
+<body>
 <div class="wrap">
 <header class="top">
   <div class="eyebrow">SAWO · IEMAS Inquiry Monitoring</div>
@@ -652,3 +663,5 @@ ITEMS.forEach((t, i) => {
 });
 progress();
 </script>
+</body>
+</html>

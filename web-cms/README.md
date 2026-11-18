@@ -1,32 +1,10 @@
-# React + TypeScript + Vite
+# IEMAS CMS
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The IEMAS management website (React + TypeScript + Vite). Administrators and supervisors use it to configure mailboxes, employees, Windows Agents, reminder and escalation policies, and to follow inquiries.
 
-Currently, two official plugins are available:
+- `npm install` then `npm run dev` for development (expects the API on the address in `VITE_API_BASE_URL`, default `/api/v1`).
+- `npm run build` type-checks and builds to `dist/`; the Dockerfile serves it with nginx (`nginx.conf`), which also forwards `/api/` and `/hubs/` to the API.
+- The menu and the Help page share one source: `src/components/layout/navigation.ts`.
+- The Rollout Tutorial is a self-contained static page in `public/rollout-guide/` (copied as-is into the build). The CMS shows it at **Help → Rollout Tutorial** (`/tutorial`); it can also be opened on its own at `/rollout-guide/`.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+See the repository [README](../README.md) for the whole system.

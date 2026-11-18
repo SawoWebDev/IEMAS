@@ -401,5 +401,5 @@ Code and tests changed on branch `feature/inquiry-supervision`. This section rec
 - Settings restored after each run (test clock off, real accounts active).
 
 ### Rollout
-- Illustrated deployment and first-use guide with an alert simulator: `deploy/rollout-guide/index.html` (screenshots from the live test system).
+- Illustrated deployment and first-use guide with an alert simulator: `web-cms/public/rollout-guide/index.html`, shown in the CMS under Help → Rollout Tutorial (screenshots from the live test system).
 - Ready-to-copy Agent: `windows-client/agent-release/IemasAgent.exe` (1.1.1, needs the .NET 8 Desktop Runtime).

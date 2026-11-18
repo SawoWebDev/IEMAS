@@ -254,6 +254,12 @@ export const NAV_SECTIONS: NavSection[] = [
         path: "/help",
         help: "This page.",
       },
+      {
+        label: "Rollout Tutorial",
+        path: "/tutorial",
+        help: "Step-by-step guide to putting this version live: server PC setup, CMS setup, installing the IEMAS Agent on each PC, first use, a simulator of every pop-up alert, and a go-live checklist.",
+        tasks: ["Follow the server and CMS setup", "Install and approve the Agent on each PC", "Show employees what the alerts look like"],
+      },
     ],
   },
 ];

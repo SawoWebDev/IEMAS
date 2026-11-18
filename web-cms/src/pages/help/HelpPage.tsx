@@ -10,7 +10,8 @@ const FLOW = [
   { title: "Employee alerted", text: "A pop-up appears on the owner's PC through the Windows Agent." },
   { title: "Reply checked", text: "Every 2 minutes the mailbox's Sent folder is checked for the reply." },
   { title: "Reminders", text: "No reply yet? The owner gets reminder pop-ups until one is found." },
-  { title: "Escalation", text: "Still no reply? The Case is marked Escalated and the owner is warned; who it should go to is recorded in Escalation History." },
+  { title: "Escalation", text: "Still no reply? The owner is warned, then the Case is escalated and management is emailed." },
+  { title: "Resolved", text: "A first reply does not end it: IEMAS follows the conversation until the employee confirms it is resolved." },
 ];
 
 const SETUP = [
@@ -55,6 +56,10 @@ export default function HelpPage() {
           responds — so no customer email is forgotten.
         </p>
       </div>
+      <p style={{ margin: "0 0 8px" }}>
+        Setting IEMAS up or showing it to employees for the first time? Follow the{" "}
+        <Link to="/tutorial">Rollout Tutorial</Link>: server setup, Agent install on each PC, and a simulator of every alert.
+      </p>
       <p style={mutedStyle}>What each part of IEMAS does. Use “Help for this page” at the top of any page to jump straight to its entry.</p>
 
       {!term && (

@@ -10,6 +10,7 @@ import EmailClassificationPage from "./pages/email-classification/EmailClassific
 import AiModelsPage from "./pages/ai-models/AiModelsPage";
 import AiUsagePage from "./pages/ai-usage/AiUsagePage";
 import HelpPage from "./pages/help/HelpPage";
+import TutorialPage from "./pages/help/TutorialPage";
 import CasesPage from "./pages/cases/CasesPage";
 import InquirySupervisionPage from "./pages/inquiry-supervision/InquirySupervisionPage";
 import InquiryAnalyticsPage from "./pages/inquiry-supervision/InquiryAnalyticsPage";
@@ -48,6 +49,7 @@ export default function App() {
           <Route path="/ai-models" element={<AiModelsPage />} />
           <Route path="/ai-usage" element={<AiUsagePage />} />
           <Route path="/help" element={<HelpPage />} />
+          <Route path="/tutorial" element={<TutorialPage />} />
           <Route path="/inquiry-supervision" element={<InquirySupervisionPage />} />
           <Route path="/inquiry-analytics" element={<InquiryAnalyticsPage />} />
           <Route path="/setup" element={<SetupPage />} />
