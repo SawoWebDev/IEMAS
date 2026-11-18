@@ -89,7 +89,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         switch (App.Session.State)
         {
             case SessionState.NotRegistered:
-                ShowOnboarding("Register this device", "This computer is not yet registered with IEMAS. Enter your enrolled email address to request registration; an administrator must approve it before you can connect.", showForm: true);
+                if (App.Session.HasInstallKey)
+                {
+                    ShowOnboarding("Connect this PC to IEMAS", "Enter your company email address (the mailbox IEMAS watches for you) and click Register. This PC was installed with an IEMAS installer, so it connects straight away; no approval is needed.", showForm: true);
+                    if (string.IsNullOrWhiteSpace(EmailTextBox.Text) && !string.IsNullOrWhiteSpace(App.Session.InstallEmail)) EmailTextBox.Text = App.Session.InstallEmail;
+                }
+                else
+                {
+                    ShowOnboarding("Register this device", "This computer is not yet registered with IEMAS. Enter your enrolled email address to request registration; an administrator must approve it before you can connect.", showForm: true);
+                }
+                if (!string.IsNullOrWhiteSpace(App.Session.AutoRegistrationError)) RegistrationError.Text = App.Session.AutoRegistrationError;
                 break;
             case SessionState.PendingApproval:
                 ShowOnboarding("Awaiting Administrator Approval", "Your registration request has been sent. An administrator needs to approve it in the IEMAS CMS before this device can connect. This screen updates automatically once approved.", showForm: false);

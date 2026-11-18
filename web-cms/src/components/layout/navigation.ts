@@ -198,8 +198,8 @@ export const NAV_SECTIONS: NavSection[] = [
       {
         label: "Windows Agents",
         path: "/agents",
-        help: "The IEMAS Agent program on each employee's PC. A new PC appears as Pending: pick the employee who owns its email account and Approve. It then connects by itself. Revoke cuts off a lost or old PC immediately.",
-        tasks: ["Approve a new PC", "Revoke a lost PC", "Check whether an Agent is connected"],
+        help: "The IEMAS Agent program on each employee's PC. Download installer gives a zip that installs and connects a PC by itself, with no approval step; installers expire, have a PC limit and can be withdrawn. A PC set up by hand appears as Pending: pick the employee who owns its email account and Approve. Revoke cuts off a lost or old PC immediately.",
+        tasks: ["Download an installer for one person or for everyone", "Withdraw an installer", "Approve a PC set up by hand", "Revoke a lost PC", "Check whether an Agent is connected"],
       },
       {
         label: "Users & Permissions",

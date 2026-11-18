@@ -36,6 +36,13 @@ public class AgentSessionManager : IAsyncDisposable
     public List<CaseDto> Waiting { get; private set; } = new();
 
     public event Action? StateUpdated;
+
+    /// <summary>True when an installer package left a key: registering then connects without waiting for approval.</summary>
+    public bool HasInstallKey => !string.IsNullOrWhiteSpace(_settings.InstallKey);
+    public string? InstallEmail => _settings.InstallEmail;
+
+    /// <summary>Why the automatic registration from the installer did not work, shown on the register screen.</summary>
+    public string? AutoRegistrationError { get; private set; }
     public event Action<AgentPushMessage>? PushReceived;
 
     public AgentSessionManager()
@@ -111,6 +118,17 @@ public class AgentSessionManager : IAsyncDisposable
         {
             State = SessionState.NotRegistered;
             StateUpdated?.Invoke();
+
+            // Installed from a CMS package made for one mailbox: register straight away, nothing to type.
+            if (HasInstallKey && !string.IsNullOrWhiteSpace(_settings.InstallEmail))
+            {
+                var (ok, error) = await RegisterAsync(_settings.InstallEmail!, Environment.MachineName);
+                if (!ok)
+                {
+                    AutoRegistrationError = error;
+                    StateUpdated?.Invoke();
+                }
+            }
             return;
         }
 
@@ -123,18 +141,35 @@ public class AgentSessionManager : IAsyncDisposable
     /// <summary>§68 "Agent Sends Registration Request → Server Creates PENDING."</summary>
     public async Task<(bool Succeeded, string? Error)> RegisterAsync(string emailAddress, string clientName)
     {
-        var request = new RegisterAgentRequest(emailAddress, clientName, _settings.ServerUrl, AgentVersion, Environment.MachineName);
+        var request = new RegisterAgentRequest(emailAddress, clientName, _settings.ServerUrl, AgentVersion, Environment.MachineName,
+            HasInstallKey ? _settings.InstallKey : null);
         var result = await _api.RegisterAsync(request, CancellationToken.None);
+
+        // An expired or used-up installer must not block the PC: forget the key and fall back to the normal
+        // request that an administrator approves in the CMS.
+        if (!result.Succeeded && HasInstallKey && (result.Error ?? "").Contains("can no longer be used", StringComparison.OrdinalIgnoreCase))
+        {
+            ForgetInstallKey();
+            result = await _api.RegisterAsync(request with { InstallKey = null }, CancellationToken.None);
+        }
+
         if (!result.Succeeded || result.Value is null)
         {
             return (false, result.Error);
         }
+
+        AutoRegistrationError = null;
 
         _agentId = result.Value.AgentId;
         _registrationRequestToken = result.Value.RegistrationRequestToken;
         State = SessionState.PendingApproval;
         StateUpdated?.Invoke();
         _reauthWatchTimer.Start();
+        if (result.Value.Status == 1)
+        {
+            // Approved on the spot by the installer key: collect the credential now instead of on the next poll.
+            await PollRegistrationIfPendingAsync();
+        }
         return (true, null);
     }
 
@@ -158,6 +193,7 @@ public class AgentSessionManager : IAsyncDisposable
                 _reauthWatchTimer.Stop();
                 _registrationKey = result.Value.RegistrationKey;
                 _credentialStore.Save(_agentId, _registrationKey, _settings.ServerUrl);
+                ForgetInstallKey();
                 await AuthenticateAndConnectAsync();
                 break;
             case 2:
@@ -166,6 +202,14 @@ public class AgentSessionManager : IAsyncDisposable
                 StateUpdated?.Invoke();
                 break;
         }
+    }
+
+    private void ForgetInstallKey()
+    {
+        if (_settings.InstallKey is null && _settings.InstallEmail is null) return;
+        _settings.InstallKey = null;
+        _settings.InstallEmail = null;
+        try { _settings.Save(); } catch (System.IO.IOException) { /* retried on the next registration */ }
     }
 
     private async Task AuthenticateAndConnectAsync()

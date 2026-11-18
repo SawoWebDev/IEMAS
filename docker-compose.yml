@@ -41,6 +41,10 @@ services:
       Cors__AllowedOrigins__0: ${CORS_ORIGIN:-http://localhost:5173}
       AiClassification__Enabled: ${AI_CLASSIFICATION_ENABLED:-true}
       AiClassification__OpenRouter__ApiKey: ${OPENROUTER_API_KEY:-}
+    volumes:
+      # The Agent and its install scripts, zipped into the one-click installer downloaded from the CMS
+      # (People & Devices > Windows Agents > Download installer). Read-only.
+      - ./windows-client/agent-release:/app/agent-release:ro
     ports:
       - "${API_PORT:-8090}:8080"
 

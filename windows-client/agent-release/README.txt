@@ -1,21 +1,19 @@
-IEMAS Agent
-===========
+IEMAS Agent release
+===================
 
-Needs once on the PC: .NET 8 Desktop Runtime (x64)
-  winget install Microsoft.DotNet.DesktopRuntime.8
-  or download ".NET Desktop Runtime 8.0.x - Windows x64" from https://dotnet.microsoft.com/download/dotnet/8.0
+This folder is mounted into the API container (see docker-compose.yml). The CMS zips it into the
+one-click installer: People & Devices > Windows Agents > Download installer.
 
-Install:
-  1. Create the folder C:\Program Files\IEMAS Agent and copy IemasAgent.exe into it.
-  2. Start IemasAgent.exe.
-  3. Settings -> Server URL: the address your administrator gives you, for example
-       https://172.16.2.68:8443   (production server, tick "Allow self-signed certificates")
-     Save.
-  4. Register with your company email address. An administrator approves the PC in the
-     IEMAS CMS (People & Devices -> Windows Agents). The app then connects by itself.
-  5. Leave "Start with Windows" ticked.
+  IemasAgent.exe         the Agent (needs the .NET 8 Desktop Runtime; the installer adds it)
+  installer\              Install-IEMAS-Agent.bat / .ps1 and README.txt, copied into every zip
 
-Update:
-  1. Right-click the IEMAS tray icon -> Exit
-  2. Replace IemasAgent.exe with the new one
-  3. Start IemasAgent.exe again (registration is kept)
+The CMS adds iemas-agent-setup.json (server address + a one-time installer key) to each zip.
+
+Rebuild IemasAgent.exe after changing the Agent:
+  dotnet publish windows-client/src/Iemas.Agent/Iemas.Agent.csproj -c Release -r win-x64 --self-contained false
+    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o <temp folder>
+  then copy IemasAgent.exe here.
+
+Manual setup without the installer: run IemasAgent.exe, Settings > Server URL (for example
+https://172.16.2.68:8443, tick "Allow self-signed certificates"), Save, Register, and approve the PC
+in the CMS under Windows Agents.

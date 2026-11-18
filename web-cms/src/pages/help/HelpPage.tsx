@@ -18,8 +18,7 @@ const SETUP = [
   { text: "Add the employee", path: "/employees" },
   { text: "Add their mailbox and set them as its owner", path: "/email-accounts" },
   { text: "Paste the OpenRouter API key and test it", path: "/ai-models" },
-  { text: "Install the IEMAS Agent on their PC and register it", path: "/agents" },
-  { text: "Approve the PC under Windows Agents", path: "/agents" },
+  { text: "Download an Agent installer under Windows Agents and run it on their PC (it connects by itself)", path: "/agents" },
   { text: "Review which emails count as work", path: "/system-configuration" },
 ];
 

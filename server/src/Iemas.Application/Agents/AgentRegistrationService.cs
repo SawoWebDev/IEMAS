@@ -5,6 +5,7 @@ using Iemas.Application.Common.Interfaces;
 using Iemas.Application.Common.Security;
 using Iemas.Domain.Agents;
 using Iemas.Domain.Email;
+using Iemas.Domain.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace Iemas.Application.Agents;
@@ -74,6 +75,17 @@ public class AgentRegistrationService
             return Result<RegisterAgentResponse>.Failure("This email address does not correspond to an enrolled IEMAS email account.");
         }
 
+        // A key from a CMS installer package: an administrator already vouched for this PC, so it is approved
+        // now instead of waiting as Pending. Checked before anything is written so a bad key leaves no trace.
+        AgentInstallKey? installKey = null;
+        Employee? autoApproveFor = null;
+        if (!string.IsNullOrWhiteSpace(request.InstallKey))
+        {
+            var check = await CheckInstallKeyAsync(request.InstallKey.Trim(), email, cancellationToken);
+            if (!check.Succeeded) return Result<RegisterAgentResponse>.Failure(check.Error!);
+            (installKey, autoApproveFor) = check.Value;
+        }
+
         var agent = new Agent
         {
             ClientName = clientName,
@@ -98,8 +110,49 @@ public class AgentRegistrationService
         });
         await _db.SaveChangesAsync(cancellationToken);
 
+        if (installKey is not null && autoApproveFor is not null)
+        {
+            installKey.UseCount++;
+            installKey.LastUsedAt = DateTimeOffset.UtcNow;
+            await ApproveCoreAsync(agent, autoApproveFor, installKey.CreatedByUserId,
+                $"Approved automatically for {autoApproveFor.FullName} by an installer package{(string.IsNullOrWhiteSpace(installKey.Label) ? "" : $" ({installKey.Label})")}", cancellationToken);
+            await _auditService.LogAsync("AGENT_AUTO_APPROVED", "Agent", agent.Id.ToString(),
+                $"{agent.ClientName} ({email}) -> {autoApproveFor.FullName}, installer key {installKey.Id} use {installKey.UseCount}/{installKey.MaxUses}", cancellationToken);
+        }
+
         // §67 "Technical Agent Log," not the admin-facing AuditLog — no administrator acted yet.
         return Result<RegisterAgentResponse>.Success(new RegisterAgentResponse(agent.Id, agent.RegistrationRequestToken, agent.RegistrationStatus));
+    }
+
+    /// <summary>
+    /// A usable installer key for this email: not revoked, not expired, uses left, and (when the key names a
+    /// mailbox) the same mailbox. The PC is approved for the mailbox's owner, who must be an active employee.
+    /// </summary>
+    private async Task<Result<(AgentInstallKey Key, Employee Owner)>> CheckInstallKeyAsync(string rawKey, string email, CancellationToken cancellationToken)
+    {
+        const string unusable = "This installer can no longer be used (it expired, was used up or was withdrawn). Ask your IEMAS administrator for a new one.";
+        var hash = HashKey(rawKey);
+        var key = await _db.AgentInstallKeys.FirstOrDefaultAsync(k => k.KeyHash == hash, cancellationToken);
+        if (key is null || key.RevokedAt is not null || key.ExpiresAt <= DateTimeOffset.UtcNow || key.UseCount >= key.MaxUses)
+        {
+            return Result<(AgentInstallKey, Employee)>.Failure(unusable);
+        }
+
+        if (key.EmailAddress is not null && !string.Equals(key.EmailAddress, email, StringComparison.OrdinalIgnoreCase))
+        {
+            return Result<(AgentInstallKey, Employee)>.Failure($"This installer is for {key.EmailAddress}. Use that address, or ask your IEMAS administrator for an installer for {email}.");
+        }
+
+        var owner = await _db.EmailAccounts
+            .Where(a => a.EmailAddress == email && a.Purpose == EmailAccountPurpose.Inbound && a.OwnerEmployeeId != null)
+            .Select(a => a.OwnerEmployee)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (owner is null || !owner.IsActive)
+        {
+            return Result<(AgentInstallKey, Employee)>.Failure($"The mailbox {email} has no active owner in IEMAS yet. Ask your IEMAS administrator to set its owner on the Email Accounts page, then start the Agent again.");
+        }
+
+        return Result<(AgentInstallKey, Employee)>.Success((key, owner));
     }
 
     /// <summary>
@@ -192,6 +245,15 @@ public class AgentRegistrationService
                     : $"The email account {agent.EnrollmentEmailAddress} is owned by {account.OwnerName}, not {employee.FullName}. Approve it for {account.OwnerName}, or change the account's owner on the Email Accounts page.");
         }
 
+        await ApproveCoreAsync(agent, employee, approvedByUserId, $"Approved for {employee.FullName}", cancellationToken);
+
+        await _auditService.LogAsync("AGENT_APPROVED", "Agent", agentId.ToString(), $"{agent.ClientName} ({agent.EnrollmentEmailAddress}) -> {employee.FullName}", cancellationToken);
+        return Result<bool>.Success(true);
+    }
+
+    /// <summary>Marks the Agent approved for the employee and generates its key (collected once by the Agent's next poll).</summary>
+    private async Task ApproveCoreAsync(Agent agent, Employee employee, Guid approvedByUserId, string logDetail, CancellationToken cancellationToken)
+    {
         agent.EmployeeId = employee.Id;
         agent.RegistrationStatus = AgentRegistrationStatus.Approved;
         agent.ApprovedAt = DateTimeOffset.UtcNow;
@@ -220,11 +282,8 @@ public class AgentRegistrationService
 
         await _db.SaveChangesAsync(cancellationToken);
 
-        _db.AgentLogs.Add(new AgentLog { AgentId = agent.Id, EventType = AgentLogEventType.Approved, Detail = $"Approved for {employee.FullName}" });
+        _db.AgentLogs.Add(new AgentLog { AgentId = agent.Id, EventType = AgentLogEventType.Approved, Detail = logDetail });
         await _db.SaveChangesAsync(cancellationToken);
-
-        await _auditService.LogAsync("AGENT_APPROVED", "Agent", agentId.ToString(), $"{agent.ClientName} ({agent.EnrollmentEmailAddress}) -> {employee.FullName}", cancellationToken);
-        return Result<bool>.Success(true);
     }
 
     public async Task<Result<bool>> RejectAsync(Guid agentId, RejectAgentRequest request, CancellationToken cancellationToken)

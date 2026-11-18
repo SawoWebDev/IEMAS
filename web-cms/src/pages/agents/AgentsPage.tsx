@@ -3,6 +3,7 @@ import { apiClient } from "../../api/client";
 import type { AgentDto, AgentLogDto, EmployeeDto } from "../../api/types";
 import { AGENT_REGISTRATION_STATUS_LABELS, AGENT_CONNECTION_STATUS_LABELS, AGENT_LOG_EVENT_TYPE_LABELS } from "../../api/types";
 import { InfoTip } from "../../components/help/Tooltip";
+import AgentInstallerPanel from "./AgentInstallerPanel";
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<AgentDto[]>([]);
@@ -118,9 +119,12 @@ export default function AgentsPage() {
       <div style={{ flex: 1, minWidth: 0 }}>
         <h1>Windows Agents</h1>
         <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
-          Each employee's PC runs the IEMAS Agent, which shows pop-up alerts. A new PC appears here as Pending;
-          approve it for the employee who owns its email account. The Agent then connects by itself — no keys to copy.
+          Each employee's PC runs the IEMAS Agent, which shows pop-up alerts. The easiest way to set up a PC is the installer
+          below: PCs installed with it connect straight away. A PC set up by hand appears here as Pending; approve it for the
+          employee who owns its email account.
         </p>
+
+        <AgentInstallerPanel employees={employees} onChanged={load} />
 
         {error && <div className="form-error">{error}</div>}
 

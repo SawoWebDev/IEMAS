@@ -402,4 +402,5 @@ Code and tests changed on branch `feature/inquiry-supervision`. This section rec
 
 ### Rollout
 - Illustrated deployment and first-use guide with an alert simulator: `web-cms/public/rollout-guide/index.html`, shown in the CMS under Help → Rollout Tutorial (screenshots from the live test system).
-- Ready-to-copy Agent: `windows-client/agent-release/IemasAgent.exe` (1.1.1, needs the .NET 8 Desktop Runtime).
+- Agent 1.2.0 in `windows-client/agent-release/` (mounted into the API container).
+- **One-click installer** (2026-11-18): CMS Windows Agents > Download installer builds a zip (Agent, `Install-IEMAS-Agent.bat/.ps1`, setup file with server address and a one-time installer key). The script installs the .NET 8 Desktop Runtime if missing, installs the Agent per user, enables Start with Windows and starts it; the Agent registers with the key and is approved at once (audit `AGENT_AUTO_APPROVED`). Keys: per mailbox or for everyone, expiry (max 90 days), max PCs, withdrawable, SHA-256 hash only; an unusable key falls back to a normal Pending request. Migration `AgentInstallKeys`; tests `Agents/AgentInstallKeyTests`. Verified on Windows 11 against the test stack: one-person installer connected with no input; Everyone installer connected after typing the email once.

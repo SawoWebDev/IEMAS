@@ -41,6 +41,7 @@ public interface IAppDbContext
     DbSet<ReplyVerificationAttempt> ReplyVerificationAttempts { get; }
     DbSet<Agent> Agents { get; }
     DbSet<AgentCredential> AgentCredentials { get; }
+    DbSet<AgentInstallKey> AgentInstallKeys { get; }
     DbSet<AgentLog> AgentLogs { get; }
     DbSet<AgentCaseAction> AgentCaseActions { get; }
     DbSet<ReminderPolicy> ReminderPolicies { get; }

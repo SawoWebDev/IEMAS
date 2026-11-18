@@ -4,7 +4,7 @@ namespace Iemas.Agent.Models;
 // wire matching ASP.NET Core's default System.Text.Json policy) — the client is built against the
 // server's actual contract, not a guessed protocol.
 
-public record RegisterAgentRequest(string EmailAddress, string ClientName, string? ServerAddress, string? AgentVersion, string? DeviceMetadata);
+public record RegisterAgentRequest(string EmailAddress, string ClientName, string? ServerAddress, string? AgentVersion, string? DeviceMetadata, string? InstallKey = null);
 
 public record RegisterAgentResponse(Guid AgentId, string RegistrationRequestToken, int Status);
 

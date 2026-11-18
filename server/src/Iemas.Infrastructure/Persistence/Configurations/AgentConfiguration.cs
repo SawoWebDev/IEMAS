@@ -99,3 +99,22 @@ public class AgentCaseActionConfiguration : IEntityTypeConfiguration<AgentCaseAc
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+public class AgentInstallKeyConfiguration : IEntityTypeConfiguration<AgentInstallKey>
+{
+    public void Configure(EntityTypeBuilder<AgentInstallKey> builder)
+    {
+        builder.ToTable("agent_install_keys");
+        builder.HasKey(k => k.Id);
+
+        builder.Property(k => k.KeyHash).IsRequired().HasMaxLength(64);
+        builder.HasIndex(k => k.KeyHash).IsUnique();
+        builder.Property(k => k.EmailAddress).HasMaxLength(320);
+        builder.Property(k => k.Label).HasMaxLength(200);
+
+        builder.HasOne(k => k.CreatedByUser)
+            .WithMany()
+            .HasForeignKey(k => k.CreatedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}

@@ -23,7 +23,8 @@ IEMAS watches the company mailboxes, recognises customer inquiries, alerts the e
 - **Reliability:** OpenRouter retries, fallback models and circuit breaker; duplicate-email protection; scheduled-job monitoring on the System Health page.
 - **Reporting:** Inquiry Analytics (volumes, response and resolution times, AI accuracy) and an audit of every AI call and its cost.
 - **Security:** login lockout after 5 failed attempts, secret length checks at start-up, encrypted stored replies.
-- **Windows Agent 1.1.1:** confirm or reject "looks resolved", colour-coded always-on-top pop-ups, help text matching the 2-minute reply check.
+- **One-click Agent installer:** download a zip from the CMS, run one .bat on the PC, and it installs, configures and connects itself with no approval step.
+- **Windows Agent 1.2.0:** installer keys, confirm or reject "looks resolved", colour-coded always-on-top pop-ups, help text matching the 2-minute reply check.
 - **Rollout Tutorial** inside the CMS.
 
 Verified end to end on 2026-11-18 with a live simulation (real mailboxes on a test mail server, the real AI models, the Agent protocol): 42 of 42 checks passed. 867 automated tests pass. Details and remaining gaps: [`inquiry-supervision/PROGRESS.md`](inquiry-supervision/PROGRESS.md).
@@ -34,7 +35,7 @@ Verified end to end on 2026-11-18 with a live simulation (real mailboxes on a te
 |---|---|
 | `server/` | ASP.NET Core 8 API with the background jobs (Hangfire), EF Core + PostgreSQL. `src/` has Domain, Application, Infrastructure, Api; `tests/` has the test suite. |
 | `web-cms/` | The management website (React + Vite), served by nginx. The tutorial lives in `public/rollout-guide/`. |
-| `windows-client/` | The IEMAS Agent for employees' PCs (WPF, .NET 8). The ready-to-copy build is `agent-release/IemasAgent.exe`. |
+| `windows-client/` | The IEMAS Agent for employees' PCs (WPF, .NET 8). `agent-release/` holds the release build and the installer scripts; it is mounted into the API container, which zips it into the installer the CMS downloads. |
 | `deploy/` | Production reverse proxy (Caddy) and the deployment notes in [`deploy/README.md`](deploy/README.md). |
 | `scripts/` | `build-and-run.ps1` (started by `Build-IEMAS.bat`), database backup and restore. |
 | `inquiry-supervision/` | A separate test stack (own ports, test mail server) and the live simulation scripts. |
@@ -51,17 +52,17 @@ Full steps with screenshots are in the Rollout Tutorial.
 4. Allow inbound TCP 8443 in the Windows firewall.
 5. Open `https://<server>:8443`, sign in, and work through **System → Setup Checklist**: employees, mailboxes and owners, outbound email, supervisors, business hours and holidays, and the **CMS web address** setting.
 
-**Each employee PC**
+**Each employee PC** (no approval step)
 
-1. `winget install Microsoft.DotNet.DesktopRuntime.8`
-2. Copy `windows-client/agent-release/IemasAgent.exe` to `C:\Program Files\IEMAS Agent\` and start it.
-3. Settings: Server URL `https://<server>:8443`, tick **Allow self-signed certificates**, keep **Start with Windows**, Save.
-4. Register with the employee's company email. An administrator approves the PC under **People & Devices → Windows Agents**.
+1. In the CMS: **People & Devices → Windows Agents → Download installer**. Pick one person's mailbox (nothing to type on the PC) or "Everyone" (each person types their email once), check the server address, download the zip.
+2. On the PC: extract the zip and double-click **`Install-IEMAS-Agent.bat`**. It installs the .NET 8 Desktop Runtime if missing, installs the Agent for that Windows user, turns on Start with Windows, starts it, and the Agent registers and is approved automatically.
+
+Each installer carries a one-time installer key with an expiry date and a maximum number of PCs; it can be withdrawn in the CMS, and only its hash is stored. An expired installer still installs the Agent, but the PC then waits for approval as before. Manual setup (copy `windows-client/agent-release/IemasAgent.exe`, enter the server address, register, approve under Windows Agents) still works.
 
 **Updating**
 
 - Server: `git pull`, then `Build-IEMAS.bat` again. Database changes are applied automatically at start-up.
-- Agent: tray icon → Exit, replace `IemasAgent.exe`, start it again. Registration is kept.
+- Agent: rebuild `windows-client/agent-release/IemasAgent.exe` (command below), then give PCs a new installer from the CMS. Running it over an existing install keeps the registration.
 
 **Backups:** schedule `scripts/backup-database.sh` daily and copy the files off the server. Keep a copy of `CREDENTIAL_ENCRYPTION_KEY`: without it the stored mailbox passwords cannot be read.
 
@@ -87,7 +88,7 @@ cd web-cms && npm install && npm run dev
 # Agent
 dotnet build windows-client/src/Iemas.Agent/Iemas.Agent.csproj -c Release
 
-# Agent release build (single file, needs the .NET 8 Desktop Runtime on the PC)
+# Agent release build used by the CMS installer (single file, needs the .NET 8 Desktop Runtime on the PC)
 dotnet publish windows-client/src/Iemas.Agent/Iemas.Agent.csproj -c Release -r win-x64 --self-contained false \
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o windows-client/agent-release
 ```

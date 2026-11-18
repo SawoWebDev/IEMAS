@@ -8,7 +8,9 @@ public record RegisterAgentRequest(
     string ClientName,
     string? ServerAddress,
     string? AgentVersion,
-    string? DeviceMetadata);
+    string? DeviceMetadata,
+    // From an installer package downloaded in the CMS. A valid key approves the PC straight away.
+    string? InstallKey = null);
 
 /// <summary>
 /// Returned immediately on registration. <see cref="RegistrationRequestToken"/> is the opaque
@@ -53,3 +55,26 @@ public record AgentDto(
     DateTimeOffset? LastHeartbeatAt);
 
 public record AgentLogDto(Guid Id, AgentLogEventType EventType, string? Detail, string? IpAddress, DateTimeOffset OccurredAt);
+
+public record CreateInstallPackageRequest(
+    // Mailbox the package is for. Null: any monitored mailbox; the employee types their email on first start.
+    string? EmailAddress,
+    // Address the PCs use to reach IEMAS, normally the address the CMS is open on (https://server:8443).
+    string ServerUrl,
+    bool AllowSelfSignedCertificate,
+    int ValidDays = 7,
+    int MaxUses = 3);
+
+public record AgentInstallKeyDto(
+    Guid Id,
+    string? EmailAddress,
+    string? OwnerName,
+    string? Label,
+    DateTimeOffset CreatedAt,
+    string? CreatedBy,
+    DateTimeOffset ExpiresAt,
+    int MaxUses,
+    int UseCount,
+    DateTimeOffset? LastUsedAt,
+    DateTimeOffset? RevokedAt,
+    bool Usable);
