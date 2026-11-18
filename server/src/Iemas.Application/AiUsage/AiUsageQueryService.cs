@@ -27,6 +27,31 @@ public record AiUsageCallDto(
     int? TotalTokens,
     decimal? CostUsd);
 
+/// <summary>One audited AI decision (see <see cref="AiUsageQueryService.GetAuditAsync"/>).</summary>
+public record AiAuditEntryDto(
+    Guid Id,
+    DateTimeOffset OccurredAt,
+    string Purpose,
+    Guid? CaseId,
+    Guid? EmailMessageId,
+    string Provider,
+    string Model,
+    string? ModelVersion,
+    string? PromptVersion,
+    string? Decision,
+    double? Confidence,
+    string? Explanation,
+    long ProcessingTimeMs,
+    int? PromptTokens,
+    int? CompletionTokens,
+    int? TotalTokens,
+    decimal? CostUsd,
+    bool Succeeded,
+    string? ErrorMessage,
+    string? FailureCategory,
+    bool? FallbackUsed,
+    int? AttemptCount);
+
 /// <summary>Everything over the chosen range, all calls included (retries, fallbacks, failures, tests).</summary>
 public record AiAnalyticsTotalsDto(
     int Calls, int SucceededCalls, int FailedCalls,
@@ -271,6 +296,44 @@ public class AiUsageQueryService
             .ToListAsync(cancellationToken);
 
         return new PagedResult<AiUsageCallDto>(items, total, page, pageSize, totalPages);
+    }
+
+    /// <summary>
+    /// The AI decision audit trail: one row per AI call with model, provider-reported model version, prompt version,
+    /// decision, confidence, explanation, duration, tokens, cost, success/failure and whether a fallback model was used.
+    /// Filter by case, email, purpose or outcome. Never contains email text.
+    /// </summary>
+    public async Task<PagedResult<AiAuditEntryDto>> GetAuditAsync(
+        int page, int pageSize, Guid? caseId, Guid? emailMessageId, string? purpose, bool? succeeded, string? promptVersion,
+        DateTimeOffset? from, DateTimeOffset? to, CancellationToken cancellationToken)
+    {
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        page = Math.Max(page, 1);
+
+        var query = _db.AiUsageRecords.AsNoTracking().AsQueryable();
+        if (caseId is Guid cid) query = query.Where(r => r.CaseId == cid);
+        if (emailMessageId is Guid eid) query = query.Where(r => r.EmailMessageId == eid);
+        if (!string.IsNullOrWhiteSpace(purpose)) query = query.Where(r => r.Purpose == purpose);
+        if (succeeded is bool ok) query = query.Where(r => r.Succeeded == ok);
+        if (!string.IsNullOrWhiteSpace(promptVersion)) query = query.Where(r => r.PromptVersion == promptVersion);
+        if (from is DateTimeOffset fromValue) query = query.Where(r => r.CreatedAt >= fromValue);
+        if (to is DateTimeOffset toValue) query = query.Where(r => r.CreatedAt <= toValue);
+
+        var total = await query.CountAsync(cancellationToken);
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        page = Math.Min(page, totalPages);
+
+        var items = await query
+            .OrderByDescending(r => r.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(r => new AiAuditEntryDto(
+                r.Id, r.CreatedAt, r.Purpose, r.CaseId, r.EmailMessageId, r.Provider, r.ModelIdentifier, r.ModelVersion, r.PromptVersion,
+                r.Decision, r.Confidence, r.Explanation, r.DurationMs, r.PromptTokens, r.CompletionTokens, r.TotalTokens, r.CostUsd,
+                r.Succeeded, r.ErrorMessage, r.FailureCategory, r.FallbackUsed, r.AttemptCount))
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<AiAuditEntryDto>(items, total, page, pageSize, totalPages);
     }
 
     public async Task<List<string>> GetModelsUsedAsync(CancellationToken cancellationToken) =>

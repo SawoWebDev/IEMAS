@@ -245,7 +245,8 @@ public class EmailClassificationService
                     "Email {EmailMessageId} classified successfully by {Provider}/{Model} after {AttemptCount} attempt(s){FallbackNote}",
                     message.Id, model.Provider, model.ModelIdentifier, attemptCount,
                     model.FallbackOrder > 0 ? " (used a fallback model, not the primary)" : "");
-                return await PersistSuccessAsync(message, profile, filterResult, lastAttempt, stopwatch, cancellationToken);
+                return await PersistSuccessAsync(message, profile, filterResult, lastAttempt, stopwatch, cancellationToken,
+                    fallbackUsed: !string.Equals(model.ModelIdentifier, models[0].ModelIdentifier, StringComparison.Ordinal));
             }
 
             _logger.LogWarning(
@@ -362,7 +363,7 @@ public class EmailClassificationService
 
     private async Task<ImportanceDecision> PersistSuccessAsync(
         EmailMessage message, ClassificationProfile? profile, DeterministicFilterResult filterResult,
-        ClassificationAttemptResult attempt, Stopwatch stopwatch, CancellationToken cancellationToken)
+        ClassificationAttemptResult attempt, Stopwatch stopwatch, CancellationToken cancellationToken, bool fallbackUsed = false)
     {
         var response = attempt.Response!;
         var policyResult = ClassificationDecisionPolicy.Decide(
@@ -409,6 +410,12 @@ public class EmailClassificationService
             Detail = policyResult.Reason,
             AiModel = attempt.ModelIdentifier,
             DurationMs = stopwatch.ElapsedMilliseconds,
+            ModelVersion = attempt.ModelVersion,
+            PromptVersion = attempt.PromptVersion,
+            Confidence = response.Confidence,
+            TotalTokens = attempt.Usage?.TotalTokens,
+            CostUsd = attempt.Usage?.CostUsd,
+            FallbackUsed = fallbackUsed,
         });
 
         await _db.SaveChangesAsync(cancellationToken);

@@ -100,6 +100,13 @@ public class CaseWorkflowService
             .Take(batchSize)
             .ToListAsync(cancellationToken);
 
+        // A follow-up can be classified before its inquiry exists (both arrived in the same poll) and so be
+        // judged on its own, e.g. "any update?" -> not important. Once the inquiry exists it still belongs to it.
+        foreach (var id in await FindUnlinkedConversationMembersAsync(batchSize, cancellationToken))
+        {
+            if (!candidateIds.Contains(id)) candidateIds.Add(id);
+        }
+
         int created = 0, updated = 0, reopened = 0;
         var outcomes = new Dictionary<Guid, CaseProcessOutcome>();
 
@@ -225,6 +232,45 @@ public class CaseWorkflowService
         return PagedResult<CaseWorkflowItemDto>.Create(items, total, page, pageSize);
     }
 
+    /// <summary>How far back a classified-but-unlinked message is still checked for membership of an inquiry's conversation.</summary>
+    public static readonly TimeSpan ConversationMemberLookback = TimeSpan.FromDays(7);
+
+    /// <summary>
+    /// Inbound messages the Important-only candidate query leaves out (screened as not important, or left
+    /// for review) that carry thread headers pointing into an existing inquiry. Supervision only: a message
+    /// in an inquiry's conversation is linked whatever its own classification says.
+    /// </summary>
+    private async Task<List<Guid>> FindUnlinkedConversationMembersAsync(int batchSize, CancellationToken cancellationToken)
+    {
+        if (_conversation is null || !await _conversation.IsSupervisionEnabledAsync(cancellationToken)) return new List<Guid>();
+
+        // Anchored on the newest email on record (not the wall clock) so a catching-up mailbox is covered too.
+        var newest = await _db.EmailMessages.AsNoTracking().Where(m => m.Direction == MessageDirection.Inbound)
+            .MaxAsync(m => (DateTimeOffset?)m.ReceivedAt, cancellationToken);
+        if (newest is null) return new List<Guid>();
+        var since = newest.Value - ConversationMemberLookback;
+        var pool = await _db.EmailMessages.AsNoTracking()
+            .Where(m => m.Direction == MessageDirection.Inbound
+                && (m.ProcessingStatus == EmailProcessingStatus.Processed || m.ProcessingStatus == EmailProcessingStatus.ReviewRequired)
+                && m.ReceivedAt >= since
+                && (m.ThreadId != null || m.InReplyTo != null || m.References != null)
+                && !_db.CaseEmails.Any(ce => ce.EmailMessageId == m.Id)
+                && !(m.ProcessingStatus == EmailProcessingStatus.Processed
+                    && _db.EmailClassifications.Any(c => c.EmailMessageId == m.Id && c.Decision == ImportanceDecision.Important)))
+            .OrderBy(m => m.ReceivedAt)
+            .Select(m => new { m.Id, m.EmailAccountId, m.ThreadId, m.InReplyTo, m.References })
+            .Take(Math.Clamp(batchSize, 1, 200))
+            .ToListAsync(cancellationToken);
+
+        var members = new List<Guid>();
+        foreach (var m in pool)
+        {
+            if (await ConversationThreadMatcher.FindCaseAsync(_db, m.EmailAccountId, m.ThreadId, m.InReplyTo, m.References, cancellationToken) is not null)
+                members.Add(m.Id);
+        }
+        return members;
+    }
+
     private IQueryable<Guid> CandidateMessageIds() =>
         _db.EmailClassifications
             .Where(c => c.Decision == ImportanceDecision.Important)
@@ -281,7 +327,8 @@ public class CaseWorkflowService
         }
 
         var message = await _db.EmailMessages.FirstOrDefaultAsync(m => m.Id == emailMessageId, cancellationToken);
-        if (message is null || message.ProcessingStatus != EmailProcessingStatus.Processed)
+        if (message is null || message.Direction != MessageDirection.Inbound
+            || message.ProcessingStatus is not (EmailProcessingStatus.Processed or EmailProcessingStatus.ReviewRequired))
         {
             return CaseProcessOutcome.Skipped;
         }
@@ -307,13 +354,24 @@ public class CaseWorkflowService
 
         var classification = await _db.EmailClassifications.AsNoTracking()
             .FirstOrDefaultAsync(c => c.EmailMessageId == emailMessageId, cancellationToken);
-        if (classification is null || classification.Decision != ImportanceDecision.Important)
+        if (threadCase is null)
         {
-            return CaseProcessOutcome.Skipped;
+            // Outside an existing conversation only a message the screening judged important becomes work.
+            if (message.ProcessingStatus != EmailProcessingStatus.Processed
+                || classification is null || classification.Decision != ImportanceDecision.Important)
+            {
+                return CaseProcessOutcome.Skipped;
+            }
         }
 
         var role = supervised ? await _conversation!.InboundRoleAsync(message.FromAddress, cancellationToken) : ConversationRole.Customer;
         var matchResult = await _matchingService.FindMatchingCaseAsync(message, cancellationToken);
+        if (threadCase is not null && (matchResult.ExistingCase is null || (matchResult.ExistingCase.Id != threadCase.Id && !IsThreadSignal(matchResult.Signal))))
+        {
+            // The conversation thread is the strongest evidence there is: never start a second inquiry, or
+            // pick one by a weak signal (same subject, same sender), when the headers name the inquiry.
+            matchResult = new CaseMatchResult(threadCase, CaseMatchSignal.References, "Same conversation thread");
+        }
         if (role == ConversationRole.Internal && (matchResult.ExistingCase is null || !IsThreadSignal(matchResult.Signal)))
         {
             // Internal email only ever joins an inquiry through the conversation thread itself.
@@ -450,10 +508,22 @@ public class CaseWorkflowService
         // much "a new email that needs you" as a new inquiry.
         var followUpNeedsAgent = supervised && outcome == CaseProcessOutcome.Updated && role == ConversationRole.Customer
             && targetCase.Stage == InquiryStage.CustomerFollowUpReceived && targetCase.StageChangedAt == message.ReceivedAt;
+        if (_notificationService is not null && targetCase.OwnerEmployeeId is null && role == ConversationRole.Customer)
+        {
+            // The mailbox got its owner after the inquiry was opened: a customer's follow-up must not go to nobody.
+            var accountOwner = await _db.EmailAccounts.AsNoTracking().Where(a => a.Id == targetCase.EmailAccountId)
+                .Select(a => a.OwnerEmployeeId).FirstOrDefaultAsync(cancellationToken);
+            if (accountOwner is not null)
+            {
+                targetCase.OwnerEmployeeId = accountOwner;
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+        }
+
         if ((outcome == CaseProcessOutcome.Created || outcome == CaseProcessOutcome.Reopened || followUpNeedsAgent) && _notificationService is not null)
         {
             await _notificationService.SendForCaseAsync(
-                NotificationType.NewEmail, targetCase, AgentPushCommandType.ShowCase, null, cancellationToken);
+                NotificationType.NewEmail, targetCase, AgentPushCommandType.ShowCase, null, cancellationToken, message.Id);
         }
         else if (outcome == CaseProcessOutcome.Updated && customerWroteAgainWhileWaiting && _notificationService is not null
                  && !await RecentlyAlertedWroteAgainAsync(targetCase.Id, cancellationToken))
@@ -461,7 +531,7 @@ public class CaseWorkflowService
             // Not a new inquiry, an existing one that still needs a reply - and the customer is chasing it.
             // Distinct alert ("still needs your response") so the agent doesn't mistake it for a new email.
             await _notificationService.SendForCaseAsync(
-                NotificationType.CustomerWroteAgain, targetCase, AgentPushCommandType.ShowCase, null, cancellationToken);
+                NotificationType.CustomerWroteAgain, targetCase, AgentPushCommandType.ShowCase, null, cancellationToken, message.Id);
         }
 
         return outcome;
@@ -564,6 +634,13 @@ public class CaseWorkflowService
         if (targetCase.WorkStatus is CaseWorkStatus.Completed or CaseWorkStatus.Cancelled)
         {
             return Result<bool>.Failure("Case is already completed or cancelled.");
+        }
+
+        // The agent's last reply may still be unread in the Sent folder (the scheduled sync runs every few
+        // minutes): store it before the inquiry is finalised. Never blocks the completion.
+        if (_conversation is not null)
+        {
+            await _conversation.TrySyncCaseAsync(targetCase.Id, null, cancellationToken);
         }
 
         targetCase.WorkStatus = CaseWorkStatus.Completed;

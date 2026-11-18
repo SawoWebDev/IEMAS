@@ -203,6 +203,27 @@ public class EmailIntakeService
         var alreadyExists = await _db.EmailMessages
             .AnyAsync(m => m.EmailAccountId == emailAccountId && m.ProviderMessageId == message.ProviderMessageId, cancellationToken);
 
+        // The same email can come back under a different provider id (an IMAP UID reset after a mailbox
+        // migration, a message re-delivered by the provider, the same mail listed twice). Its RFC 5322
+        // Message-ID is the identity; with none, a fingerprint of sender, subject, time and recipients stands in.
+        if (!alreadyExists)
+        {
+            var messageId = Truncate(message.MessageId, 998);
+            if (!string.IsNullOrWhiteSpace(messageId))
+            {
+                alreadyExists = await _db.EmailMessages.AnyAsync(m => m.EmailAccountId == emailAccountId
+                    && m.Direction == MessageDirection.Inbound && m.MessageId == messageId, cancellationToken);
+            }
+            else
+            {
+                var from = Truncate(message.FromAddress, 320) ?? string.Empty;
+                var to = string.Join(';', message.ToAddresses);
+                alreadyExists = await _db.EmailMessages.AnyAsync(m => m.EmailAccountId == emailAccountId
+                    && m.Direction == MessageDirection.Inbound && m.MessageId == null
+                    && m.FromAddress == from && m.Subject == message.Subject && m.ReceivedAt == message.ReceivedAt && m.ToAddresses == to, cancellationToken);
+            }
+        }
+
         if (alreadyExists)
         {
             _db.EmailIntakeLogs.Add(new EmailIntakeLog

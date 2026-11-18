@@ -25,10 +25,27 @@ public record SystemHealthDto(string Status, double TotalDurationMs, List<Health
 public class SystemHealthController : ControllerBase
 {
     private readonly HealthCheckService _healthCheckService;
+    private readonly Iemas.Api.Jobs.JobMonitoringService _jobMonitoring;
 
-    public SystemHealthController(HealthCheckService healthCheckService)
+    public SystemHealthController(HealthCheckService healthCheckService, Iemas.Api.Jobs.JobMonitoringService jobMonitoring)
     {
         _healthCheckService = healthCheckService;
+        _jobMonitoring = jobMonitoring;
+    }
+
+    /// <summary>Per recurring job: last success/failure, durations, 24 h failures, queue depth and a Healthy/Stale/Failing status.</summary>
+    [HttpGet("jobs")]
+    public ActionResult<Iemas.Api.Jobs.JobMonitoringReport> Jobs()
+    {
+        try
+        {
+            return Ok(_jobMonitoring.GetReport());
+        }
+        catch (Exception)
+        {
+            // Hangfire storage unreachable: report that, not a stack trace.
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "Hangfire storage is unavailable." });
+        }
     }
 
     [HttpGet]

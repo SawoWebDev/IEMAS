@@ -44,6 +44,14 @@ public class UsageRecordingAiClassificationProvider : IAiClassificationProvider
             TotalTokens = result.Usage?.TotalTokens,
             CostUsd = result.Usage?.CostUsd,
             GenerationId = result.Usage?.GenerationId,
+            // Audit trail: what was decided, by which exact model/prompt, and how.
+            ModelVersion = result.ModelVersion,
+            PromptVersion = result.PromptVersion,
+            Decision = result.Response is { } r ? $"{(r.Relevant ? "relevant" : "not relevant")}/{r.Kind ?? "unspecified"}/{r.Priority}" : null,
+            Confidence = result.Response?.Confidence,
+            Explanation = result.Response?.Summary is { Length: > 1000 } s ? s[..1000] : result.Response?.Summary,
+            AttemptCount = result.Attempts,
+            FailureCategory = result.Succeeded || result.FailureCategory == ClassificationFailureCategory.None ? null : result.FailureCategory.ToString(),
         }, CancellationToken.None);
 
         return result;

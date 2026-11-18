@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<AiModelBenchmarkService>();
         services.AddScoped<Iemas.Application.AiUsage.AiUsageQueryService>();
         services.AddScoped<EmailClassificationService>();
+        services.AddScoped<ClassificationReviewService>();
         services.AddScoped<CaseMatchingService>();
         services.AddScoped<CaseWorkflowService>();
         services.AddScoped<CaseService>();
@@ -71,6 +72,7 @@ public static class DependencyInjection
         services.AddScoped<Iemas.Application.Inquiries.ResolutionAssessmentService>();
         services.AddScoped<Iemas.Application.Inquiries.InquirySupervisionService>();
         services.AddScoped<Iemas.Application.Inquiries.InquiryOverviewService>();
+        services.AddScoped<Iemas.Application.Inquiries.InquiryAnalyticsService>();
         return services;
     }
 }

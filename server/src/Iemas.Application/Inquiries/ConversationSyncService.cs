@@ -25,6 +25,17 @@ public sealed record ConversationSyncRunResult(int CasesChecked, int AgentMessag
 public class ConversationSyncService
 {
     private const int MaxSentMessagesPerMailbox = 200;
+
+    /// <summary>
+    /// A resolved or closed inquiry keeps being synced for this long after it closed: catches the reply
+    /// sent just before "Confirm resolved", and a mail client (or Outlook on a POP mailbox) that uploads
+    /// its Sent copy late.
+    /// </summary>
+    public static readonly TimeSpan LateReplyWindow = TimeSpan.FromDays(1);
+
+    /// <summary>Inside the grace window a closed inquiry is re-read at most this often (the first read after closing is immediate).</summary>
+    public static readonly TimeSpan ClosedRecheckInterval = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan JustClosedWindow = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan SyncOverlap = TimeSpan.FromDays(1);
     private static readonly Regex HtmlTag = new("<[^>]+>", RegexOptions.Compiled);
 
@@ -45,9 +56,67 @@ public class ConversationSyncService
         _conversation = conversation;
         _protector = protector;
         _logger = logger;
+
+        // The confirm/reject/complete paths sync the mailbox before finalising (see InquiryConversationService).
+        _conversation.UseSync(this);
     }
 
-    public async Task<ConversationSyncRunResult> RunAsync(int batchSize, CancellationToken cancellationToken)
+    /// <summary>
+    /// Event-triggered sync of ONE inquiry's mailbox (the agent confirms or rejects a resolution, completes
+    /// the inquiry, or takes an action). Reads the Sent folder now instead of waiting for the 5-minute job,
+    /// so the agent's last reply is stored before the inquiry is finalised. Idempotent (a message already
+    /// stored is skipped) and never throws: a failure is logged, reported in the result and leaves the
+    /// state untouched, so the calling action can carry on.
+    /// </summary>
+    public async Task<ConversationSyncRunResult> SyncCaseAsync(Guid caseId, CancellationToken cancellationToken, DateTimeOffset? at = null)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            var accountId = await _db.Cases.Where(c => c.Id == caseId).Select(c => (Guid?)c.EmailAccountId).FirstOrDefaultAsync(cancellationToken);
+            if (accountId is null) return new ConversationSyncRunResult(0, 0, 0, 0, stopwatch.ElapsedMilliseconds);
+            var (agent, internalCount, failed) = await SyncAccountAsync(accountId.Value, new List<Guid> { caseId }, at ?? DateTimeOffset.UtcNow, cancellationToken);
+            return new ConversationSyncRunResult(1, agent, internalCount, failed ? 1 : 0, stopwatch.ElapsedMilliseconds);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Event-triggered conversation sync of case {CaseId} failed; continuing", caseId);
+            await DiscardPendingChangesAsync();
+            return new ConversationSyncRunResult(1, 0, 0, 1, stopwatch.ElapsedMilliseconds);
+        }
+    }
+
+    /// <summary>
+    /// After a failed save nothing half-applied may linger in the unit of work: it would be written by the
+    /// next, unrelated SaveChanges (for instance "Replied" without its verification record, which the
+    /// database refuses). Drops the messages this run added and reloads the inquiries it changed.
+    /// </summary>
+    private async Task DiscardPendingChangesAsync()
+    {
+        if (_db is not DbContext context) return;
+        try
+        {
+            context.ChangeTracker.DetectChanges();
+            foreach (var entry in context.ChangeTracker.Entries().ToList())
+            {
+                if (entry.State == EntityState.Added && entry.Entity is EmailMessage or CaseEmail or ReplyVerificationAttempt or CaseEvent)
+                    entry.State = EntityState.Detached;
+                else if (entry.State == EntityState.Modified && entry.Entity is Case)
+                    await entry.ReloadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Could not discard the pending changes of a failed conversation sync");
+        }
+    }
+
+    /// <param name="at">The clock (tests pass an explicit time; the scheduled job uses now).</param>
+    public async Task<ConversationSyncRunResult> RunAsync(int batchSize, CancellationToken cancellationToken, DateTimeOffset? at = null)
     {
         var stopwatch = Stopwatch.StartNew();
         var openCases = await _db.Cases
@@ -57,11 +126,31 @@ public class ConversationSyncService
             .Select(c => new { c.Id, c.EmailAccountId })
             .ToListAsync(cancellationToken);
 
+        // An agent often sends the final answer and confirms "resolved" minutes later, before this job
+        // has read the Sent folder (and the confirm path syncs only what the server could see at that
+        // moment). A closed inquiry therefore stays in the check for the grace window after it closed
+        // (re-read every ClosedRecheckInterval, and once more just after closing) so late-sent or
+        // late-uploaded replies are still recorded. Closed inquiries never change stage because of it.
+        var clock = at ?? DateTimeOffset.UtcNow;
+        var graceStart = clock - LateReplyWindow;
+        var recheckBefore = clock - ClosedRecheckInterval;
+        var recentlyClosed = await _db.Cases
+            .Where(c => (c.Stage == InquiryStage.Resolved || c.Stage == InquiryStage.Closed)
+                && c.StageChangedAt >= graceStart
+                && (c.ReplyLastCheckedAt == null
+                    || c.ReplyLastCheckedAt < c.StageChangedAt + JustClosedWindow
+                    || c.ReplyLastCheckedAt < recheckBefore))
+            .OrderBy(c => c.ReplyLastCheckedAt ?? DateTimeOffset.MinValue)
+            .Take(batchSize)
+            .Select(c => new { c.Id, c.EmailAccountId })
+            .ToListAsync(cancellationToken);
+        openCases.AddRange(recentlyClosed);
+
         int agentStored = 0, internalStored = 0, failures = 0;
         foreach (var group in openCases.GroupBy(c => c.EmailAccountId))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var (agent, internalCount, failed) = await SyncAccountAsync(group.Key, group.Select(c => c.Id).ToList(), cancellationToken);
+            var (agent, internalCount, failed) = await SyncAccountAsync(group.Key, group.Select(c => c.Id).ToList(), clock, cancellationToken);
             agentStored += agent;
             internalStored += internalCount;
             if (failed) failures++;
@@ -70,11 +159,10 @@ public class ConversationSyncService
         return new ConversationSyncRunResult(openCases.Count, agentStored, internalStored, failures, stopwatch.ElapsedMilliseconds);
     }
 
-    private async Task<(int Agent, int Internal, bool Failed)> SyncAccountAsync(Guid accountId, List<Guid> caseIds, CancellationToken cancellationToken)
+    private async Task<(int Agent, int Internal, bool Failed)> SyncAccountAsync(Guid accountId, List<Guid> caseIds, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var account = await _db.EmailAccounts.Include(a => a.Credential).FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
         var cases = await _db.Cases.Where(c => caseIds.Contains(c.Id)).ToListAsync(cancellationToken);
-        var now = DateTimeOffset.UtcNow;
 
         // Sample mailboxes have no server and nobody can reply from them.
         if (account is null || account.Host == Operations.SampleDataService.SampleMailboxHost || account.Credential is null)
@@ -109,11 +197,23 @@ public class ConversationSyncService
             return (0, 0, true);
         }
 
-        var (agentStored, internalStored) = await AttachSentAsync(account, cases, sent, "sent:", cancellationToken);
+        try
+        {
+            var (agentStored, internalStored) = await AttachSentAsync(account, cases, sent, "sent:", cancellationToken);
 
-        foreach (var c in cases) c.ReplyLastCheckedAt = now;
-        await _db.SaveChangesAsync(cancellationToken);
-        return (agentStored, internalStored, false);
+            foreach (var c in cases) c.ReplyLastCheckedAt = now;
+            await _db.SaveChangesAsync(cancellationToken);
+            return (agentStored, internalStored, false);
+        }
+        catch (DbUpdateException ex)
+        {
+            // Typically a concurrent run (the 5-minute job and a confirm) stored the same message first and
+            // the unique index refused the second copy. Nothing is lost: the winner's rows exist, and the
+            // next run skips them.
+            _logger?.LogWarning(ex, "Storing sent messages of {Mailbox} hit a database conflict; will retry on the next run", account.EmailAddress);
+            await DiscardPendingChangesAsync();
+            return (0, 0, true);
+        }
     }
 
     /// <summary>
@@ -125,8 +225,12 @@ public class ConversationSyncService
     public async Task<(int Agent, int Internal)> IngestFromAgentAsync(Guid employeeId, IReadOnlyCollection<ProviderMessage> sent, CancellationToken cancellationToken)
     {
         if (sent.Count == 0) return (0, 0);
+        // Outlook's Sent Items reach the server when the Agent next reports, possibly after the agent
+        // confirmed the inquiry resolved: inquiries closed in the last day still take their own replies.
+        var closedSince = DateTimeOffset.UtcNow - LateReplyWindow;
         var cases = await _db.Cases
-            .Where(c => c.OwnerEmployeeId == employeeId && c.Stage != InquiryStage.Resolved && c.Stage != InquiryStage.Closed)
+            .Where(c => c.OwnerEmployeeId == employeeId
+                && ((c.Stage != InquiryStage.Resolved && c.Stage != InquiryStage.Closed) || c.StageChangedAt >= closedSince))
             .ToListAsync(cancellationToken);
 
         int agentStored = 0, internalStored = 0;
@@ -159,11 +263,26 @@ public class ConversationSyncService
             .ToListAsync(cancellationToken);
 
         int agentStored = 0, internalStored = 0;
+        // Messages stored earlier in THIS run are not visible to the database queries yet (unsaved), so a
+        // message listed twice by the provider (or from both the server and Outlook) is tracked here.
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var message in sent.OrderBy(m => m.ReceivedAt))
         {
             var providerId = $"{idPrefix}{message.ProviderMessageId}";
+            var hasMessageId = !string.IsNullOrWhiteSpace(message.MessageId);
+            var toJoined = string.Join(';', message.ToAddresses);
+            var fingerprint = hasMessageId
+                ? $"id:{message.MessageId}"
+                : $"fp:{message.FromAddress}|{message.Subject}|{message.ReceivedAt.UtcTicks}|{toJoined}";
+            if (!seen.Add(fingerprint) | !seen.Add($"pm:{providerId}")) continue;
+
+            // Idempotency: by provider id, by Message-ID, and - for a message with no Message-ID - by a
+            // fingerprint of sender, subject, time and recipients.
             var known = await _db.EmailMessages.AnyAsync(m => m.EmailAccountId == accountId
-                && (m.ProviderMessageId == providerId || (message.MessageId != null && m.MessageId == message.MessageId)), cancellationToken);
+                && (m.ProviderMessageId == providerId
+                    || (hasMessageId && m.MessageId == message.MessageId)
+                    || (!hasMessageId && m.Direction == MessageDirection.Outbound && m.FromAddress == message.FromAddress
+                        && m.Subject == message.Subject && m.ReceivedAt == message.ReceivedAt && m.ToAddresses == toJoined)), cancellationToken);
             if (known) continue;
 
             var (target, signal, detail) = Assign(message, cases, links.Select(l => (l.CaseId, l.MessageId, l.ThreadId)).ToList());
@@ -262,8 +381,11 @@ public class ConversationSyncService
         // A customer can have several open inquiries. With no thread headers, the one whose subject the
         // message carries wins; otherwise the most recently active one.
         var sentSubject = Cases.CaseMatchingService.NormalizeSubject(message.Subject);
+        // A closed inquiry only takes messages that are provably part of its thread (above): a new email
+        // to the same customer belongs to whatever they are discussing now, not to a finished inquiry.
         var byRecipient = cases
-            .Where(c => message.ReceivedAt >= c.FirstEmailReceivedAt
+            .Where(c => !InquiryLifecycle.IsTerminal(c.Stage)
+                && message.ReceivedAt >= c.FirstEmailReceivedAt
                 && message.ToAddresses.Concat(message.CcAddresses).Any(a => string.Equals(a, c.CustomerEmailAddress, StringComparison.OrdinalIgnoreCase)))
             .OrderByDescending(c => sentSubject.Length > 0 && string.Equals(c.NormalizedSubject, sentSubject, StringComparison.OrdinalIgnoreCase))
             .ThenByDescending(c => c.LastActivityAt)

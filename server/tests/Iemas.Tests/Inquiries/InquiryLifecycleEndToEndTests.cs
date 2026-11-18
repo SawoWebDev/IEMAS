@@ -437,6 +437,65 @@ public class InquiryLifecycleEndToEndTests
         Assert.Empty(h.ManagementEmail.Sent);
     }
 
+    /// <summary>
+    /// Found by the live simulation (2026-11-18): the agent sent the full answer, the customer thanked
+    /// them within seconds and the agent confirmed "resolved" - all before the Sent folder was read.
+    /// The answer was never recorded, and the AI judged the conversation without it.
+    /// </summary>
+    [Fact]
+    public async Task S9d_ReplySentJustBeforeConfirm_IsStillRecorded_AndAiWaitsForIt()
+    {
+        using var h = new InquiryHarness(Agent1);
+        var first = h.Receive(Agent1, Customer, "Heaters for our spa", "Which heaters do you recommend for three saunas? Prices?", Monday0900);
+        await h.RunAsync(Monday0900.AddMinutes(1));
+        var ack = h.Send(Agent1, Customer, "Re: Heaters for our spa", "We have received your request and will look into it.", Day(0, 10), inReplyTo: first);
+        await h.RunAsync(Day(0, 10, 2));
+        var question = h.Receive(Agent1, Customer, "Re: Heaters for our spa", "Can the big one be controlled from reception?", Day(0, 10, 30), inReplyTo: ack);
+        await h.RunAsync(Day(0, 10, 32));
+        Assert.Equal(InquiryStage.CustomerFollowUpReceived, (await h.CaseAsync(Agent1, Customer)).Stage);
+
+        // The full answer goes out; the customer thanks the agent before the Sent folder is read.
+        var answer = h.Send(Agent1, Customer, "Re: Heaters for our spa", "Recommendation: 15 kW with a remote control unit at reception, EUR 2,480.", Day(0, 11), inReplyTo: question);
+        h.Receive(Agent1, Customer, "Re: Heaters for our spa", "Thank you, that works for us!", Day(0, 11, 1), inReplyTo: answer);
+        var assessmentsBefore = h.Assessor.Requests.Count;
+        await h.RunWithoutSentFolderAsync(Day(0, 11, 2));
+
+        // The AI does not judge a conversation that is missing the message the customer answered.
+        Assert.Equal(assessmentsBefore, h.Assessor.Requests.Count);
+
+        // The agent confirms before the Sent folder is read.
+        var c = await h.CaseAsync(Agent1, Customer);
+        var result = await h.AgentActions.SubmitActionAsync(Guid.NewGuid(), h.Agents[Agent1].Id,
+            new SubmitCaseActionRequest("confirm-9d", c.Id, CaseActionType.ConfirmResolved, "Customer happy", Day(0, 11, 3)), CancellationToken.None);
+        Assert.True(result.Succeeded, result.Error);
+
+        // The next Sent-folder read still records the answer on the resolved inquiry, without reopening it.
+        await h.RunAsync(Day(0, 11, 5));
+        c = await h.CaseAsync(Agent1, Customer);
+        Assert.Equal(InquiryStage.Resolved, c.Stage);
+        var roles = await h.Db.CaseEmails.Where(ce => ce.CaseId == c.Id).OrderBy(ce => ce.EmailMessage.ReceivedAt)
+            .Select(ce => ce.Role).ToListAsync();
+        Assert.Equal(new[] { ConversationRole.Customer, ConversationRole.Agent, ConversationRole.Customer, ConversationRole.Agent, ConversationRole.Customer }, roles);
+        Assert.Empty(h.ManagementEmail.Sent);
+    }
+
+    [Fact]
+    public void MissingRepliedToMessage_WaitsOnlyBriefly()
+    {
+        var at = Day(0, 11);
+        var conversation = new List<(ConversationRole, MessageDirection, DateTimeOffset, string?, string?)>
+        {
+            (ConversationRole.Customer, MessageDirection.Inbound, Day(0, 9), "a@x", null),
+            (ConversationRole.Agent, MessageDirection.Outbound, Day(0, 10), "b@x", "a@x"),
+            (ConversationRole.Customer, MessageDirection.Inbound, at, "c@x", "<missing@x>"),
+        };
+        Assert.True(ResolutionAssessmentService.MissingRepliedToMessage(conversation, at.AddMinutes(2)));
+        Assert.False(ResolutionAssessmentService.MissingRepliedToMessage(conversation, at.AddMinutes(16)));
+
+        conversation[2] = (ConversationRole.Customer, MessageDirection.Inbound, at, "c@x", "<b@x>");
+        Assert.False(ResolutionAssessmentService.MissingRepliedToMessage(conversation, at.AddMinutes(2)));
+    }
+
     [Fact]
     public async Task S9b_AgentRejectsAiSuggestion_SupervisionContinues()
     {

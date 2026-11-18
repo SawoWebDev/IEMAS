@@ -362,3 +362,38 @@ Levels: **Impl** = code written · **Auto** = automated tests (540 pass) · **DB
 - **Stack state:** AI provider reset to the default OpenRouter URL with no key; stand-in AI removed; test mail server bound to loopback only.
 
 **Not production-ready until the items above are verified.**
+
+---
+
+## 10. Improvements pass (2026-11-18)
+
+Code and tests changed on branch `feature/inquiry-supervision`. This section records what changed and what is still open. The 2026-11-17 live run (run 11172352) predates all of it and has **not** been repeated.
+
+### Fixed / added
+- **Lost last reply (live-run bug) fixed.** The case's mailbox is synced when the agent confirms or rejects resolution and on other agent case actions. Resolved cases keep syncing for a 1-day grace window. Tests: `ConversationSyncOnConfirmTests`.
+- **ResolutionGuard** (deterministic, after the AI verdict) downgrades AppearsResolved when: the customer only says thanks without confirming; the agent spoke last; the customer's last message asks a question or reports a problem; the agent's last message ends with a question, asks approval or promises later action or a pending quotation; the AI listed open items. Tests: `Ai/ResolutionGuardTests`.
+- **Manual review queue** for ReviewRequired and AI-failure classifications: CMS Email Classification page, `/api/v1/classification-reviews` (supervisor and above), actions approve, reject, correct. Audited. Tests: `ClassificationReviewServiceTests`.
+- **OpenRouter reliability:** timeout, bounded retries with backoff honouring Retry-After, fallback models, JSON validation with one repair call, circuit breaker. An AI failure keeps supervision running. Tests: `Ai/OpenRouterReliabilityTests`.
+- **AI audit:** every AI call records model, model version, prompt version, decision, confidence, explanation, attempts, failure category and cost. `GET /api/v1/ai-usage/audit`. Resolution confirm/reject and classification reviews are audited. Tests: `Ai/AiAuditTests`.
+- **Idempotency:** Message-ID + fingerprint dedupe; notifications unique per case + email + type. Tests: `IdempotencyTests`, `ThreadFollowUpTests`.
+- **Business calendar hardening:** holidays from setting `inquiry.holidays`, DST-safe time zone. Tests: `BusinessCalendarHardeningTests`, `SupervisionHardeningRulesTests`.
+- **Escalation reliability:** recipient fallback (supervisor, department manager, group), one escalation per case + level, SMTP failures retried after 5/15/60 min (max 3) and cancelled once resolved. Tests: `EscalationReliabilityTests`.
+- **Job monitoring:** `GET /api/v1/system-health/jobs` (last success, last failure, duration, retries, pending; Healthy/Stale/Failing) feeds the health check and the CMS System Health "Scheduled jobs" table. Tests: `JobMonitoringTests`.
+- **Analytics:** `GET /api/v1/inquiries/analytics` and CMS `/inquiry-analytics` (volume; open/resolved/overdue/escalated; response and resolution times avg/median/p90; reopens; rejections; AI accuracy). Tests: `InquiryAnalyticsTests`.
+- **Security review:** authorization matrix test over all controllers, per-account login lockout, agent replies encrypted with AES-GCM. Tests: `SecurityReviewTests`.
+- **End-to-end:** `ProductionScenarioEndToEndTests.cs`.
+- **Migration:** `20261118004752_InquiryImprovementsPass`.
+- Flow documentation page `flow-diagram/iemas-inquiry-flow.html` redrawn (phases, side panels, new steps, updated known gaps). Total passing test count in its header is the placeholder `867` until filled in.
+
+### Remaining gaps
+- Inbound customer bodies are stored unencrypted (only agent replies are encrypted).
+- No department scoping for supervisors.
+- Message-ID dedupe is application-level only (no DB unique index); existing data may contain duplicates.
+- The escalation unique index is created only if existing data has no duplicates.
+- Job-monitoring history is in memory and is lost on restart.
+- Analytics uses wall-clock time, not business hours.
+- The new prompts have not been validated against a live model.
+- The Windows Agent GUI is still untested by automation.
+- **A live re-run of `live-test/live_simulation.py` is needed** to confirm the fixes above end to end.
+
+**Still not production-ready until the live re-run and the real-AI validation are done.**

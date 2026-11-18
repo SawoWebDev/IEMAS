@@ -1,13 +1,12 @@
 using System.Diagnostics;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Iemas.Application.AiModels;
 using Iemas.Application.Common.Ai;
+using Iemas.Application.Common.Interfaces;
 using Iemas.Domain.Cases;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Iemas.Infrastructure.Ai;
 
@@ -16,18 +15,29 @@ namespace Iemas.Infrastructure.Ai;
 /// concern addressed. Same provider isolation and prompt-injection discipline as
 /// <see cref="OpenRouterClassificationProvider"/>: the conversation is untrusted data, fenced and
 /// never obeyed. The model returns structured JSON only and never drafts a reply.
+/// Reliability: bounded retries with backoff for timeouts/5xx/429 (Retry-After honoured), strict output
+/// validation with one repair call, and never throws - a failure is a result with no verdict.
 /// </summary>
 public class OpenRouterResolutionAssessor : IAiResolutionAssessor
 {
+    /// <summary>Bump whenever <see cref="SystemPrompt"/> changes; recorded with every assessment.</summary>
+    public const string PromptVersion = "resolution-2026-11-v2";
+
     private readonly HttpClient _httpClient;
     private readonly IAiProviderConnectionResolver _connectionResolver;
     private readonly ILogger<OpenRouterResolutionAssessor> _logger;
+    private readonly AiClassificationOptions _options;
+    private readonly IRetryDelay? _retryDelay;
 
-    public OpenRouterResolutionAssessor(HttpClient httpClient, IAiProviderConnectionResolver connectionResolver, ILogger<OpenRouterResolutionAssessor> logger)
+    public OpenRouterResolutionAssessor(
+        HttpClient httpClient, IAiProviderConnectionResolver connectionResolver, ILogger<OpenRouterResolutionAssessor> logger,
+        IOptions<AiClassificationOptions>? options = null, IRetryDelay? retryDelay = null)
     {
         _httpClient = httpClient;
         _connectionResolver = connectionResolver;
         _logger = logger;
+        _options = options?.Value ?? new AiClassificationOptions();
+        _retryDelay = retryDelay;
     }
 
     private const string SystemPrompt = """
@@ -50,79 +60,182 @@ public class OpenRouterResolutionAssessor : IAiResolutionAssessor
           customer confirmed the issue is solved or thanked the agent for the solution, and nothing
           is left open.
         A reply is not the same as a resolution. When unsure, do not choose APPEARS_RESOLVED.
+        If the latest message is from the agent and it asks the customer a question, asks for
+        information, a decision or a document, or proposes a next step (a call, a meeting, a visit,
+        a trial) that the customer has not answered yet, the conversation is still open: choose
+        IN_PROGRESS, not APPEARS_RESOLVED. A polite closing such as "let me know if you have any
+        questions" is not such a question.
+        A customer's "thanks" or "thank you" on its own is NOT confirmation that the issue is resolved:
+        it may only acknowledge a message. Choose APPEARS_RESOLVED only if the customer's request was
+        actually fulfilled.
+
+        Before choosing, check each of these against the WHOLE conversation:
+        - unanswered_customer_question: a customer question or request that no agent message answered
+        - outstanding_employee_action: something an agent promised to do ("I will send", "we will check",
+          "I'll get back to you") and has not yet done
+        - pending_quotation_or_proposal: a quotation, proposal, offer or document that is still to be
+          prepared, or was sent and not yet accepted or rejected
+        - awaiting_customer_approval: the agent is waiting for the customer's approval, confirmation,
+          decision or information
+        - unresolved_request: the customer's original request is still not fulfilled
+        If any of these is true the verdict must NOT be APPEARS_RESOLVED.
 
         Respond with ONLY this JSON shape:
         {"verdict": "ACKNOWLEDGED_ONLY" | "IN_PROGRESS" | "CUSTOMER_WAITING" | "APPEARS_RESOLVED",
          "confidence": number between 0 and 1,
-         "reason": string (one or two sentences, no customer personal data)}
+         "reason": string (one or two sentences, no customer personal data),
+         "checks": {"unanswered_customer_question": boolean, "outstanding_employee_action": boolean,
+                    "pending_quotation_or_proposal": boolean, "awaiting_customer_approval": boolean,
+                    "unresolved_request": boolean},
+         "open_items": [string] (short descriptions, no customer personal data; empty when nothing is open)}
         """;
 
     public async Task<ResolutionAssessmentResult> AssessAsync(ResolutionAssessmentRequest request, string modelIdentifier, TimeSpan timeout, CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
-        var connection = await _connectionResolver.ResolveAsync(cancellationToken);
-        if (string.IsNullOrWhiteSpace(connection.ApiKey))
-        {
-            return Fail(modelIdentifier, "OpenRouter API key is not configured.", stopwatch);
-        }
-
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(timeout);
         try
         {
-            var http = new HttpRequestMessage(HttpMethod.Post, $"{connection.BaseUrl}/chat/completions");
-            http.Headers.Authorization = new AuthenticationHeaderValue("Bearer", connection.ApiKey);
-            http.Content = JsonContent.Create(new
+            var connection = await _connectionResolver.ResolveAsync(cancellationToken);
+            if (string.IsNullOrWhiteSpace(connection.ApiKey))
             {
-                model = modelIdentifier,
-                temperature = 0,
-                response_format = new { type = "json_object" },
-                usage = new { include = true },
-                messages = new object[]
-                {
-                    new { role = "system", content = SystemPrompt },
-                    new { role = "user", content = BuildUserPrompt(request) },
-                },
-            });
-
-            using var response = await _httpClient.SendAsync(http, cts.Token);
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("OpenRouter resolution assessment failed with status {StatusCode} for model {Model}", response.StatusCode, modelIdentifier);
-                return Fail(modelIdentifier, $"OpenRouter returned HTTP {(int)response.StatusCode}.", stopwatch);
+                return Fail(modelIdentifier, "OpenRouter API key is not configured.", stopwatch, ClassificationFailureCategory.AuthenticationFailure, attempts: 0);
             }
 
-            var chat = await response.Content.ReadFromJsonAsync<ChatResponse>(cts.Token);
-            var usage = chat?.Usage is { } u ? new AiTokenUsage(u.PromptTokens, u.CompletionTokens, u.TotalTokens, u.Cost, chat.Id) : null;
-            var content = chat?.Choices?.FirstOrDefault()?.Message?.Content;
-            if (string.IsNullOrWhiteSpace(content)) return Fail(modelIdentifier, "Empty response.", stopwatch, usage);
+            var messages = new List<object>
+            {
+                new { role = "system", content = SystemPrompt },
+                new { role = "user", content = BuildUserPrompt(request) },
+            };
+            var call = await OpenRouterChatCaller.SendAsync(_httpClient, connection.BaseUrl, connection.ApiKey, _options.OpenRouter,
+                BuildBody(messages, modelIdentifier), timeout, _options.OpenRouter.AssessmentMaxRetries, _retryDelay, _logger, modelIdentifier, cancellationToken);
+            var attempts = call.Attempts;
+            var usage = call.Usage;
+            if (!call.Succeeded)
+            {
+                return Fail(modelIdentifier, call.Error!, stopwatch, call.Category, usage, call.ModelVersion, attempts);
+            }
 
-            using var doc = JsonDocument.Parse(content);
+            var parsed = TryParse(call.Content!, out var error);
+            var modelVersion = call.ModelVersion;
+            if (parsed is null && _options.OpenRouter.RepairMalformedOutput)
+            {
+                messages.Add(new { role = "assistant", content = call.Content!.Length > 2000 ? call.Content[..2000] : call.Content });
+                messages.Add(new { role = "user", content = $"Your previous reply was rejected: {error} Reply again with ONLY the single JSON object in the required shape, with valid values." });
+                var repair = await OpenRouterChatCaller.SendAsync(_httpClient, connection.BaseUrl, connection.ApiKey, _options.OpenRouter,
+                    BuildBody(messages, modelIdentifier), timeout, 0, _retryDelay, _logger, modelIdentifier, cancellationToken);
+                attempts += repair.Attempts;
+                usage = AddUsage(usage, repair.Usage);
+                modelVersion = repair.ModelVersion ?? modelVersion;
+                if (!repair.Succeeded)
+                {
+                    return Fail(modelIdentifier, repair.Error!, stopwatch,
+                        repair.Category == ClassificationFailureCategory.None ? ClassificationFailureCategory.MalformedResponse : repair.Category, usage, modelVersion, attempts);
+                }
+                parsed = TryParse(repair.Content!, out error);
+            }
+            if (parsed is null)
+            {
+                return Fail(modelIdentifier, $"The model response did not match the expected shape: {error}", stopwatch,
+                    ClassificationFailureCategory.MalformedResponse, usage, modelVersion, attempts);
+            }
+
+            return new ResolutionAssessmentResult(true, parsed.Verdict, parsed.Confidence, parsed.Reason, "OpenRouter", modelIdentifier, null,
+                stopwatch.ElapsedMilliseconds, usage, parsed.OpenItems, modelVersion, PromptVersion, ClassificationFailureCategory.None, attempts);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return Fail(modelIdentifier, $"Timed out after {timeout.TotalSeconds:0}s.", stopwatch, ClassificationFailureCategory.Transient);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "OpenRouter resolution assessment threw for model {Model}", modelIdentifier);
+            return Fail(modelIdentifier, ex.Message, stopwatch, ClassificationFailureCategory.Transient);
+        }
+    }
+
+    private static object BuildBody(IReadOnlyList<object> messages, string modelIdentifier) => new
+    {
+        model = modelIdentifier,
+        temperature = 0,
+        response_format = new { type = "json_object" },
+        max_tokens = 700,
+        usage = new { include = true },
+        messages,
+    };
+
+    /// <summary>A validated assessment out of the model's JSON.</summary>
+    public sealed record ParsedAssessment(ResolutionVerdict Verdict, double Confidence, string? Reason, IReadOnlyList<string> OpenItems);
+
+    private static readonly (string Key, string Label)[] CheckLabels =
+    {
+        ("unanswered_customer_question", "Unanswered customer question"),
+        ("outstanding_employee_action", "Outstanding employee action or promise"),
+        ("pending_quotation_or_proposal", "Pending quotation or proposal"),
+        ("awaiting_customer_approval", "Awaiting customer approval or confirmation"),
+        ("unresolved_request", "Unresolved request"),
+    };
+
+    /// <summary>Strict validation: the verdict must be a known value and confidence a number in 0..1. Anything else returns null with the reason.</summary>
+    public static ParsedAssessment? TryParse(string json, out string? error)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
-            var verdict = (root.TryGetProperty("verdict", out var v) ? v.GetString() : null) switch
+            if (root.ValueKind != JsonValueKind.Object) { error = "The reply was not a JSON object."; return null; }
+
+            var verdictText = root.TryGetProperty("verdict", out var v) && v.ValueKind == JsonValueKind.String ? v.GetString()?.Trim().ToUpperInvariant() : null;
+            ResolutionVerdict? verdict = verdictText switch
             {
                 "ACKNOWLEDGED_ONLY" => ResolutionVerdict.AcknowledgedOnly,
                 "IN_PROGRESS" => ResolutionVerdict.InProgress,
                 "CUSTOMER_WAITING" => ResolutionVerdict.CustomerWaiting,
                 "APPEARS_RESOLVED" => ResolutionVerdict.AppearsResolved,
-                _ => (ResolutionVerdict?)null,
+                _ => null,
             };
-            if (verdict is null || !root.TryGetProperty("confidence", out var c) || !c.TryGetDouble(out var confidence) || confidence is < 0 or > 1)
+            if (verdict is null) { error = $"'verdict' \"{verdictText}\" is not one of ACKNOWLEDGED_ONLY, IN_PROGRESS, CUSTOMER_WAITING, APPEARS_RESOLVED."; return null; }
+
+            if (!root.TryGetProperty("confidence", out var c) || c.ValueKind != JsonValueKind.Number || !c.TryGetDouble(out var confidence))
             {
-                return Fail(modelIdentifier, "The model response did not match the expected shape.", stopwatch, usage);
+                error = "'confidence' is missing or not a number.";
+                return null;
             }
-            var reason = root.TryGetProperty("reason", out var r) ? r.GetString() : null;
-            return new ResolutionAssessmentResult(true, verdict, confidence, reason, "OpenRouter", modelIdentifier, null, stopwatch.ElapsedMilliseconds, usage);
+            if (double.IsNaN(confidence) || confidence is < 0 or > 1) { error = $"'confidence' {confidence} is outside 0..1."; return null; }
+
+            var reason = root.TryGetProperty("reason", out var r) && r.ValueKind == JsonValueKind.String ? r.GetString() : null;
+
+            var items = new List<string>();
+            if (root.TryGetProperty("checks", out var checks) && checks.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var (key, label) in CheckLabels)
+                {
+                    if (checks.TryGetProperty(key, out var flag) && flag.ValueKind == JsonValueKind.True) items.Add(label);
+                }
+            }
+            if (root.TryGetProperty("open_items", out var open) && open.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in open.EnumerateArray().Take(10))
+                {
+                    if (item.ValueKind == JsonValueKind.String && item.GetString() is { Length: > 0 } text) items.Add(text.Length > 200 ? text[..200] : text);
+                }
+            }
+            error = null;
+            return new ParsedAssessment(verdict.Value, confidence, reason, items);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
         {
-            return Fail(modelIdentifier, $"Timed out after {timeout.TotalSeconds:0}s.", stopwatch);
+            error = $"Not valid JSON: {ex.Message}";
+            return null;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogWarning(ex, "OpenRouter resolution assessment threw for model {Model}", modelIdentifier);
-            return Fail(modelIdentifier, ex.Message, stopwatch);
-        }
+    }
+
+    private static AiTokenUsage? AddUsage(AiTokenUsage? a, AiTokenUsage? b)
+    {
+        if (a is null) return b;
+        if (b is null) return a;
+        static int? Sum(int? x, int? y) => x is null && y is null ? null : (x ?? 0) + (y ?? 0);
+        return new AiTokenUsage(Sum(a.PromptTokens, b.PromptTokens), Sum(a.CompletionTokens, b.CompletionTokens), Sum(a.TotalTokens, b.TotalTokens),
+            a.CostUsd is null && b.CostUsd is null ? null : (a.CostUsd ?? 0) + (b.CostUsd ?? 0), a.GenerationId ?? b.GenerationId);
     }
 
     private static string BuildUserPrompt(ResolutionAssessmentRequest request)
@@ -138,31 +251,7 @@ public class OpenRouterResolutionAssessor : IAiResolutionAssessor
         return sb.AppendLine("===== END CONVERSATION =====").ToString();
     }
 
-    private static ResolutionAssessmentResult Fail(string model, string error, Stopwatch sw, AiTokenUsage? usage = null) =>
-        new(false, null, 0, null, "OpenRouter", model, error, sw.ElapsedMilliseconds, usage);
-
-    private sealed class ChatResponse
-    {
-        [JsonPropertyName("id")] public string? Id { get; set; }
-        [JsonPropertyName("choices")] public List<Choice>? Choices { get; set; }
-        [JsonPropertyName("usage")] public Usage? Usage { get; set; }
-    }
-
-    private sealed class Choice
-    {
-        [JsonPropertyName("message")] public Message? Message { get; set; }
-    }
-
-    private sealed class Message
-    {
-        [JsonPropertyName("content")] public string? Content { get; set; }
-    }
-
-    private sealed class Usage
-    {
-        [JsonPropertyName("prompt_tokens")] public int? PromptTokens { get; set; }
-        [JsonPropertyName("completion_tokens")] public int? CompletionTokens { get; set; }
-        [JsonPropertyName("total_tokens")] public int? TotalTokens { get; set; }
-        [JsonPropertyName("cost")] public decimal? Cost { get; set; }
-    }
+    private static ResolutionAssessmentResult Fail(string model, string error, Stopwatch sw, ClassificationFailureCategory category,
+        AiTokenUsage? usage = null, string? modelVersion = null, int attempts = 1) =>
+        new(false, null, 0, null, "OpenRouter", model, error, sw.ElapsedMilliseconds, usage, null, modelVersion, PromptVersion, category, attempts);
 }

@@ -61,6 +61,8 @@ public static class SupervisionRules
     public static SupervisionAction? Evaluate(Case c, SupervisionSettings s, BusinessCalendar cal, DateTimeOffset now)
     {
         if (InquiryLifecycle.IsTerminal(c.Stage)) return null;
+        // Belt and braces: a Case completed or cancelled through any other path is never supervised.
+        if (c.WorkStatus is CaseWorkStatus.Completed or CaseWorkStatus.Cancelled) return null;
 
         var cycleStart = c.SupervisionCycleStartedAt ?? c.FirstEmailReceivedAt;
         if (c.ResolutionDueAt is null)
@@ -145,7 +147,15 @@ public static class SupervisionRules
         var sent = c.EpisodeRemindersSent;
         if (sent < s.RemindersBeforeEscalation)
         {
+            // Reminders are at least one interval apart: never earlier than deadline + n intervals, and
+            // never sooner than one interval after the previous reminder actually went out (a late run
+            // after downtime must not fire reminder 2 right behind reminder 1).
             var due = cal.AddBusinessHours(deadline, interval * (sent + 1));
+            if (sent > 0 && c.EpisodeLastReminderAt is DateTimeOffset prev)
+            {
+                var afterPrev = cal.AddBusinessHours(prev, interval);
+                if (afterPrev > due) due = afterPrev;
+            }
             if (now < due) return null;
             var isWarning = escalate && sent + 1 == s.RemindersBeforeEscalation;
             return new SupervisionAction(SupervisionActionKind.Reminder,
@@ -158,6 +168,11 @@ public static class SupervisionRules
         if (c.EpisodeEscalations == 0)
         {
             var due = cal.AddBusinessHours(deadline, interval * (s.RemindersBeforeEscalation + 1));
+            if (c.EpisodeLastReminderAt is DateTimeOffset lastReminder)
+            {
+                var afterLast = cal.AddBusinessHours(lastReminder, interval);
+                if (afterLast > due) due = afterLast;
+            }
             return now < due ? null : new SupervisionAction(SupervisionActionKind.Escalate,
                 $"{what}, and still unanswered after {s.RemindersBeforeEscalation} reminder(s).");
         }

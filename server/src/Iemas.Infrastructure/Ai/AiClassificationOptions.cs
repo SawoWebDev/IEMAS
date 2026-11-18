@@ -27,4 +27,24 @@ public class OpenRouterOptions
     /// <summary>OpenRouter uses this for its own analytics/rate-limit attribution; not secret.</summary>
     public string? SiteUrl { get; set; }
     public string? SiteName { get; set; }
+
+    /// <summary>
+    /// Extra attempts the resolution assessor makes itself after a timeout, network error, HTTP 5xx or 429
+    /// (backoff via IRetryDelay; Retry-After honoured). Classification does NOT retry inside the provider
+    /// because EmailClassificationService already runs its own per-model retry loop; see
+    /// <see cref="ClassificationTransportRetries"/>.
+    /// </summary>
+    public int AssessmentMaxRetries { get; set; } = 2;
+
+    /// <summary>Provider-level transport retries for classification. Default 0: the service layer owns that loop (avoids multiplying retries).</summary>
+    public int ClassificationTransportRetries { get; set; }
+
+    /// <summary>First backoff step; doubles per retry.</summary>
+    public int RetryBaseDelayMilliseconds { get; set; } = 1000;
+
+    /// <summary>Upper bound for any single backoff or Retry-After wait.</summary>
+    public int MaxRetryDelaySeconds { get; set; } = 30;
+
+    /// <summary>When the model returns malformed or out-of-range JSON, send ONE corrective follow-up asking it to re-emit valid JSON.</summary>
+    public bool RepairMalformedOutput { get; set; } = true;
 }

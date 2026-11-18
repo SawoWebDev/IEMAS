@@ -12,6 +12,7 @@ import AiUsagePage from "./pages/ai-usage/AiUsagePage";
 import HelpPage from "./pages/help/HelpPage";
 import CasesPage from "./pages/cases/CasesPage";
 import InquirySupervisionPage from "./pages/inquiry-supervision/InquirySupervisionPage";
+import InquiryAnalyticsPage from "./pages/inquiry-supervision/InquiryAnalyticsPage";
 import SetupPage from "./pages/setup/SetupPage";
 import CaseDetailPage from "./pages/cases/CaseDetailPage";
 import AgentsPage from "./pages/agents/AgentsPage";
@@ -48,6 +49,7 @@ export default function App() {
           <Route path="/ai-usage" element={<AiUsagePage />} />
           <Route path="/help" element={<HelpPage />} />
           <Route path="/inquiry-supervision" element={<InquirySupervisionPage />} />
+          <Route path="/inquiry-analytics" element={<InquiryAnalyticsPage />} />
           <Route path="/setup" element={<SetupPage />} />
           <Route path="/cases" element={<CasesPage />} />
           <Route path="/cases/:id" element={<CaseDetailPage />} />

@@ -69,6 +69,10 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddScoped<RecurringJobGuards>();
+// Background job monitoring: in-process run history + Hangfire storage snapshot -> per-job status.
+builder.Services.AddSingleton<JobExecutionTracker>();
+builder.Services.AddSingleton<IHangfireSnapshotSource, HangfireSnapshotSource>();
+builder.Services.AddSingleton<JobMonitoringService>();
 
 builder.Services.AddExceptionHandler<Iemas.Api.GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -83,6 +87,17 @@ var jwtSecret = builder.Configuration["Jwt:Secret"]
 // an authorization check).
 var agentJwtSecret = builder.Configuration["AgentJwt:Secret"]
     ?? throw new InvalidOperationException("Missing AgentJwt:Secret configuration.");
+
+// Minimum signing-secret strength: warn in Development, fail fast everywhere else.
+foreach (var (settingName, secretValue) in new[] { ("Jwt:Secret", jwtSecret), ("AgentJwt:Secret", agentJwtSecret) })
+{
+    var strength = Iemas.Infrastructure.Security.JwtSecretValidator.Evaluate(secretValue, builder.Environment.IsDevelopment());
+    if (strength == Iemas.Infrastructure.Security.JwtSecretStrength.Ok) continue;
+    var message = Iemas.Infrastructure.Security.JwtSecretValidator.Describe(settingName);
+    if (strength == Iemas.Infrastructure.Security.JwtSecretStrength.WeakFatal)
+        throw new InvalidOperationException(message);
+    Console.Error.WriteLine($"WARNING: {message}");
+}
 
 builder.Services.AddAuthentication(options =>
 {
@@ -278,6 +293,14 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseMiddleware<Iemas.Api.CorrelationIdMiddleware>();
+// Baseline response headers for an API that serves JSON only (no HTML): stop MIME sniffing, framing and referrer leaks.
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    context.Response.Headers["Referrer-Policy"] = "no-referrer";
+    await next();
+});
 app.UseExceptionHandler();
 app.UseSerilogRequestLogging();
 app.UseHttpsRedirection();

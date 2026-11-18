@@ -42,6 +42,21 @@ public class AiUsageController : ControllerBase
         CancellationToken cancellationToken) =>
         Ok(await _queryService.GetCallsAsync(page ?? 1, pageSize ?? AiUsageQueryService.DefaultPageSize, model, purpose, succeeded, from, to, cancellationToken));
 
+    /// <summary>AI decision audit trail (model, model version, prompt version, decision, confidence, explanation, timing, tokens, cost, fallback). Filter by case or email.</summary>
+    [HttpGet("audit")]
+    public async Task<ActionResult<PagedResult<AiAuditEntryDto>>> Audit(
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        [FromQuery] Guid? caseId,
+        [FromQuery] Guid? emailMessageId,
+        [FromQuery] string? purpose,
+        [FromQuery] bool? succeeded,
+        [FromQuery] string? promptVersion,
+        [FromQuery] DateTimeOffset? from,
+        [FromQuery] DateTimeOffset? to,
+        CancellationToken cancellationToken) =>
+        Ok(await _queryService.GetAuditAsync(page ?? 1, pageSize ?? AiUsageQueryService.DefaultPageSize, caseId, emailMessageId, purpose, succeeded, promptVersion, from, to, cancellationToken));
+
     [HttpGet("models")]
     public async Task<ActionResult<List<string>>> Models(CancellationToken cancellationToken) =>
         Ok(await _queryService.GetModelsUsedAsync(cancellationToken));

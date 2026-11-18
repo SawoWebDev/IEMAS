@@ -53,17 +53,41 @@ public sealed class BusinessCalendar
         var policy = await db.ReminderPolicies.AsNoTracking().Include(p => p.Holidays)
             .Where(p => p.Enabled && p.IsDefault)
             .FirstOrDefaultAsync(cancellationToken);
+        var settingHolidays = ParseHolidays(await SystemSettingsService.GetValueAsync(db, SystemSettingKeys.SupervisionHolidays, cancellationToken)).Dates;
 
         if (policy is null)
         {
             var zone = await SystemSettingsService.GetDefaultTimeZoneAsync(db, cancellationToken);
-            return new BusinessCalendar(zone, TimeSpan.FromHours(8), TimeSpan.FromHours(17), true, Array.Empty<DateOnly>());
+            return new BusinessCalendar(zone, TimeSpan.FromHours(8), TimeSpan.FromHours(17), true, settingHolidays);
         }
 
         var start = policy.RestrictToBusinessHours ? policy.BusinessHoursStart : TimeSpan.Zero;
         var end = policy.RestrictToBusinessHours ? policy.BusinessHoursEnd : TimeSpan.FromHours(24);
         return new BusinessCalendar(ReminderTimingCalculator.ResolveTimeZone(policy.TimeZoneId), start, end, policy.ExcludeWeekends,
-            policy.Holidays.Select(h => h.Date));
+            policy.Holidays.Select(h => h.Date).Concat(settingHolidays));
+    }
+
+    /// <summary>
+    /// Parses the "Company holidays" setting: ISO dates (yyyy-MM-dd) separated by commas, semicolons or
+    /// new lines. Returns the distinct dates in order, and every token that is not a valid date.
+    /// </summary>
+    public static (List<DateOnly> Dates, List<string> Invalid) ParseHolidays(string? text)
+    {
+        var dates = new List<DateOnly>();
+        var invalid = new List<string>();
+        foreach (var token in (text ?? "").Split(new[] { ',', ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (DateOnly.TryParseExact(token, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d))
+            {
+                if (!dates.Contains(d)) dates.Add(d);
+            }
+            else
+            {
+                invalid.Add(token);
+            }
+        }
+        dates.Sort();
+        return (dates, invalid);
     }
 
     public bool IsBusinessDay(DateOnly localDate) =>

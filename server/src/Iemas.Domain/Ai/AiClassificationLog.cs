@@ -17,4 +17,12 @@ public class AiClassificationLog : Entity
     public string? Detail { get; set; }
     public string? AiModel { get; set; }
     public long DurationMs { get; set; }
+
+    // ---- AI audit trail (additive, nullable) ----
+    public string? ModelVersion { get; set; }
+    public string? PromptVersion { get; set; }
+    public double? Confidence { get; set; }
+    public int? TotalTokens { get; set; }
+    public decimal? CostUsd { get; set; }
+    public bool? FallbackUsed { get; set; }
 }

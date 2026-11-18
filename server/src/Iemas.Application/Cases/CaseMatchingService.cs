@@ -38,6 +38,7 @@ public class CaseMatchingService
                 .Include(ce => ce.EmailMessage)
                 .Include(ce => ce.Case)
                 .Where(ce => ce.EmailMessage.ThreadId == message.ThreadId && ce.EmailMessage.EmailAccountId == message.EmailAccountId)
+                .OrderByDescending(ce => ce.Case.LastActivityAt)
                 .Select(ce => ce.Case)
                 .FirstOrDefaultAsync(cancellationToken);
 
@@ -54,6 +55,7 @@ public class CaseMatchingService
                 .Include(ce => ce.EmailMessage)
                 .Include(ce => ce.Case)
                 .Where(ce => ce.EmailMessage.MessageId == message.InReplyTo && ce.EmailMessage.EmailAccountId == message.EmailAccountId)
+                .OrderByDescending(ce => ce.Case.LastActivityAt)
                 .Select(ce => ce.Case)
                 .FirstOrDefaultAsync(cancellationToken);
 
@@ -73,6 +75,7 @@ public class CaseMatchingService
                 .Where(ce => ce.EmailMessage.MessageId != null
                     && referenceIds.Contains(ce.EmailMessage.MessageId)
                     && ce.EmailMessage.EmailAccountId == message.EmailAccountId)
+                .OrderByDescending(ce => ce.Case.LastActivityAt)
                 .Select(ce => ce.Case)
                 .FirstOrDefaultAsync(cancellationToken);
 
@@ -92,6 +95,7 @@ public class CaseMatchingService
                 .Include(ce => ce.Case)
                 .Where(ce => ce.EmailMessage.EmailAccountId == message.EmailAccountId
                     && (ce.EmailMessage.InReplyTo == message.MessageId || (ce.EmailMessage.References != null && ce.EmailMessage.References.Contains(message.MessageId))))
+                .OrderByDescending(ce => ce.Case.LastActivityAt)
                 .Select(ce => ce.Case)
                 .FirstOrDefaultAsync(cancellationToken);
 

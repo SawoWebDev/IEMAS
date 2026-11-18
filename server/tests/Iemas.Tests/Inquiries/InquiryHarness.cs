@@ -196,7 +196,16 @@ public sealed class InquiryHarness : IDisposable
         await _intake.RunAllAsync(CancellationToken.None);
         await _classification.RunAsync(100, CancellationToken.None);
         await _workflow.RunAsync(100, CancellationToken.None);
-        await _sync.RunAsync(500, CancellationToken.None);
+        await _sync.RunAsync(500, CancellationToken.None, now);
+        return await Supervision.RunAsync(1000, CancellationToken.None, now);
+    }
+
+    /// <summary>A cycle in which the Inbox jobs and supervision run but the Sent folder has not been read yet (it is read less often).</summary>
+    public async Task<SupervisionRunResult> RunWithoutSentFolderAsync(DateTimeOffset now)
+    {
+        await _intake.RunAllAsync(CancellationToken.None);
+        await _classification.RunAsync(100, CancellationToken.None);
+        await _workflow.RunAsync(100, CancellationToken.None);
         return await Supervision.RunAsync(1000, CancellationToken.None, now);
     }
 

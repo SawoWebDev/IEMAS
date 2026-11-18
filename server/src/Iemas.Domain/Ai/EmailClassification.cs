@@ -66,5 +66,15 @@ public class EmailClassification : Entity
     public string? CorrectedCategory { get; set; }
     public ClassificationPriority? CorrectedPriority { get; set; }
 
+    // --- Manual review of a ReviewRequired result. The AI values above (Relevance/Category/Priority/
+    // AiConfidence/DecisionReason) are never overwritten by a review: the reviewer's values go in the
+    // Corrected* fields. Null ReviewedAt = not reviewed yet (a review can happen only once). ---
+
+    public ClassificationReviewDecision? ReviewDecision { get; set; }
+    public Guid? ReviewedByUserId { get; set; }
+    public string? ReviewedByEmail { get; set; }
+    public DateTimeOffset? ReviewedAt { get; set; }
+    public string? ReviewNote { get; set; }
+
     public DateTimeOffset ClassifiedAt { get; set; } = DateTimeOffset.UtcNow;
 }

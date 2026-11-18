@@ -103,6 +103,16 @@ public class AgentCaseActionService
             if (!outcome.Succeeded) return Result<CaseActionResultDto>.Failure(outcome.Error ?? "The action could not be applied.");
         }
 
+        // An action that changes who owes the next step, or claims a reply was sent, is the moment the agent's
+        // latest message is most likely to still be unread in the Sent folder: store it first, so the stage
+        // change below builds on the real conversation. Never blocks or fails the action.
+        if (_conversation is not null
+            && request.ActionType is CaseActionType.AlreadyReplied or CaseActionType.WaitingForCustomer or CaseActionType.WaitingForInternal
+                or CaseActionType.Cancel or CaseActionType.MarkCompleted)
+        {
+            await _conversation.TrySyncCaseAsync(targetCase.Id, actedAt, cancellationToken);
+        }
+
         var detail = BuildActionDetail(request.ActionType, request.Comment);
         ApplyAction(targetCase, request.ActionType);
         if (_conversation is not null) await ApplyToLifecycleAsync(targetCase, request.ActionType, actedAt, cancellationToken);

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Iemas.Application.Common.Interfaces;
+using Iemas.Application.Inquiries;
 using Iemas.Application.Escalations.Dtos;
 using Iemas.Application.Notifications;
 using Iemas.Application.Operations;
@@ -50,7 +51,9 @@ public class EscalationService
     /// goes one level higher, staying at the top level once reached. Sends the management email
     /// (G10) and tells the agent. Ownership never changes (§64).
     /// </summary>
-    public async Task<SupervisionEscalationResult> EscalateForSupervisionAsync(Case targetCase, string reason, DateTimeOffset now, CancellationToken cancellationToken)
+    public async Task<SupervisionEscalationResult> EscalateForSupervisionAsync(
+        Case targetCase, string reason, DateTimeOffset now, CancellationToken cancellationToken,
+        Func<DateTimeOffset, DateTimeOffset>? earliestNextLevel = null)
     {
         if (await _db.IsPausedAsync(PauseControl.Escalations, cancellationToken))
         {
@@ -70,6 +73,7 @@ public class EscalationService
             return new SupervisionEscalationResult(EscalationOutcome.Skipped, "No enabled Escalation Policy applies, so nobody could be told.");
         }
 
+        // Levels already notified, whatever the policy: a Case never escalates to the same level twice.
         var highest = await _db.EscalationEvents
             .Where(e => e.CaseId == targetCase.Id && e.Outcome == EscalationOutcome.Executed)
             .Select(e => (int?)e.Level).MaxAsync(cancellationToken) ?? 0;
@@ -79,38 +83,65 @@ public class EscalationService
             .Where(l => l.EscalationPolicyId == policy.Id && l.Level <= policy.MaximumLevel)
             .OrderBy(l => l.Level)
             .ToListAsync(cancellationToken);
-        var level = levels.FirstOrDefault(l => l.Level > highest) ?? levels.LastOrDefault();
-        if (level is null)
+        if (levels.Count == 0)
         {
             await RecordSkipAsync(targetCase.Id, policy.Id, null, EscalationSkipReason.MaximumLevelReached, "The policy has no escalation levels.", cancellationToken);
             return new SupervisionEscalationResult(EscalationOutcome.Skipped, "The escalation policy has no levels configured.");
         }
 
-        var recipients = await ResolveRecipientListAsync(targetCase, level, cancellationToken);
-        if (recipients.Count == 0)
+        var candidates = levels.Where(l => l.Level > highest).ToList();
+        if (candidates.Count == 0)
         {
-            await RecordEventAsync(targetCase, policy, level, EscalationOutcome.RecipientUnresolved, null,
-                $"Recipient of type {level.RecipientType} could not be resolved. Reason for escalation: {reason}", cancellationToken, trigger: reason);
-            return new SupervisionEscalationResult(EscalationOutcome.RecipientUnresolved, $"Level {level.Level} recipient ({level.RecipientType}) could not be resolved.");
+            var detail = $"Level {highest} is the highest level and management at every level has already been told; a level never escalates twice.";
+            await RecordSkipAsync(targetCase.Id, policy.Id, highest, EscalationSkipReason.MaximumLevelReached, detail, cancellationToken);
+            return new SupervisionEscalationResult(EscalationOutcome.Skipped, detail);
         }
 
-        var owner = targetCase.OwnerEmployeeId is Guid ownerId
-            ? await _db.Employees.AsNoTracking().FirstOrDefaultAsync(e => e.Id == ownerId, cancellationToken)
-            : null;
-        var reminders = await SentReminderTimesAsync(targetCase.Id, cancellationToken);
-        var zone = await SystemSettingsService.GetDefaultTimeZoneAsync(_db, cancellationToken);
-        var email = EscalationEmailComposer.Compose(
-            new EscalationEmailContext(targetCase, owner?.FullName, owner?.Email, level.Level, reason, reminders, zone, now,
-                await SystemSettingsService.GetValueAsync(_db, SystemSettingKeys.OrganizationName, cancellationToken),
-                await SystemSettingsService.GetValueAsync(_db, SystemSettingKeys.CmsBaseUrl, cancellationToken)),
-            recipients.Select(r => new EmailRecipient(r.Name, r.Email)).ToList());
+        // A higher level is only told after the caller's waiting period since the previous level
+        // (default policy: one business day). Checked against the recorded escalation, not the Case's
+        // counters, so a second supervision run racing the first cannot escalate two levels at once.
+        if (earliestNextLevel is not null && highest > 0)
+        {
+            var previousAt = await _db.EscalationEvents
+                .Where(e => e.CaseId == targetCase.Id && e.Outcome == EscalationOutcome.Executed)
+                .MaxAsync(e => (DateTimeOffset?)e.OccurredAt, cancellationToken);
+            if (previousAt is DateTimeOffset previous && now < earliestNextLevel(previous))
+            {
+                return new SupervisionEscalationResult(EscalationOutcome.Skipped,
+                    $"Level {highest} was notified at {previous:u}; the next level waits until {earliestNextLevel(previous):u}.", RetryLater: true);
+            }
+        }
 
-        var delivery = _emailSender is null
-            ? new OutboundEmailResult(false, null, "No escalation email sender is configured.")
-            : await _emailSender.SendAsync(email, cancellationToken);
+        // Recipient fallback: when the next level has nobody to tell (no supervisor set, manager
+        // left, empty group) it is recorded as unresolved and the next level up is tried instead.
+        EscalationLevel? level = null;
+        List<(string Name, string Email)> recipients = new();
+        string? firstUnresolved = null;
+        foreach (var candidate in candidates)
+        {
+            var resolved = await ResolveRecipientListAsync(targetCase, candidate, cancellationToken);
+            if (resolved.Count > 0)
+            {
+                level = candidate;
+                recipients = resolved;
+                break;
+            }
+            await RecordEventAsync(targetCase, policy, candidate, EscalationOutcome.RecipientUnresolved, null,
+                $"Recipient of type {candidate.RecipientType} could not be resolved. Reason for escalation: {reason}", cancellationToken, trigger: reason);
+            firstUnresolved ??= $"Level {candidate.Level} recipient ({candidate.RecipientType}) could not be resolved.";
+        }
+        if (level is null)
+        {
+            return new SupervisionEscalationResult(EscalationOutcome.RecipientUnresolved, firstUnresolved ?? "No escalation recipient could be resolved.");
+        }
 
         var display = string.Join("; ", recipients.Select(r => $"{r.Name} <{r.Email}>"));
-        _db.EscalationEvents.Add(new EscalationEvent
+        var fellBack = firstUnresolved is null ? "" : $" ({firstUnresolved} Fell back to level {level.Level}.)";
+
+        // Claim the level BEFORE sending: the unique (CaseId, Level) index lets exactly one of two
+        // concurrent runs record it, so only that run sends. The row stays "Pending" until the send
+        // result is known; a crash in between leaves it Pending and the retry pass picks it up.
+        var escalationEvent = new EscalationEvent
         {
             CaseId = targetCase.Id,
             EscalationPolicyId = policy.Id,
@@ -122,18 +153,49 @@ public class EscalationService
             Channel = policy.Channel,
             Outcome = EscalationOutcome.Executed,
             Detail = reason,
-            EmailMessageId = delivery.MessageId,
-            DeliveryResult = delivery.Sent ? "Sent" : "Failed",
-            FailureReason = delivery.Error,
+            DeliveryResult = "Pending",
+            LastDeliveryAttemptAt = now,
             OccurredAt = now,
-        });
+        };
+        var claimEvent = new CaseEvent
+        {
+            CaseId = targetCase.Id,
+            EventType = CaseEventType.EscalationEvent,
+            OccurredAt = now,
+            Detail = $"Escalated to management, level {level.Level} ({level.RecipientType}): {display}. Reason: {reason}{fellBack}",
+        };
+        _db.EscalationEvents.Add(escalationEvent);
+        _db.CaseEvents.Add(claimEvent);
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            _db.EscalationEvents.Remove(escalationEvent);
+            _db.CaseEvents.Remove(claimEvent);
+            var claimedLevel = level.Level;
+            var raced = await _db.EscalationEvents.AsNoTracking().AnyAsync(
+                e => e.CaseId == targetCase.Id && e.Level == claimedLevel && e.Outcome == EscalationOutcome.Executed, cancellationToken);
+            if (!raced) throw;
+            return new SupervisionEscalationResult(EscalationOutcome.Skipped, $"Level {claimedLevel} was already escalated by another run.");
+        }
+
+        var owner = targetCase.OwnerEmployeeId is Guid ownerId
+            ? await _db.Employees.AsNoTracking().FirstOrDefaultAsync(e => e.Id == ownerId, cancellationToken)
+            : null;
+        var delivery = await TrySendAsync(targetCase, owner, level.Level, reason, recipients, now, cancellationToken);
+        escalationEvent.DeliveryResult = delivery.Sent ? "Sent" : "Failed";
+        escalationEvent.EmailMessageId = delivery.MessageId;
+        escalationEvent.FailureReason = delivery.Error;
         _db.CaseEvents.Add(new CaseEvent
         {
             CaseId = targetCase.Id,
             EventType = CaseEventType.EscalationEvent,
             OccurredAt = now,
-            Detail = $"Escalated to management, level {level.Level} ({level.RecipientType}): {display}. Reason: {reason} "
-                + (delivery.Sent ? "Escalation email sent." : $"Escalation email NOT sent: {delivery.Error}"),
+            Detail = delivery.Sent
+                ? "Escalation email sent." + (delivery.Error is null ? "" : $" {delivery.Error}")
+                : $"Escalation email NOT sent: {delivery.Error} It will be retried up to {MaxEmailRetries} more time(s).",
         });
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -146,46 +208,109 @@ public class EscalationService
             $"Level {level.Level} → {display}" + (delivery.Sent ? "" : $" (email not sent: {delivery.Error})"));
     }
 
-    /// <summary>Re-sends escalation emails that failed (e.g. the SMTP server was down), up to 3 attempts each.</summary>
+    /// <summary>Retries after the first failed send, at most this many per escalation.</summary>
+    public const int MaxEmailRetries = 3;
+
+    /// <summary>Wait before the next retry, by how many retries were already made: 5 min, 15 min, then 60 min. Keeps a down SMTP server from being hit every minute.</summary>
+    public static TimeSpan RetryBackoff(int retriesDone) => retriesDone switch
+    {
+        <= 0 => TimeSpan.FromMinutes(5),
+        1 => TimeSpan.FromMinutes(15),
+        _ => TimeSpan.FromMinutes(60),
+    };
+
+    /// <summary>Composes and sends the management email. Never throws (other than cancellation): a failure is a result.</summary>
+    private async Task<OutboundEmailResult> TrySendAsync(
+        Case targetCase, Employee? owner, int level, string reason, IReadOnlyList<(string Name, string Email)> recipients, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        if (_emailSender is null) return new OutboundEmailResult(false, null, "No escalation email sender is configured.");
+        if (recipients.Count == 0) return new OutboundEmailResult(false, null, "No recipient could be resolved for this level any more.");
+        try
+        {
+            var reminders = await SentReminderTimesAsync(targetCase.Id, cancellationToken);
+            var zone = await SystemSettingsService.GetDefaultTimeZoneAsync(_db, cancellationToken);
+            var email = EscalationEmailComposer.Compose(
+                new EscalationEmailContext(targetCase, owner?.FullName, owner?.Email, level, reason, reminders, zone, now,
+                    await SystemSettingsService.GetValueAsync(_db, SystemSettingKeys.OrganizationName, cancellationToken),
+                    await SystemSettingsService.GetValueAsync(_db, SystemSettingKeys.CmsBaseUrl, cancellationToken)),
+                recipients.Select(r => new EmailRecipient(r.Name, r.Email)).ToList());
+            return await _emailSender.SendAsync(email, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return new OutboundEmailResult(false, null, $"Sending failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Re-sends escalation emails that failed (or were left Pending by a crash). Bounded: at most
+    /// <see cref="MaxEmailRetries"/> retries per escalation, spaced by <see cref="RetryBackoff"/>, so
+    /// a failing SMTP server is never retried in a tight loop. Each attempt is claimed first
+    /// (RetryCount is a concurrency token), so two runs cannot send the same email twice. Stops for
+    /// resolved/closed inquiries: management is no longer told about those.
+    /// </summary>
     public async Task<int> RetryFailedEscalationEmailsAsync(DateTimeOffset now, CancellationToken cancellationToken)
     {
         if (_emailSender is null) return 0;
-        var failed = await _db.EscalationEvents
-            .Where(e => e.Outcome == EscalationOutcome.Executed && e.DeliveryResult == "Failed" && e.RetryCount < 3 && e.OccurredAt > now.AddDays(-2))
-            .OrderBy(e => e.OccurredAt).Take(20).ToListAsync(cancellationToken);
+        var pending = await _db.EscalationEvents
+            .Where(e => e.Outcome == EscalationOutcome.Executed && (e.DeliveryResult == "Failed" || e.DeliveryResult == "Pending")
+                && e.RetryCount < MaxEmailRetries && e.OccurredAt > now.AddDays(-2))
+            .OrderBy(e => e.OccurredAt).Take(100).ToListAsync(cancellationToken);
+        var due = pending
+            .Where(e => now >= (e.LastDeliveryAttemptAt ?? e.OccurredAt) + RetryBackoff(e.RetryCount))
+            .Take(20).ToList();
+
         var resent = 0;
-        foreach (var e in failed)
+        foreach (var e in due)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var targetCase = await _db.Cases.FirstOrDefaultAsync(c => c.Id == e.CaseId, cancellationToken);
+            if (targetCase is null || InquiryLifecycle.IsTerminal(targetCase.Stage)
+                || targetCase.WorkStatus is CaseWorkStatus.Completed or CaseWorkStatus.Cancelled)
+            {
+                e.DeliveryResult = "Cancelled";
+                e.FailureReason = targetCase is null ? "Case no longer exists." : "The inquiry was resolved or closed before the email could be delivered.";
+                await _db.SaveChangesAsync(cancellationToken);
+                continue;
+            }
+
+            // Claim this attempt before sending.
+            e.RetryCount++;
+            e.LastDeliveryAttemptAt = now;
+            try
+            {
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                // Another run claimed it (RetryCount changed underneath us): not ours to send.
+                continue;
+            }
+
             var level = await _db.EscalationLevels
                 .Include(l => l.SpecificEmployee)
                 .Include(l => l.SpecificGroup!).ThenInclude(g => g.Members).ThenInclude(m => m.Employee)
                 .FirstOrDefaultAsync(l => l.EscalationPolicyId == e.EscalationPolicyId && l.Level == e.Level, cancellationToken);
-            e.RetryCount++;
-            if (targetCase is null || level is null) { e.FailureReason = "Case or escalation level no longer exists."; continue; }
-
-            var recipients = await ResolveRecipientListAsync(targetCase, level, cancellationToken);
+            var recipients = level is null ? new List<(string Name, string Email)>() : await ResolveRecipientListAsync(targetCase, level, cancellationToken);
             var owner = targetCase.OwnerEmployeeId is Guid ownerId ? await _db.Employees.AsNoTracking().FirstOrDefaultAsync(x => x.Id == ownerId, cancellationToken) : null;
-            var reminders = await SentReminderTimesAsync(targetCase.Id, cancellationToken);
-            var zone = await SystemSettingsService.GetDefaultTimeZoneAsync(_db, cancellationToken);
-            var result = await _emailSender.SendAsync(EscalationEmailComposer.Compose(
-                new EscalationEmailContext(targetCase, owner?.FullName, owner?.Email, e.Level, e.Trigger, reminders, zone, now,
-                    await SystemSettingsService.GetValueAsync(_db, SystemSettingKeys.OrganizationName, cancellationToken),
-                    await SystemSettingsService.GetValueAsync(_db, SystemSettingKeys.CmsBaseUrl, cancellationToken)),
-                recipients.Select(r => new EmailRecipient(r.Name, r.Email)).ToList()), cancellationToken);
+
+            var result = level is null
+                ? new OutboundEmailResult(false, null, "The escalation level no longer exists.")
+                : await TrySendAsync(targetCase, owner, e.Level, e.Trigger, recipients, now, cancellationToken);
             if (result.Sent)
             {
                 e.DeliveryResult = "Sent";
                 e.EmailMessageId = result.MessageId;
-                e.FailureReason = null;
+                e.FailureReason = result.Error;
                 resent++;
             }
             else
             {
+                e.DeliveryResult = "Failed";
                 e.FailureReason = result.Error;
             }
+            await _db.SaveChangesAsync(cancellationToken);
         }
-        await _db.SaveChangesAsync(cancellationToken);
         return resent;
     }
 
@@ -619,8 +744,10 @@ public class EscalationService
         {
             // A concurrent run already recorded this exact level — treat as already-handled, same
             // race-handling pattern used throughout (EmailIntakeService, CaseWorkflowService, etc.).
+            _db.EscalationEvents.Remove(escalationEvent);
+            var raceLevel = level.Level;
             var raced = await _db.EscalationEvents.AsNoTracking().AnyAsync(
-                e => e.CaseId == targetCase.Id && e.EscalationPolicyId == policy.Id && e.Level == level.Level && e.Outcome == EscalationOutcome.Executed,
+                e => e.CaseId == targetCase.Id && e.Level == raceLevel && e.Outcome == EscalationOutcome.Executed,
                 cancellationToken);
             if (!raced) throw;
             return EscalationOutcome.Skipped;

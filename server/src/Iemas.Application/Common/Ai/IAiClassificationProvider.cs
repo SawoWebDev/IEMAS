@@ -89,7 +89,13 @@ public record ClassificationAttemptResult(
     long DurationMs,
     ClassificationFailureCategory FailureCategory = ClassificationFailureCategory.None,
     TimeSpan? RetryAfter = null,
-    AiTokenUsage? Usage = null);
+    AiTokenUsage? Usage = null,
+    /// <summary>Model id the provider reported it served (audit); null when not reported.</summary>
+    string? ModelVersion = null,
+    /// <summary>Version constant of the prompt used (audit).</summary>
+    string? PromptVersion = null,
+    /// <summary>HTTP calls made for this result (retries and the malformed-output repair call included).</summary>
+    int Attempts = 1);
 
 /// <summary>
 /// Requirements §82 (AI Provider Management) — provider-specific integration logic (OpenRouter

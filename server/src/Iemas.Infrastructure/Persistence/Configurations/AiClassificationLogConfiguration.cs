@@ -16,6 +16,10 @@ public class AiClassificationLogConfiguration : IEntityTypeConfiguration<AiClass
             .HasForeignKey(l => l.EmailMessageId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        builder.Property(l => l.ModelVersion).HasMaxLength(200);
+        builder.Property(l => l.PromptVersion).HasMaxLength(50);
+        builder.Property(l => l.CostUsd).HasPrecision(18, 8);
+
         builder.HasIndex(l => l.EmailMessageId);
     }
 }

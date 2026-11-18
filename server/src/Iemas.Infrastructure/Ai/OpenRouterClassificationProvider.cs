@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Iemas.Application.AiModels;
 using Iemas.Application.Common.Ai;
+using Iemas.Application.Common.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -23,21 +24,29 @@ namespace Iemas.Infrastructure.Ai;
 /// </summary>
 public class OpenRouterClassificationProvider : IAiClassificationProvider
 {
+    /// <summary>Bump whenever <see cref="SystemPrompt"/> or the user-prompt layout changes; recorded with every AI decision.</summary>
+    public const string PromptVersion = "classification-2026-11-v3";
+
     private readonly HttpClient _httpClient;
     private readonly IAiProviderConnectionResolver _connectionResolver;
+    private readonly AiClassificationOptions _allOptions;
     private readonly OpenRouterOptions _options;
     private readonly ILogger<OpenRouterClassificationProvider> _logger;
+    private readonly IRetryDelay? _retryDelay;
 
     public OpenRouterClassificationProvider(
         HttpClient httpClient,
         IAiProviderConnectionResolver connectionResolver,
         IOptions<AiClassificationOptions> options,
-        ILogger<OpenRouterClassificationProvider> logger)
+        ILogger<OpenRouterClassificationProvider> logger,
+        IRetryDelay? retryDelay = null)
     {
         _httpClient = httpClient;
         _connectionResolver = connectionResolver;
+        _allOptions = options.Value;
         _options = options.Value.OpenRouter;
         _logger = logger;
+        _retryDelay = retryDelay;
     }
 
     public async Task<ClassificationAttemptResult> ClassifyAsync(
@@ -54,114 +63,77 @@ public class OpenRouterClassificationProvider : IAiClassificationProvider
             // Phase 10: AuthenticationFailure — retrying with the same missing key cannot succeed.
             return new ClassificationAttemptResult(false, "OpenRouter", modelIdentifier, null,
                 "OpenRouter API key is not configured.", stopwatch.ElapsedMilliseconds,
-                ClassificationFailureCategory.AuthenticationFailure);
+                ClassificationFailureCategory.AuthenticationFailure, PromptVersion: PromptVersion, Attempts: 0);
         }
-
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(timeout);
 
         try
         {
-            var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{connection.BaseUrl}/chat/completions");
-            httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", connection.ApiKey);
-            if (!string.IsNullOrWhiteSpace(_options.SiteUrl))
+            var messages = new List<object>
             {
-                httpRequest.Headers.Add("HTTP-Referer", _options.SiteUrl);
-            }
-            if (!string.IsNullOrWhiteSpace(_options.SiteName))
+                new { role = "system", content = SystemPrompt },
+                new { role = "user", content = BuildUserPrompt(request) },
+            };
+            var call = await OpenRouterChatCaller.SendAsync(_httpClient, connection.BaseUrl, connection.ApiKey, _options,
+                BuildChatRequest(messages, modelIdentifier), timeout, _options.ClassificationTransportRetries, _retryDelay, _logger, modelIdentifier, cancellationToken);
+            var attempts = call.Attempts;
+            var usage = call.Usage;
+
+            if (!call.Succeeded)
             {
-                httpRequest.Headers.Add("X-Title", _options.SiteName);
-            }
-
-            httpRequest.Content = JsonContent.Create(BuildChatRequest(request, modelIdentifier));
-
-            using var httpResponse = await _httpClient.SendAsync(httpRequest, cts.Token);
-
-            if (!httpResponse.IsSuccessStatusCode)
-            {
-                var body = await SafeReadBodyAsync(httpResponse, cts.Token);
-                _logger.LogWarning("OpenRouter request failed with status {StatusCode} for model {Model}", httpResponse.StatusCode, modelIdentifier);
-                return new ClassificationAttemptResult(false, "OpenRouter", modelIdentifier, null,
-                    $"OpenRouter returned HTTP {(int)httpResponse.StatusCode}: {Truncate(body, 500)}", stopwatch.ElapsedMilliseconds,
-                    CategorizeHttpFailure(httpResponse), ParseRetryAfter(httpResponse));
+                return Failed(call.Error!, call.Category, call.RetryAfter, usage, call.ModelVersion, attempts);
             }
 
-            var chatResponse = await httpResponse.Content.ReadFromJsonAsync<OpenRouterChatResponse>(cts.Token);
-            var content = chatResponse?.Choices?.FirstOrDefault()?.Message?.Content;
-            var usage = ToUsage(chatResponse);
-
-            if (string.IsNullOrWhiteSpace(content))
+            var parsed = TryParseClassification(call.Content!, out var parseError);
+            var modelVersion = call.ModelVersion;
+            if (parsed is null && _options.RepairMalformedOutput)
             {
-                return new ClassificationAttemptResult(false, "OpenRouter", modelIdentifier, null,
-                    "OpenRouter returned an empty response.", stopwatch.ElapsedMilliseconds,
-                    ClassificationFailureCategory.MalformedResponse, Usage: usage);
+                // Strict structured output: one corrective follow-up, then give up (the service layer decides on fallback).
+                messages.Add(new { role = "assistant", content = Truncate(call.Content!, 2000) });
+                messages.Add(new { role = "user", content = $"Your previous reply was rejected: {parseError} Reply again with ONLY the single JSON object in the required shape, with valid values." });
+                var repair = await OpenRouterChatCaller.SendAsync(_httpClient, connection.BaseUrl, connection.ApiKey, _options,
+                    BuildChatRequest(messages, modelIdentifier), timeout, 0, _retryDelay, _logger, modelIdentifier, cancellationToken);
+                attempts += repair.Attempts;
+                usage = AddUsage(usage, repair.Usage);
+                modelVersion = repair.ModelVersion ?? modelVersion;
+                if (!repair.Succeeded)
+                {
+                    return Failed(repair.Error!, repair.Category == ClassificationFailureCategory.None ? ClassificationFailureCategory.MalformedResponse : repair.Category, repair.RetryAfter, usage, modelVersion, attempts);
+                }
+                parsed = TryParseClassification(repair.Content!, out parseError);
             }
 
-            var parsed = TryParseClassification(content, out var parseError);
             if (parsed is null)
             {
                 // §83 — a malformed/unexpected AI response must not be silently treated as a
                 // classification; it is reported as a failed attempt like any other provider error.
-                return new ClassificationAttemptResult(false, "OpenRouter", modelIdentifier, null,
-                    $"Could not parse a valid classification from the model response: {parseError}", stopwatch.ElapsedMilliseconds,
-                    ClassificationFailureCategory.MalformedResponse, Usage: usage);
+                return Failed($"Could not parse a valid classification from the model response: {parseError}",
+                    ClassificationFailureCategory.MalformedResponse, null, usage, modelVersion, attempts);
             }
 
-            stopwatch.Stop();
-            return new ClassificationAttemptResult(true, "OpenRouter", modelIdentifier, parsed, null, stopwatch.ElapsedMilliseconds, Usage: usage);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            // The linked CTS fired from CancelAfter(timeout), not from the caller's own token.
-            return new ClassificationAttemptResult(false, "OpenRouter", modelIdentifier, null,
-                $"OpenRouter request timed out after {timeout.TotalSeconds:0}s.", stopwatch.ElapsedMilliseconds,
-                ClassificationFailureCategory.Transient);
+            return new ClassificationAttemptResult(true, "OpenRouter", modelIdentifier, parsed, null, stopwatch.ElapsedMilliseconds,
+                Usage: usage, ModelVersion: modelVersion, PromptVersion: PromptVersion, Attempts: attempts);
         }
         catch (OperationCanceledException)
         {
             throw;
         }
-        catch (JsonException ex)
-        {
-            // The HTTP call itself succeeded (2xx) but the response body wasn't valid JSON at all
-            // — a different failure than TryParseClassification's "valid JSON, wrong shape" case,
-            // but the same MalformedResponse category: retrying the identical request against a
-            // server that just sent back garbage is exactly as unlikely to help as a request that
-            // parsed but didn't match the expected schema.
-            _logger.LogWarning(ex, "OpenRouter response body was not valid JSON for model {Model}", modelIdentifier);
-            return new ClassificationAttemptResult(false, "OpenRouter", modelIdentifier, null,
-                $"OpenRouter response was not valid JSON: {ex.Message}", stopwatch.ElapsedMilliseconds,
-                ClassificationFailureCategory.MalformedResponse);
-        }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "OpenRouter request threw for model {Model}", modelIdentifier);
-            // Everything else here (HttpRequestException, socket/DNS/TLS failures) means the
-            // request never reached OpenRouter to produce a definitive answer at all — the same
-            // "worth retrying" class as a timeout.
-            return new ClassificationAttemptResult(false, "OpenRouter", modelIdentifier, null,
-                $"OpenRouter request failed: {ex.Message}", stopwatch.ElapsedMilliseconds,
-                ClassificationFailureCategory.Transient);
+            _logger.LogWarning(ex, "OpenRouter classification threw for model {Model}", modelIdentifier);
+            return Failed($"OpenRouter request failed: {ex.Message}", ClassificationFailureCategory.Transient, null, null, null, 1);
         }
+
+        ClassificationAttemptResult Failed(string error, ClassificationFailureCategory category, TimeSpan? retryAfter, AiTokenUsage? usage, string? modelVersion, int attempts) =>
+            new(false, "OpenRouter", modelIdentifier, null, error, stopwatch.ElapsedMilliseconds, category, retryAfter, usage, modelVersion, PromptVersion, attempts);
     }
 
-    /// <summary>Maps an OpenRouter HTTP failure status to a retry category (§82/§83, Phase 10 hardening).</summary>
-    private static ClassificationFailureCategory CategorizeHttpFailure(HttpResponseMessage response) => response.StatusCode switch
+    private static AiTokenUsage? AddUsage(AiTokenUsage? a, AiTokenUsage? b)
     {
-        System.Net.HttpStatusCode.TooManyRequests => ClassificationFailureCategory.RateLimited,
-        System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden => ClassificationFailureCategory.AuthenticationFailure,
-        >= System.Net.HttpStatusCode.InternalServerError => ClassificationFailureCategory.Transient,
-        _ => ClassificationFailureCategory.InvalidRequest,
-    };
-
-    /// <summary>OpenRouter (like most APIs) sends `Retry-After` as either delay-seconds or an HTTP-date; both are supported by <see cref="RetryConditionHeaderValue"/>.</summary>
-    private static TimeSpan? ParseRetryAfter(HttpResponseMessage response)
-    {
-        var retryAfter = response.Headers.RetryAfter;
-        if (retryAfter is null) return null;
-        if (retryAfter.Delta.HasValue) return retryAfter.Delta.Value;
-        if (retryAfter.Date.HasValue) return retryAfter.Date.Value - DateTimeOffset.UtcNow;
-        return null;
+        if (a is null) return b;
+        if (b is null) return a;
+        static int? Sum(int? x, int? y) => x is null && y is null ? null : (x ?? 0) + (y ?? 0);
+        return new AiTokenUsage(Sum(a.PromptTokens, b.PromptTokens), Sum(a.CompletionTokens, b.CompletionTokens), Sum(a.TotalTokens, b.TotalTokens),
+            a.CostUsd is null && b.CostUsd is null ? null : (a.CostUsd ?? 0) + (b.CostUsd ?? 0), a.GenerationId ?? b.GenerationId);
     }
 
     private const int MaxOutputTokens = 600;
@@ -178,7 +150,7 @@ public class OpenRouterClassificationProvider : IAiClassificationProvider
         return body.Length <= MaxBodyChars ? body : body[..MaxBodyChars] + "\n[... rest of the email omitted to save cost ...]";
     }
 
-    private static object BuildChatRequest(ClassificationRequest request, string modelIdentifier) => new
+    private static object BuildChatRequest(IReadOnlyList<object> messages, string modelIdentifier) => new
     {
         model = modelIdentifier,
         temperature = 0,
@@ -189,11 +161,7 @@ public class OpenRouterClassificationProvider : IAiClassificationProvider
         max_tokens = MaxOutputTokens,
         // Asks OpenRouter to return the real cost of this call in the response's usage block.
         usage = new { include = true },
-        messages = new object[]
-        {
-            new { role = "system", content = SystemPrompt },
-            new { role = "user", content = BuildUserPrompt(request) },
-        },
+        messages,
     };
 
     // Requirements §23/§25/§27 — the AI recommends structured output only; it never drafts a
@@ -355,6 +323,12 @@ public class OpenRouterClassificationProvider : IAiClassificationProvider
                 category = "Uncategorized";
             }
 
+            if (kind is not null && kind is not ("customer_inquiry" or "dealer_inquiry" or "business_correspondence" or "vendor_pitch" or "automated" or "spam" or "other"))
+            {
+                error = $"'email_kind' value \"{kind}\" is not one of the allowed kinds.";
+                return null;
+            }
+
             if (priority is not ("LOW" or "MEDIUM" or "HIGH"))
             {
                 error = $"'priority' value \"{priority}\" is not one of LOW/MEDIUM/HIGH.";
@@ -373,68 +347,12 @@ public class OpenRouterClassificationProvider : IAiClassificationProvider
                 legitimate,
                 kind);
         }
-        catch (JsonException ex)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
         {
             error = $"Response was not valid JSON: {ex.Message}";
             return null;
         }
     }
 
-    private static async Task<string> SafeReadBodyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await response.Content.ReadAsStringAsync(cancellationToken);
-        }
-        catch
-        {
-            return "(could not read response body)";
-        }
-    }
-
     private static string Truncate(string value, int maxLength) => value.Length <= maxLength ? value : value[..maxLength];
-
-    private static AiTokenUsage? ToUsage(OpenRouterChatResponse? response) =>
-        response?.Usage is { } u
-            ? new AiTokenUsage(u.PromptTokens, u.CompletionTokens, u.TotalTokens, u.Cost, response.Id)
-            : response?.Id is not null ? new AiTokenUsage(null, null, null, null, response.Id) : null;
-
-    private class OpenRouterChatResponse
-    {
-        [JsonPropertyName("id")]
-        public string? Id { get; set; }
-
-        [JsonPropertyName("choices")]
-        public List<OpenRouterChoice>? Choices { get; set; }
-
-        [JsonPropertyName("usage")]
-        public OpenRouterUsage? Usage { get; set; }
-    }
-
-    private class OpenRouterUsage
-    {
-        [JsonPropertyName("prompt_tokens")]
-        public int? PromptTokens { get; set; }
-
-        [JsonPropertyName("completion_tokens")]
-        public int? CompletionTokens { get; set; }
-
-        [JsonPropertyName("total_tokens")]
-        public int? TotalTokens { get; set; }
-
-        [JsonPropertyName("cost")]
-        public decimal? Cost { get; set; }
-    }
-
-    private class OpenRouterChoice
-    {
-        [JsonPropertyName("message")]
-        public OpenRouterMessage? Message { get; set; }
-    }
-
-    private class OpenRouterMessage
-    {
-        [JsonPropertyName("content")]
-        public string? Content { get; set; }
-    }
 }

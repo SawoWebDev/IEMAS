@@ -26,5 +26,8 @@ public class EmailClassificationConfiguration : IEntityTypeConfiguration<Iemas.D
             .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(c => c.Decision);
+
+        builder.Property(c => c.ReviewedByEmail).HasMaxLength(320);
+        builder.Property(c => c.ReviewNote).HasMaxLength(2000);
     }
 }

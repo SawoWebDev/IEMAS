@@ -49,7 +49,8 @@ public static class ReminderTimingCalculator
                 }
                 if (timeOfDay >= policy.BusinessHoursEnd)
                 {
-                    current = AtTimeOfDay(local, policy.BusinessHoursStart, tz).AddDays(1);
+                    // Next LOCAL day at opening time. (Adding 24 UTC hours would land an hour off across a DST change.)
+                    current = LocalToUtc(local.Date.AddDays(1), policy.BusinessHoursStart, tz);
                     continue;
                 }
             }

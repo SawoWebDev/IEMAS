@@ -43,6 +43,20 @@ public class InquirySupervisionService
         _time = time ?? TimeProvider.System;
     }
 
+    /// <summary>Process-wide gate so a manual "run now" and the scheduled Hangfire job never overlap in this process.</summary>
+    private static readonly SemaphoreSlim RunGate = new(1, 1);
+
+    /// <summary>
+    /// Runs <paramref name="work"/> only if no other supervision run (manual or scheduled) is in progress in
+    /// this process. Returns false immediately, without waiting, when one is.
+    /// </summary>
+    public static async Task<(bool Ran, T? Result)> TryRunExclusiveAsync<T>(Func<Task<T>> work, CancellationToken cancellationToken)
+    {
+        if (!await RunGate.WaitAsync(0, cancellationToken)) return (false, default);
+        try { return (true, await work()); }
+        finally { RunGate.Release(); }
+    }
+
     public async Task<SupervisionRunResult> RunAsync(int batchSize, CancellationToken cancellationToken, DateTimeOffset? at = null)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -59,7 +73,8 @@ public class InquirySupervisionService
 
         var calendar = settings.TestClockMinutes ? BusinessCalendar.FastTestClock() : await BusinessCalendar.LoadAsync(_db, cancellationToken);
         var caseIds = await _db.Cases
-            .Where(c => c.Stage != InquiryStage.Resolved && c.Stage != InquiryStage.Closed)
+            .Where(c => c.Stage != InquiryStage.Resolved && c.Stage != InquiryStage.Closed
+                && c.WorkStatus != CaseWorkStatus.Completed && c.WorkStatus != CaseWorkStatus.Cancelled)
             .OrderBy(c => c.StageChangedAt)
             .Take(batchSize)
             .Select(c => c.Id)
@@ -84,7 +99,7 @@ public class InquirySupervisionService
             // While paused, only silent bookkeeping happens; nothing that notifies or escalates.
             if (paused && action.Kind is not (SupervisionActionKind.SetResolutionDue or SupervisionActionKind.DeadlineMissed)) continue;
 
-            var applied = await ApplyAsync(c, action, now, cancellationToken);
+            var applied = await ApplyAsync(c, action, now, settings, calendar, cancellationToken);
             if (applied is null) continue;
             log.Add($"{c.CaseNumber}: {applied}");
             switch (action.Kind)
@@ -109,7 +124,7 @@ public class InquirySupervisionService
     }
 
     /// <summary>Applies one action. Returns a one-line description, or null if nothing was done.</summary>
-    private async Task<string?> ApplyAsync(Case c, SupervisionAction action, DateTimeOffset now, CancellationToken cancellationToken)
+    private async Task<string?> ApplyAsync(Case c, SupervisionAction action, DateTimeOffset now, SupervisionSettings settings, BusinessCalendar calendar, CancellationToken cancellationToken)
     {
         switch (action.Kind)
         {
@@ -154,7 +169,8 @@ public class InquirySupervisionService
 
             case SupervisionActionKind.Escalate:
             {
-                var result = await _escalation.EscalateForSupervisionAsync(c, action.Reason, now, cancellationToken);
+                var result = await _escalation.EscalateForSupervisionAsync(c, action.Reason, now, cancellationToken,
+                    earliestNextLevel: previous => calendar.AddBusinessDays(previous, settings.EscalationRepeatBusinessDays));
                 if (result.RetryLater) return null;
 
                 // Counted even when nobody could be told (no policy / no recipient): the attempt is on

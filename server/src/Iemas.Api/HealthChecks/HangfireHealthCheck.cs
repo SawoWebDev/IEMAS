@@ -1,4 +1,5 @@
 using Hangfire;
+using Iemas.Api.Jobs;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Iemas.Api.HealthChecks;
@@ -9,6 +10,13 @@ namespace Iemas.Api.HealthChecks;
 // that would itself be production work triggered by a health poll.
 public sealed class HangfireHealthCheck : IHealthCheck
 {
+    private readonly JobMonitoringService? _jobMonitoring;
+
+    public HangfireHealthCheck(JobMonitoringService? jobMonitoring = null)
+    {
+        _jobMonitoring = jobMonitoring;
+    }
+
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
         try
@@ -36,6 +44,28 @@ public sealed class HangfireHealthCheck : IHealthCheck
                 return Task.FromResult(HealthCheckResult.Degraded(
                     "Hangfire server(s) registered, but none report any available workers.",
                     data: data));
+            }
+
+            // Core pipeline jobs that stopped succeeding make the system Degraded (or Unhealthy when most of
+            // them are failing) even though the Hangfire server itself is up.
+            if (_jobMonitoring is not null)
+            {
+                var report = _jobMonitoring.GetReport();
+                var core = report.Jobs.Where(j => j.Core && j.Status != nameof(JobHealthStatus.NotRegistered)).ToList();
+                var failing = core.Where(j => j.Status == nameof(JobHealthStatus.Failing)).ToList();
+                var stale = core.Where(j => j.Status == nameof(JobHealthStatus.Stale)).ToList();
+                data["failingCoreJobs"] = string.Join(", ", failing.Select(j => j.Id));
+                data["staleCoreJobs"] = string.Join(", ", stale.Select(j => j.Id));
+                if (core.Count > 0 && failing.Count * 2 >= core.Count)
+                {
+                    return Task.FromResult(HealthCheckResult.Unhealthy(
+                        $"{failing.Count} of {core.Count} core background jobs are failing: {string.Join(", ", failing.Select(j => j.Label))}.", data: data));
+                }
+                if (failing.Count > 0 || stale.Count > 0)
+                {
+                    return Task.FromResult(HealthCheckResult.Degraded(
+                        $"Core background jobs need attention: {string.Join(", ", failing.Concat(stale).Select(j => $"{j.Label} ({j.Status})"))}.", data: data));
+                }
             }
 
             return Task.FromResult(HealthCheckResult.Healthy(

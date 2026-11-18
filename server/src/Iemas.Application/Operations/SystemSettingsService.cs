@@ -83,6 +83,7 @@ public static class SystemSettingKeys
     public const string InternalWaitBusinessDays = "inquiry.internal_wait_business_days";
     public const string ResolutionTargetBusinessDays = "inquiry.resolution_target_business_days";
     public const string EscalationRepeatBusinessDays = "inquiry.escalation_repeat_business_days";
+    public const string SupervisionHolidays = "inquiry.holidays";
 
     // AI resolution assessment - Q2 decisions.
     public const string AiResolutionEnabled = "inquiry.ai_resolution_enabled";
@@ -305,6 +306,10 @@ public class SystemSettingsService
             "An inquiry still unresolved after this long is marked overdue. It is only a target: it never closes the inquiry.", SettingValueType.Integer, "5", 1, 120, Unit: "business days"),
         new(SystemSettingKeys.EscalationRepeatBusinessDays, "Inquiry supervision", "Move to the next escalation level after",
             "If management has been told and the inquiry is still neglected after this long, the next escalation level is notified.", SettingValueType.Integer, "1", 1, 60, Unit: "business days"),
+        new(SystemSettingKeys.SupervisionHolidays, "Inquiry supervision", "Company holidays",
+            "Dates that do not count as business days for reminder and escalation timing, as ISO dates (2026-12-25) separated by commas or new lines. "
+            + "Added to any holidays on the default Reminder Policy. The business time zone comes from that policy, or from the default time zone above.",
+            SettingValueType.LongText, "", 0, 4000),
         new(SystemSettingKeys.TestClockMinutes, "Inquiry supervision", "TEST MODE: count hours as minutes",
             "For trying the system out only. On: every supervision time above runs 60 times faster (1 hour = 1 minute, 1 day = 24 minutes) "
             + "and business hours, weekends and holidays are ignored. Turn it OFF before real use.", SettingValueType.Boolean, "false"),
@@ -560,6 +565,14 @@ public class SystemSettingsService
                     "false" or "off" or "no" or "0" => ("false", null),
                     _ => (null, $"{definition.Label} must be true or false."),
                 };
+
+            case SettingValueType.LongText when definition.Key == SystemSettingKeys.SupervisionHolidays:
+            {
+                var (dates, invalid) = Inquiries.BusinessCalendar.ParseHolidays(value);
+                if (invalid.Count > 0) return (null, $"{definition.Label}: '{invalid[0]}' is not a valid date; use the format 2026-12-25.");
+                var normalized = string.Join(", ", dates.Select(d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+                return normalized.Length > (definition.Max ?? 4000) ? (null, $"{definition.Label} is too long.") : (normalized, null);
+            }
 
             case SettingValueType.LongText:
                 if (value.Length > (definition.Max ?? 2000))

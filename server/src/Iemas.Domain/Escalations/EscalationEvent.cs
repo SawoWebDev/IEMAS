@@ -43,8 +43,15 @@ public class EscalationEvent : Entity
     /// <summary>§63 "Email Message ID" / delivery-layer fields — carried here as nullable pass-through columns for a later phase's delivery layer to populate; this phase never writes them.</summary>
     public string? EmailMessageId { get; set; }
     public string? DeliveryResult { get; set; }
+    /// <summary>
+    /// Retries done after the first send attempt (0 = only the first attempt was made). Also the
+    /// optimistic-concurrency token: two supervision runs retrying the same event cannot both win.
+    /// </summary>
     public int RetryCount { get; set; }
     public string? FailureReason { get; set; }
+
+    /// <summary>When delivery was last attempted (or claimed). With <see cref="RetryCount"/> it sets the retry backoff. Null on rows that predate it.</summary>
+    public DateTimeOffset? LastDeliveryAttemptAt { get; set; }
 
     /// <summary>Idempotency: at most one Executed/RecipientUnresolved/Failed event per (CaseId, EscalationPolicyId, Level) — a Skipped event (e.g. ThresholdNotReached, re-recorded every poll) is deliberately excluded from this guard; see EscalationConfiguration.</summary>
     public DateTimeOffset OccurredAt { get; set; } = DateTimeOffset.UtcNow;

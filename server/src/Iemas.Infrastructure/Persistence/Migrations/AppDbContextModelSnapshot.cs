@@ -262,6 +262,13 @@ namespace Iemas.Infrastructure.Persistence.Migrations
                     b.Property<string>("AiModel")
                         .HasColumnType("text");
 
+                    b.Property<double?>("Confidence")
+                        .HasColumnType("double precision");
+
+                    b.Property<decimal?>("CostUsd")
+                        .HasPrecision(18, 8)
+                        .HasColumnType("numeric(18,8)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -274,7 +281,21 @@ namespace Iemas.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("EmailMessageId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool?>("FallbackUsed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ModelVersion")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<int>("Outcome")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PromptVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int?>("TotalTokens")
                         .HasColumnType("integer");
 
                     b.Property<DateTimeOffset?>("UpdatedAt")
@@ -406,11 +427,17 @@ namespace Iemas.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<int?>("CompletionTokens")
+                    b.Property<int?>("AttemptCount")
                         .HasColumnType("integer");
 
                     b.Property<Guid?>("CaseId")
                         .HasColumnType("uuid");
+
+                    b.Property<int?>("CompletionTokens")
+                        .HasColumnType("integer");
+
+                    b.Property<double?>("Confidence")
+                        .HasColumnType("double precision");
 
                     b.Property<decimal?>("CostUsd")
                         .HasPrecision(18, 8)
@@ -418,6 +445,10 @@ namespace Iemas.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Decision")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<long>("DurationMs")
                         .HasColumnType("bigint");
@@ -429,6 +460,17 @@ namespace Iemas.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<string>("Explanation")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("FailureCategory")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<bool?>("FallbackUsed")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("GenerationId")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
@@ -438,8 +480,16 @@ namespace Iemas.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("ModelVersion")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<int?>("PromptTokens")
                         .HasColumnType("integer");
+
+                    b.Property<string>("PromptVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("Provider")
                         .IsRequired()
@@ -614,6 +664,23 @@ namespace Iemas.Infrastructure.Persistence.Migrations
 
                     b.Property<bool?>("ResponseExpected")
                         .HasColumnType("boolean");
+
+                    b.Property<int?>("ReviewDecision")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReviewedByEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Summary")
                         .HasColumnType("text");
@@ -1334,6 +1401,9 @@ namespace Iemas.Infrastructure.Persistence.Migrations
                     b.Property<string>("FailureReason")
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset?>("LastDeliveryAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("Level")
                         .HasColumnType("integer");
 
@@ -1353,6 +1423,7 @@ namespace Iemas.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer");
 
                     b.Property<int>("RetryCount")
+                        .IsConcurrencyToken()
                         .HasColumnType("integer");
 
                     b.Property<int?>("SkipReason")
@@ -1372,6 +1443,10 @@ namespace Iemas.Infrastructure.Persistence.Migrations
                     b.HasIndex("EscalationPolicyId");
 
                     b.HasIndex("OccurredAt");
+
+                    b.HasIndex("CaseId", "Level")
+                        .IsUnique()
+                        .HasFilter("\"Outcome\" = 0");
 
                     b.HasIndex("CaseId", "EscalationPolicyId", "Level", "Outcome");
 
@@ -1754,6 +1829,9 @@ namespace Iemas.Infrastructure.Persistence.Migrations
                     b.Property<int>("DeliveredAgentCount")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("EmailMessageId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("EmployeeId")
                         .HasColumnType("uuid");
 
@@ -1790,6 +1868,10 @@ namespace Iemas.Infrastructure.Persistence.Migrations
                     b.HasIndex("CaseId", "Status");
 
                     b.HasIndex("EmployeeId", "CreatedAt");
+
+                    b.HasIndex("CaseId", "EmailMessageId", "Type")
+                        .IsUnique()
+                        .HasFilter("\"EmailMessageId\" IS NOT NULL");
 
                     b.ToTable("notifications", (string)null);
                 });

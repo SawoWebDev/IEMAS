@@ -46,6 +46,16 @@ public enum ImportanceDecision
     ReviewRequired = 2,
 }
 
+/// <summary>What a human reviewer decided for a ReviewRequired email.</summary>
+public enum ClassificationReviewDecision
+{
+    /// <summary>It is a customer inquiry: proceeds to Case creation/matching.</summary>
+    Approved = 0,
+
+    /// <summary>Not an inquiry: becomes NotImportant, no Case.</summary>
+    Rejected = 1,
+}
+
 /// <summary>
 /// Requirements §67 pattern — a technical outcome log distinct from the admin-facing AuditLog,
 /// matching <see cref="Iemas.Domain.Email.EmailIntakeOutcome"/>'s role for the intake pipeline.

@@ -25,15 +25,42 @@ public class AuthService
         _auditService = auditService;
     }
 
+    /// <summary>Failed attempts for one account within <see cref="LockoutWindow"/> that trigger a lockout.</summary>
+    public const int MaxFailedAttempts = 5;
+    public static readonly TimeSpan LockoutWindow = TimeSpan.FromMinutes(15);
+    /// <summary>Maximum length (RFC 5321 address limit) of an attacker-supplied email kept in the audit trail.</summary>
+    public const int MaxAuditEmailLength = 320;
+
+    /// <summary>Strips control characters, trims, lower-cases and truncates an email for lookup/audit use.</summary>
+    public static string NormalizeEmailForAudit(string? email)
+    {
+        if (string.IsNullOrEmpty(email)) return string.Empty;
+        var cleaned = new string(email.Where(c => !char.IsControl(c)).ToArray()).Trim().ToLowerInvariant();
+        return cleaned.Length > MaxAuditEmailLength ? cleaned[..MaxAuditEmailLength] : cleaned;
+    }
+
     public async Task<LoginResponse?> LoginAsync(LoginRequest request, CancellationToken cancellationToken)
     {
+        var auditEmail = NormalizeEmailForAudit(request.Email);
+
+        // Per-account lockout, window based (no schema change): count recent LOGIN_FAILED rows for this
+        // address. Identical outward result to a bad password, so it never reveals whether the account exists.
+        var since = DateTimeOffset.UtcNow - LockoutWindow;
+        var recentFailures = await _db.AuditLogs.AsNoTracking()
+            .CountAsync(a => a.Action == "LOGIN_FAILED" && a.EntityId == auditEmail && a.CreatedAt >= since, cancellationToken);
+        if (recentFailures >= MaxFailedAttempts)
+        {
+            await _auditService.LogAsync("LOGIN_LOCKED", "User", auditEmail, "Too many failed attempts", cancellationToken);
+            return null;
+        }
+
         var user = await _db.Users
             .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
-            .FirstOrDefaultAsync(u => u.Email == request.Email.ToLowerInvariant(), cancellationToken);
+            .FirstOrDefaultAsync(u => u.Email == auditEmail, cancellationToken);
 
         if (user is null || !user.IsActive || !_passwordHasher.Verify(request.Password, user.PasswordHash))
         {
-            await _auditService.LogAsync("LOGIN_FAILED", "User", request.Email, "Invalid credentials or inactive user", cancellationToken);
+            await _auditService.LogAsync("LOGIN_FAILED", "User", auditEmail, "Invalid credentials or inactive user", cancellationToken);
             return null;
         }
 

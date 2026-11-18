@@ -86,10 +86,36 @@ public class SmtpEscalationEmailSender : IEscalationEmailSender
             {
                 await client.AuthenticateAsync(account.Username, secret, timeout.Token);
             }
-            await client.SendAsync(mime, timeout.Token);
+            // One bad address (someone who left, a typo) must not stop the escalation reaching everyone
+            // else: drop each recipient the server refuses and send to the rest, noting who was skipped.
+            var rejected = new List<string>();
+            while (true)
+            {
+                try
+                {
+                    await client.SendAsync(mime, timeout.Token);
+                    break;
+                }
+                catch (SmtpCommandException ex) when (ex.ErrorCode == SmtpErrorCode.RecipientNotAccepted && ex.Mailbox is not null
+                    && mime.To.Mailboxes.Count() > 1)
+                {
+                    var bad = mime.To.Mailboxes.FirstOrDefault(m => string.Equals(m.Address, ex.Mailbox.Address, StringComparison.OrdinalIgnoreCase));
+                    if (bad is null) throw;
+                    mime.To.Remove(bad);
+                    rejected.Add($"{bad.Address} ({ex.Message.Trim().TrimEnd('"')})");
+                    _logger.LogWarning("Escalation email: the mail server refused recipient {Recipient}; sending to the others", bad.Address);
+                    if (!client.IsConnected) await client.ConnectAsync(account.Host, account.Port, socket, timeout.Token);
+                }
+            }
             await client.DisconnectAsync(true, cancellationToken);
 
-            return new OutboundEmailResult(true, mime.MessageId, null);
+            return new OutboundEmailResult(true, mime.MessageId,
+                rejected.Count == 0 ? null : $"Not delivered to {string.Join(", ", rejected)}: refused by the mail server.");
+        }
+        catch (SmtpCommandException ex) when (ex.ErrorCode == SmtpErrorCode.RecipientNotAccepted)
+        {
+            _logger.LogWarning("Escalation email could not be sent through {Mailbox}: recipient {Recipient} refused", account.EmailAddress, ex.Mailbox?.Address);
+            return new OutboundEmailResult(false, null, $"The mail server refused the recipient {ex.Mailbox?.Address}: {ex.Message.Trim().TrimEnd('"')}. Check that employee's email address.");
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

@@ -16,6 +16,9 @@ public enum NotificationSendOutcome
     Suppressed,
     TemplateDisabled,
     NoRecipient,
+
+    /// <summary>A notification of this type was already raised for this email on this case (retry or concurrent run).</summary>
+    Duplicate,
 }
 
 public static class NotificationTemplateDefaults
@@ -77,12 +80,23 @@ public class NotificationService
         _dispatcher = dispatcher;
     }
 
+    /// <param name="emailMessageId">
+    /// The email this notification is about, when there is one. At most one notification per (case, email,
+    /// type) is ever created: a job retried after a crash, or two overlapping runs, never alert the agent twice.
+    /// </param>
     public async Task<NotificationSendOutcome> SendForCaseAsync(
-        NotificationType type, Case targetCase, AgentPushCommandType pushType, int? reminderCount, CancellationToken cancellationToken)
+        NotificationType type, Case targetCase, AgentPushCommandType pushType, int? reminderCount, CancellationToken cancellationToken,
+        Guid? emailMessageId = null)
     {
         if (targetCase.OwnerEmployeeId is not Guid employeeId)
         {
             return NotificationSendOutcome.NoRecipient;
+        }
+
+        if (emailMessageId is Guid forEmail
+            && await _db.Notifications.AnyAsync(n => n.CaseId == targetCase.Id && n.EmailMessageId == forEmail && n.Type == type, cancellationToken))
+        {
+            return NotificationSendOutcome.Duplicate;
         }
 
         if ((await IgnoredSenderList.LoadAsync(_db, cancellationToken)).Matches(targetCase.CustomerEmailAddress))
@@ -103,6 +117,7 @@ public class NotificationService
             CaseId = targetCase.Id,
             EmployeeId = employeeId,
             Type = type,
+            EmailMessageId = emailMessageId,
             Title = Render(template.Title, variables),
             Message = Render(template.MessageText, variables),
             Status = NotificationDeliveryStatus.Scheduled,
@@ -113,11 +128,14 @@ public class NotificationService
         {
             notification.Status = NotificationDeliveryStatus.Cancelled;
             notification.FailureReason = "Suppressed: Agent Notifications are paused (Emergency Pause).";
-            await _db.SaveChangesAsync(cancellationToken);
+            await SaveNewAsync(notification, cancellationToken);
             return NotificationSendOutcome.Suppressed;
         }
 
-        await _db.SaveChangesAsync(cancellationToken);
+        if (!await SaveNewAsync(notification, cancellationToken))
+        {
+            return NotificationSendOutcome.Duplicate;
+        }
 
         var delivered = _dispatcher is null
             ? 0
@@ -133,6 +151,27 @@ public class NotificationService
         await _db.SaveChangesAsync(cancellationToken);
 
         return delivered > 0 ? NotificationSendOutcome.Sent : NotificationSendOutcome.Queued;
+    }
+
+    /// <summary>
+    /// Commits a new notification. When the unique (case, email, type) index refuses it because a concurrent
+    /// run created the same notification first, the loser is dropped and false is returned.
+    /// </summary>
+    private async Task<bool> SaveNewAsync(Notification notification, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        catch (DbUpdateException) when (notification.EmailMessageId is Guid forEmail)
+        {
+            if (_db is DbContext context) context.Entry(notification).State = EntityState.Detached;
+            var existsNow = await _db.Notifications.AsNoTracking()
+                .AnyAsync(n => n.CaseId == notification.CaseId && n.EmailMessageId == forEmail && n.Type == notification.Type, cancellationToken);
+            if (!existsNow) throw;
+            return false;
+        }
     }
 
     /// <summary>How far back undelivered pop-ups are still worth showing when an Agent (re)connects.</summary>

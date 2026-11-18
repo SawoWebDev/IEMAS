@@ -7,6 +7,8 @@ using Iemas.Domain.Email;
 using Iemas.Domain.Notifications;
 using Iemas.Domain.Reminders;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Iemas.Application.Inquiries;
 
@@ -22,11 +24,49 @@ public class InquiryConversationService
 {
     private readonly IAppDbContext _db;
     private readonly NotificationService? _notifications;
+    private readonly IServiceProvider? _services;
+    private readonly ILogger<InquiryConversationService>? _logger;
+    private ConversationSyncService? _sync;
 
-    public InquiryConversationService(IAppDbContext db, NotificationService? notifications = null)
+    public InquiryConversationService(IAppDbContext db, NotificationService? notifications = null,
+        IServiceProvider? services = null, ILogger<InquiryConversationService>? logger = null)
     {
         _db = db;
         _notifications = notifications;
+        _services = services;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Wired by <see cref="ConversationSyncService"/> itself (it needs this service, so it cannot be a
+    /// constructor dependency). Without it - or without a service provider that can build it - the
+    /// event-triggered syncs below are simply skipped and the scheduled job still runs.
+    /// </summary>
+    public void UseSync(ConversationSyncService sync) => _sync = sync;
+
+    /// <summary>
+    /// Reads the inquiry's mailbox now, so the agent's last reply is stored before the inquiry is
+    /// finalised or its state changed by an agent action. NEVER fails the caller: a problem is logged and
+    /// the action carries on (the scheduled sync and the late-reply grace window catch up). Idempotent.
+    /// </summary>
+    public async Task<bool> TrySyncCaseAsync(Guid caseId, DateTimeOffset? at, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var sync = _sync ?? _services?.GetService<ConversationSyncService>();
+            if (sync is null) return false;
+            var result = await sync.SyncCaseAsync(caseId, cancellationToken, at);
+            return result.MailboxFailures == 0;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Pre-action mailbox sync of case {CaseId} failed; continuing", caseId);
+            return false;
+        }
     }
 
     public Task<bool> IsSupervisionEnabledAsync(CancellationToken cancellationToken) =>
@@ -137,6 +177,10 @@ public class InquiryConversationService
         if (c is null) return Result<bool>.Failure("Case not found.");
         if (InquiryLifecycle.IsTerminal(c.Stage)) return Result<bool>.Failure("This inquiry is already closed.");
 
+        // The agent often sends the final answer and confirms minutes later, before the scheduled job has
+        // read the Sent folder: store that reply now, while the inquiry is still open. Never blocks the confirm.
+        await TrySyncCaseAsync(c.Id, at, cancellationToken);
+
         var now = at ?? DateTimeOffset.UtcNow;
         c.CompletionReason = CaseCompletionReason.CustomerRequestResolved;
         c.CompletionComment = string.IsNullOrWhiteSpace(comment) ? null : comment;
@@ -154,6 +198,11 @@ public class InquiryConversationService
         var c = await _db.Cases.FirstOrDefaultAsync(x => x.Id == caseId, cancellationToken);
         if (c is null) return Result<bool>.Failure("Case not found.");
         if (c.Stage != InquiryStage.PotentiallyResolved) return Result<bool>.Failure("This inquiry is not marked potentially resolved.");
+
+        // Store anything the agent sent since the AI's proposal first. If the agent has already written
+        // again, the sync moved the inquiry back into active supervision: the rejection is then already in effect.
+        await TrySyncCaseAsync(c.Id, at, cancellationToken);
+        if (c.Stage != InquiryStage.PotentiallyResolved) return Result<bool>.Success(true);
 
         var transition = InquiryLifecycle.OnResolutionRejected(c, at ?? DateTimeOffset.UtcNow);
         Record(c, transition is null ? null : transition with

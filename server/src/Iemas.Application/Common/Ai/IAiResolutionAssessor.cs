@@ -16,7 +16,13 @@ public sealed record ResolutionAssessmentResult(
     string ModelIdentifier,
     string? Error,
     long DurationMs,
-    AiTokenUsage? Usage = null);
+    AiTokenUsage? Usage = null,
+    /// <summary>Things the AI found still open (unanswered question, promised action, pending quotation, awaiting approval...). Empty/null when none.</summary>
+    IReadOnlyList<string>? OpenItems = null,
+    string? ModelVersion = null,
+    string? PromptVersion = null,
+    ClassificationFailureCategory FailureCategory = ClassificationFailureCategory.None,
+    int Attempts = 1);
 
 /// <summary>
 /// Phase 5 / Module 8 - the AI reads a whole inquiry conversation and judges whether the

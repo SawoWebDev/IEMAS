@@ -3,6 +3,7 @@ import { apiClient } from "../../api/client";
 import type { ClassificationProfileDto, TestClassificationResult } from "../../api/types";
 import { Badge } from "../../components/StatCard";
 import { InfoTip, TipLabel } from "../../components/help/Tooltip";
+import ReviewQueue from "./ReviewQueue";
 
 const lines = (text: string | null | undefined) => (text ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
 
@@ -117,6 +118,8 @@ export default function EmailClassificationPage() {
       </p>
 
       {error && <div className="form-error">{error}</div>}
+
+      <ReviewQueue />
 
       <h2 style={{ fontSize: 16, marginTop: 24, display: "flex", alignItems: "center" }}>Profiles<InfoTip text="A profile tells the AI what matters for a mailbox: its categories and the words that make an email important or not. Choose a profile per mailbox on Email Accounts." /></h2>
       <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, marginBottom: 24 }}>

@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IEMAS Inquiry Flow</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: wide wrap (max 1240px); the flow section is a 3-column grid (phases | flowchart | side panels) that stacks on narrow screens, then reference sections. Step categories are colour-coded everywhere. */
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --fg:#17202b; --muted:#5b6675; --line:#d9dee5;
+  --accent:#1f5fbf;
+  --ai:#7b3fd1; --ai-bg:#efe7fb;
+  --code:#2f5f8a; --code-bg:#e4eef7;
+  --ext:#a0610a; --ext-bg:#fbefd9;
+  --human:#1d7a4c; --human-bg:#e1f3e8;
+  --ok:#1d7a4c; --warn:#a0610a; --bad:#b3261e; --bad-bg:#fbe5e3;
+  --f-display:"Archivo","Segoe UI",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f141b; --surface:#171e27; --fg:#e6ebf1; --muted:#9aa6b5; --line:#2a3440;
+  --accent:#6ea3f0;
+  --ai:#b892f2; --ai-bg:#2b2140; --code:#7fb0dc; --code-bg:#1b2a3a;
+  --ext:#e0a64e; --ext-bg:#33270f; --human:#5cc28e; --human-bg:#14301f;
+  --ok:#5cc28e; --warn:#e0a64e; --bad:#f08a80; --bad-bg:#3a1916; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141b; --surface:#171e27; --fg:#e6ebf1; --muted:#9aa6b5; --line:#2a3440;
+  --accent:#6ea3f0;
+  --ai:#b892f2; --ai-bg:#2b2140; --code:#7fb0dc; --code-bg:#1b2a3a;
+  --ext:#e0a64e; --ext-bg:#33270f; --human:#5cc28e; --human-bg:#14301f;
+  --ok:#5cc28e; --warn:#e0a64e; --bad:#f08a80; --bad-bg:#3a1916; color-scheme:dark}
+
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.55}
+.wrap{max-width:1240px;margin:0 auto;padding-block:32px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:44px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(28px,5vw,40px);font-weight:800;letter-spacing:-.01em}
+h2{font-size:22px;font-weight:700}
+h3{font-size:16px;font-weight:700}
+p{margin:0;max-width:68ch}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+section{display:flex;flex-direction:column;gap:16px}
+.lede{color:var(--muted);font-size:16px}
+
+/* header stats */
+.head{display:flex;flex-direction:column;gap:14px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:8px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:2px}
+.stat b{font-family:var(--f-display);font-size:26px;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:13px}
+
+/* legend chips */
+.legend{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:7px;border-radius:999px;padding:4px 11px;font-size:13px;font-weight:600;border:1px solid transparent;white-space:nowrap}
+.chip::before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor}
+.c-ai{color:var(--ai);background:var(--ai-bg)} .c-code{color:var(--code);background:var(--code-bg)}
+.c-ext{color:var(--ext);background:var(--ext-bg)} .c-human{color:var(--human);background:var(--human-bg)}
+button.chip{cursor:pointer;font-family:inherit}
+button.chip[aria-pressed="false"]{opacity:.4}
+button.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* flowchart */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px;overflow-x:auto}
+.panel pre.mermaid{margin:0;min-width:640px;display:flex;justify-content:center;background:transparent}
+.note{font-size:13px;color:var(--muted)}
+
+/* flow layout: phases | chart | side panels */
+.flow{display:grid;grid-template-columns:190px minmax(0,1fr) 270px;gap:16px;align-items:start}
+.phases{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+.phase{border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;border:1px solid var(--line);border-left-width:4px;background:var(--surface)}
+.phase .n{display:inline-flex;align-items:center;justify-content:center;flex:none;width:26px;height:26px;border-radius:50%;color:#fff;font-family:var(--f-display);font-weight:800;font-size:14px}
+.phase h3{font-size:14.5px}
+.phase p{font-size:13px;color:var(--muted)}
+.phase .hd{display:flex;gap:8px;align-items:center}
+.phase[data-k="code"]{border-left-color:var(--code);background:var(--code-bg)} .phase[data-k="code"] .n{background:var(--code)}
+.phase[data-k="human"]{border-left-color:var(--human);background:var(--human-bg)} .phase[data-k="human"] .n{background:var(--human)}
+.phase[data-k="ai"]{border-left-color:var(--ai);background:var(--ai-bg)} .phase[data-k="ai"] .n{background:var(--ai)}
+.phase[data-k="ext"]{border-left-color:var(--ext);background:var(--ext-bg)} .phase[data-k="ext"] .n{background:var(--ext)}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{border-radius:10px;padding:14px 16px;border:1px solid var(--line);border-left-width:4px;background:var(--surface);display:flex;flex-direction:column;gap:8px;min-width:0}
+.card[data-k="code"]{border-left-color:var(--code);background:var(--code-bg)}
+.card[data-k="human"]{border-left-color:var(--human);background:var(--human-bg)}
+.card[data-k="ai"]{border-left-color:var(--ai);background:var(--ai-bg)}
+.card h3{font-size:15px}
+.checks{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:5px;font-size:13px}
+.checks li{padding-left:20px;position:relative;overflow-wrap:anywhere}
+.checks li::before{content:"\2713";position:absolute;left:0;color:var(--ok);font-weight:700}
+@media (max-width:1100px){
+  .flow{grid-template-columns:minmax(0,1fr)}
+  .phases{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+  .side{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+}
+
+/* step list */
+.steps{display:flex;flex-direction:column;gap:10px}
+.step{display:grid;grid-template-columns:44px minmax(0,1fr);gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;border-left-width:4px}
+.step[data-k="ai"]{border-left-color:var(--ai)} .step[data-k="code"]{border-left-color:var(--code)}
+.step[data-k="ext"]{border-left-color:var(--ext)} .step[data-k="human"]{border-left-color:var(--human)}
+.step[hidden]{display:none!important}
+.step .lt{font-family:var(--f-display);font-weight:800;font-size:22px;color:var(--muted)}
+.step .body{display:flex;flex-direction:column;gap:6px;min-width:0}
+.step .top{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.step .sched{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.step ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:2px}
+.kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:2px 12px;font-size:13.5px}
+.kv dt{color:var(--muted);font-weight:500}
+.kv dd{margin:0}
+.pass{color:var(--ok);font-weight:600} .fail{color:var(--bad);font-weight:600} .warnt{color:var(--warn);font-weight:600}
+
+/* tables */
+.tbl{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;font-family:var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:500}
+tr:last-child td{border-bottom:0}
+td.num{font-variant-numeric:tabular-nums;font-family:var(--f-mono)}
+
+/* threads */
+.threads{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px}
+.thread{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.thread ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.tag{font-family:var(--f-mono);font-size:11.5px;padding:1px 6px;border-radius:4px;white-space:nowrap}
+
+/* gaps */
+.gap{border-radius:8px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);background:var(--surface)}
+.gap.bug{background:var(--bad-bg);border-color:transparent}
+.gap.bug h3{color:var(--bad)}
+.gap.fixed{background:var(--human-bg);border-color:transparent}
+.gap.fixed h3{color:var(--ok)}
+.gap.fixed .tl .x{color:var(--ok)}
+.tl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;font-size:14px}
+.tl .t{font-family:var(--f-mono);font-variant-numeric:tabular-nums;color:var(--muted)}
+.tl .x{color:var(--bad);font-weight:600}
+
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:8px}
+.box ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:14px}
+pre.cmd{margin:0;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;font-family:var(--f-mono);font-size:13px;overflow-x:auto;white-space:pre}
+@media (max-width:520px){.step{grid-template-columns:1fr}.step .lt{font-size:16px}}
+</style>
+<style>*,*::before,*::after{box-sizing:border-box}body{margin:0}</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header class="head">
+  <div class="eyebrow">IEMAS · inquiry-supervision · live run 11172352 · 2026-11-17 23:52 UTC (historical) · doc updated 2026-11-18</div>
+  <h1>How an inquiry email moves through IEMAS</h1>
+  <p class="lede">From the moment a customer's email lands in an agent's mailbox to the moment the inquiry is marked resolved. Each step shows whether AI runs there or plain code does, and what the live simulation proved. The live-run evidence is from 2026-11-17 and is kept as history; later changes are marked.</p>
+  <div class="stats">
+    <div class="stat"><b>2</b><span>places where AI runs (classification for unclear emails, resolution check)</span></div>
+    <div class="stat"><b>867</b><span>automated tests passing (server/tests/Iemas.Tests, after the 2026-11-18 improvements pass)</span></div>
+    <div class="stat"><b>26 / 27</b><span>live checks in the 2026-11-17 run. The 1 failure was a test-script bug. That run predates the improvements pass.</span></div>
+    <div class="stat"><b>$0.00071</b><span>AI cost for that live run (1 classification + 6 resolution checks)</span></div>
+    <div class="stat"><b>1 fixed</b><span>real product bug found (the agent's last reply could go missing). Fixed by syncing on confirm plus a 1-day grace window.</span></div>
+  </div>
+</header>
+
+<section>
+  <h2>Colour key</h2>
+  <div class="legend">
+    <span class="chip c-ai">AI (LLM call)</span>
+    <span class="chip c-code">System / code (deterministic, scheduled job)</span>
+    <span class="chip c-ext">External (email / SMTP)</span>
+    <span class="chip c-human">Human (employee: Windows Agent app, Outlook, CMS)</span>
+  </div>
+  <p class="note">"Agents" in IEMAS are the human employees using the Windows Agent desktop app. There are no AI sub-agents: the system is a pipeline of scheduled Hangfire jobs in the <code>iemas-inq-api</code> container, and only two of them call an LLM.</p>
+</section>
+
+<section>
+  <h2>The whole flow</h2>
+  <div class="flow">
+    <ol class="phases" aria-label="Phases">
+      <li class="phase" data-k="code"><div class="hd"><span class="n">1</span><h3>Email Intake</h3></div><p>Receive and store incoming emails</p></li>
+      <li class="phase" data-k="human"><div class="hd"><span class="n">2</span><h3>Classification &amp; Routing</h3></div><p>Determine type and route</p></li>
+      <li class="phase" data-k="ai"><div class="hd"><span class="n">3</span><h3>Case Management</h3></div><p>Create or update the inquiry case</p></li>
+      <li class="phase" data-k="ext"><div class="hd"><span class="n">4</span><h3>AI Assessment &amp; Supervision</h3></div><p>Understand status, monitor deadlines</p></li>
+      <li class="phase" data-k="human"><div class="hd"><span class="n">5</span><h3>Human Resolution</h3></div><p>Confirm or reject closure</p></li>
+    </ol>
+    <div class="panel">
+<pre class="mermaid">
+flowchart TD
+  A["Customer email arrives<br/>via IMAP and SMTP"]:::ext
+  B["email-intake job · every 1 min<br/>fetch and store email<br/>Message-ID and fingerprint dedupe"]:::code
+  C{"Existing<br/>thread?"}:::code
+  D["Link to existing case<br/>and notify agent"]:::code
+  E["email-classification<br/>Zettelkasten filter"]:::code
+  F{"Result?"}:::code
+  X["No case<br/>archive"]:::muted
+  G["AI classifier<br/>Qwen3-30B, fallback models"]:::ai
+  H{"AI decision"}:::code
+  RQ["Manual review queue in CMS<br/>ReviewRequired or AI failure"]:::human
+  RV{"Reviewer<br/>action"}:::human
+  I["case-workflow<br/>create or join case<br/>notify assigned employee"]:::code
+  K["Agent replies"]:::human
+  L["conversation-sync · every 5 min<br/>and event-triggered on confirm,<br/>reject and agent actions<br/>resolved cases synced for 1 day"]:::code
+  M["AI resolution assessment<br/>Qwen3-30B, fallback chain<br/>plus deterministic ResolutionGuard"]:::ai
+  N{"Assessment<br/>result?"}:::code
+  W["Keep case open<br/>monitor"]:::code
+  S["PotentiallyResolved<br/>ask agent to confirm"]:::code
+  T{"Agent confirms<br/>resolved?"}:::human
+  CM["Continue monitoring"]:::code
+  U["Resolved<br/>stop supervision"]:::human
+  V["Inquiry completed"]:::done
+  SUP["Supervision loop<br/>deadlines on business calendar<br/>reminders then escalation email"]:::ext
+
+  A --> B --> C
+  C -- "Yes" --> D --> I
+  C -- "No" --> E --> F
+  F -- "NotInquiry" --> X
+  F -- "Uncertain" --> G --> H
+  F -- "Inquiry" --> I
+  H -- "Important" --> I
+  H -- "NotImportant" --> X
+  H -- "ReviewRequired or AI failure" --> RQ --> RV
+  RV -- "approve or correct to Inquiry" --> I
+  RV -- "reject or correct to NotInquiry" --> X
+  I --> K --> L --> M --> N
+  N -- "InProgress or Waiting" --> W --> SUP
+  N -- "AppearsResolved ≥ 75% and guard passes" --> S --> T
+  N -- "other or guard downgrades" --> CM --> SUP
+  T -- "Yes" --> U --> V
+  T -- "No or reject" --> CM
+  SUP -. "reminder to agent" .-> K
+
+  classDef ai fill:#efe7fb,stroke:#7b3fd1,color:#2a1250,stroke-width:2px
+  classDef code fill:#e4eef7,stroke:#2f5f8a,color:#12283d
+  classDef ext fill:#fbefd9,stroke:#a0610a,color:#3d2504
+  classDef human fill:#e1f3e8,stroke:#1d7a4c,color:#0d3320
+  classDef muted fill:#eceef1,stroke:#8a94a3,color:#3a4350,stroke-dasharray:4 3
+  classDef done fill:#1d7a4c,stroke:#1d7a4c,color:#ffffff
+</pre>
+    </div>
+    <aside class="side" aria-label="Cross-cutting concerns">
+      <div class="card" data-k="code"><h3>Supervision &amp; Escalation</h3><ul class="checks">
+        <li>Deadlines and reminders (background jobs)</li>
+        <li>Business calendar: weekends, holidays from setting <code>inquiry.holidays</code>, DST-safe time zone</li>
+        <li>Escalation levels: supervisor, department manager, group, with recipient fallback</li>
+        <li>One escalation per case + level</li>
+        <li>SMTP failures retried after 5 / 15 / 60 min, max 3, and cancelled once the case is resolved</li></ul></div>
+      <div class="card" data-k="human"><h3>Monitoring &amp; Reliability</h3><ul class="checks">
+        <li><code>GET /api/v1/system-health/jobs</code>: last success, last failure, duration, retries, pending</li>
+        <li>Healthy / Stale / Failing feeds the health check; CMS System Health "Scheduled jobs" table</li>
+        <li>OpenRouter: timeout, bounded retries with backoff honouring Retry-After, fallback models, JSON validation with one repair call, circuit breaker</li>
+        <li>AI failure = keep supervising</li></ul></div>
+      <div class="card" data-k="ai"><h3>Security &amp; Audit</h3><ul class="checks">
+        <li>Every AI call audited: model, model version, prompt version, decision, confidence, explanation, attempts, failure category, cost (<code>GET /api/v1/ai-usage/audit</code>)</li>
+        <li>Resolution confirm/reject and classification reviews audited</li>
+        <li>Authorization matrix test over all controllers</li>
+        <li>Agent replies encrypted with AES-GCM</li>
+        <li>Per-account login lockout</li></ul></div>
+      <div class="card" data-k="human"><h3>Key Benefits</h3><ul class="checks">
+        <li>No lost emails or messages</li>
+        <li>Accurate classification</li>
+        <li>Reliable resolution</li>
+        <li>Full traceability</li></ul></div>
+    </aside>
+  </div>
+  <p class="note">A customer follow-up re-enters at the top, joins the same case (CustomerFollowUpReceived) and restarts the agent's timer. Customer silence alone is never escalated. The AI can only suggest "resolved"; a person always closes the inquiry, and the ResolutionGuard can downgrade the AI's suggestion before it reaches the agent.</p>
+</section>
+
+<section>
+  <h2>Step by step</h2>
+  <div class="legend" role="group" aria-label="Filter steps by type">
+    <button class="chip c-ai" data-f="ai" aria-pressed="true">AI</button>
+    <button class="chip c-code" data-f="code" aria-pressed="true">Code</button>
+    <button class="chip c-ext" data-f="ext" aria-pressed="true">Mail / outside</button>
+    <button class="chip c-human" data-f="human" aria-pressed="true">Person</button>
+  </div>
+  <div class="steps" id="steps">
+
+    <div class="step" data-k="ext"><div class="lt">a</div><div class="body">
+      <div class="top"><h3>Customer email arrives</h3><span class="chip c-ext">Mail</span></div>
+      <p>The customer sends an email over SMTP into the agent's IMAP mailbox. In the test this was the GreenMail test mail server.</p>
+      <dl class="kv"><dt>Proved by</dt><dd class="pass">6 hand-written emails delivered (spa hotel, heater fault, dealer, newsletter, internal logistics, "Great to meet you in Lyon")</dd></dl>
+    </div></div>
+
+    <div class="step" data-k="code"><div class="lt">b</div><div class="body">
+      <div class="top"><h3>email-intake</h3><span class="chip c-code">Code</span><span class="sched">every 1 min</span></div>
+      <p>Fetches new mail over IMAP and writes an <code>email_messages</code> row. Duplicates are skipped by Message-ID and a content fingerprint (see Idempotency below). If the email belongs to an existing inquiry thread (thread id, In-Reply-To, References via ConversationThreadMatcher), it is linked straight to that case and skips screening; the assigned agent is notified.</p>
+      <dl class="kv"><dt>Proved by</dt><dd class="pass">Henrik's follow-up joined his existing case CASE-000037 (live run). Thread follow-up behaviour is also covered by <code>ThreadFollowUpTests</code>.</dd></dl>
+    </div></div>
+
+    <div class="step" data-k="code"><div class="lt">c</div><div class="body">
+      <div class="top"><h3>email-classification filter</h3><span class="chip c-code">Code, no AI</span><span class="sched">every 1 min</span></div>
+      <p>ZettelkastenFilter (DeterministicEmailFilter v2) scores weighted signals:</p>
+      <ul><li>inquiry phrases, product terms, request cues, dealer phrases</li><li>not-inquiry phrases, automated sender, internal domain sawo.com</li><li>sender history</li></ul>
+      <p>Result: <b>Inquiry</b> (score ≥ threshold, no negatives), <b>NotInquiry</b>, or <b>Uncertain</b>.</p>
+      <dl class="kv"><dt>Proved by</dt><dd class="pass">All 6 emails classified as expected (see table below)</dd></dl>
+    </div></div>
+
+    <div class="step" data-k="ai"><div class="lt">d</div><div class="body">
+      <div class="top"><h3>AI classifier, only for Uncertain emails</h3><span class="chip c-ai">AI</span></div>
+      <p>EmailClassificationService → OpenRouterClassificationProvider. Model <code>qwen/qwen3-30b-a3b-instruct-2507</code>, fallback <code>mistralai/mistral-small-3.2-24b-instruct</code>. Returns relevance, category, priority and confidence. ClassificationDecisionPolicy (plain code) turns that into Important, NotImportant or ReviewRequired. If every model fails, the email goes to ReviewRequired and is never silently dropped. Calls go through the reliability layer: timeout, bounded retries with backoff (honouring Retry-After), fallback models, JSON validation with one repair call, circuit breaker. Every call is written to the AI audit log.</p>
+      <dl class="kv"><dt>Writes</dt><dd><code>email_classifications</code>, <code>ai_usage_records</code> (with audit fields)</dd><dt>Proved by</dt><dd class="pass">"Great to meet you in Lyon": filter 0 → Uncertain → AI 0.95 → NotImportant, no case. Cost $0.00018 (live run). Reliability and audit are covered by <code>Ai/OpenRouterReliabilityTests</code> and <code>Ai/AiAuditTests</code>.</dd></dl>
+    </div></div>
+
+    <div class="step" data-k="human"><div class="lt">e</div><div class="body">
+      <div class="top"><h3>Manual review queue (ReviewRequired)</h3><span class="chip c-human">Person</span></div>
+      <p>Emails the AI could not decide (ReviewRequired) or that hit an AI failure wait in the CMS <b>Email Classification</b> page. A supervisor or above works the queue through <code>/api/v1/classification-reviews</code>: <b>approve</b> (creates the case), <b>reject</b> (no case) or <b>correct</b> the classification. Each review is audited. This branch previously had no workflow.</p>
+      <dl class="kv"><dt>Proved by</dt><dd class="pass"><code>ClassificationReviewServiceTests</code> (automated)</dd><dt>Not yet</dt><dd class="warnt">Not exercised in a live run</dd></dl>
+    </div></div>
+
+    <div class="step" data-k="code"><div class="lt">f</div><div class="body">
+      <div class="top"><h3>case-workflow</h3><span class="chip c-code">Code</span><span class="sched">every 1 min</span></div>
+      <p>CaseWorkflowService + CaseMatchingService create a new case or join an existing one (thread id, In-Reply-To, References, participants). The owner is the mailbox's OwnerEmployee. NotificationService pushes a "New Email" pop-up to the Windows Agent over SignalR. Notifications are unique per case + email + type, so a re-run never double-notifies.</p>
+      <dl class="kv"><dt>Proved by</dt><dd class="pass">CASE-000036/37/38 created with the right owners. Each agent's sync showed only their own cases.</dd></dl>
+    </div></div>
+
+    <div class="step" data-k="human"><div class="lt">g</div><div class="body">
+      <div class="top"><h3>Agent replies from Outlook</h3><span class="chip c-human">Person</span></div>
+      <p>The reply goes over SMTP to the customer, and a copy lands in the agent's Sent folder.</p>
+      <dl class="kv"><dt>Tested</dt><dd class="warnt">Through the protocol only. The real Windows Agent GUI was not driven.</dd></dl>
+    </div></div>
+
+    <div class="step" data-k="code"><div class="lt">h</div><div class="body">
+      <div class="top"><h3>conversation-sync</h3><span class="chip c-code">Code</span><span class="sched">every 5 min + event-triggered</span></div>
+      <p>ConversationSyncService reads the Sent folder over IMAP. It stores outbound messages linked by thread headers as role <b>Agent</b> (to the customer) or <b>Internal</b> (only to @sawo.com). Agent reply bodies are encrypted (AES-GCM). InquiryLifecycle moves the stage.</p>
+      <ul><li><b>Event-triggered:</b> a sync of the case's mailbox also runs immediately when the agent confirms or rejects resolution and on other agent case actions, so the last reply is stored before the AI or the agent decides.</li><li><b>Grace window:</b> Resolved cases keep being synced for 1 day.</li></ul>
+      <dl class="kv"><dt>Proved by</dt><dd class="pass">Dealer thread: internal forward and export's reply stored as Internal (live run). <code>ConversationSyncOnConfirmTests</code> covers the sync-on-confirm fix.</dd><dt>Was a bug</dt><dd class="pass">FIXED: the old job skipped Resolved cases, so a reply sent just before confirmation was lost (see Known gaps for the history)</dd></dl>
+    </div></div>
+
+    <div class="step" data-k="ai"><div class="lt">i</div><div class="body">
+      <div class="top"><h3>AI resolution assessment</h3><span class="chip c-ai">AI</span><span class="sched">when the conversation changes</span></div>
+      <p>ResolutionAssessmentService → OpenRouterResolutionAssessor, Qwen3-30B with a fallback chain and the same reliability layer as the classifier. Verdict: AcknowledgedOnly, InProgress, CustomerWaiting or AppearsResolved, plus confidence, reason and a list of open items. AppearsResolved with confidence ≥ 75% that also passes the ResolutionGuard moves the stage to PotentiallyResolved and asks the agent to confirm. The AI never closes an inquiry. If the AI fails, supervision simply continues.</p>
+      <dl class="kv"><dt>Proved by</dt><dd class="pass">6 checks, $0.00053 total (live run). Acknowledgement → AcknowledgedOnly. Customer thanks → AppearsResolved. Megan's reply → InProgress.</dd><dt>Not yet</dt><dd class="warnt">The new prompts have not been validated against a live model</dd></dl>
+    </div></div>
+
+    <div class="step" data-k="code"><div class="lt">j</div><div class="body">
+      <div class="top"><h3>ResolutionGuard</h3><span class="chip c-code">Code, no AI</span></div>
+      <p>Deterministic check after the AI verdict. It downgrades AppearsResolved (the case stays open and supervised) when any of these holds:</p>
+      <ul><li>the customer only says thanks without confirming the problem is solved</li><li>the agent spoke last</li><li>the customer's last message asks a question or reports a problem</li><li>the agent's last message ends with a question, asks for approval, or promises later action or a pending quotation</li><li>the AI itself listed open items</li></ul>
+      <dl class="kv"><dt>Proved by</dt><dd class="pass"><code>Ai/ResolutionGuardTests</code> (automated)</dd></dl>
+    </div></div>
+
+    <div class="step" data-k="code"><div class="lt">k</div><div class="body">
+      <div class="top"><h3>inquiry-supervision timers</h3><span class="chip c-code">Code</span><span class="sched">every 1 min</span></div>
+      <p>InquirySupervisionService + SupervisionRules + BusinessCalendar. The calendar covers business hours, weekends, holidays from the setting <code>inquiry.holidays</code>, and a DST-safe time zone.</p>
+      <ul><li>First reply due within 4 business hours</li><li>Reminder every 2 hours, 2 reminders, then escalation</li><li>Idle limit 1 business day</li><li>Customer wait limit 3 calendar days</li><li>Resolution target 5 business days</li></ul>
+      <dl class="kv"><dt>Proved by</dt><dd class="pass">Megan's case: 2 reminders, then escalation, then no second escalation after agent2 replied (live run). <code>BusinessCalendarHardeningTests</code> and <code>SupervisionHardeningRulesTests</code> cover the later rules.</dd></dl>
+    </div></div>
+
+    <div class="step" data-k="ext"><div class="lt">l</div><div class="body">
+      <div class="top"><h3>Escalation email</h3><span class="chip c-code">Code</span><span class="chip c-ext">SMTP</span></div>
+      <p>EscalationService picks recipients from the policy level (supervisor → department manager → group), with a fallback when a level has no recipient. EscalationEmailComposer builds the email, and SmtpEscalationEmailSender sends it through the oldest active Outbound SMTP account. An EscalationEvent row is written and the agent gets an "Escalated" pop-up. Level 2 follows one business day later. Only one escalation exists per case + level. A failed SMTP send is retried after 5, 15 and 60 minutes (max 3 attempts) and cancelled once the case is resolved.</p>
+      <dl class="kv"><dt>Proved by</dt><dd class="pass">Escalation email delivered at 00:03 UTC, 10 test-minutes after Megan wrote (live run). It listed customer, subject, agent, status, replied = No, inactivity, both reminders, the reason and a CMS link. Retry rules: <code>EscalationReliabilityTests</code>.</dd></dl>
+    </div></div>
+
+    <div class="step" data-k="human"><div class="lt">m</div><div class="body">
+      <div class="top"><h3>Agent confirms or rejects</h3><span class="chip c-human">Person</span></div>
+      <p>In the Windows Agent ("Confirm Resolved", case-actions actionType 10; RejectResolution = 11) or the CMS. Confirm sets the stage to Resolved and supervision stops. Reject sends the case back to supervision. Both actions are audited and trigger a conversation sync first.</p>
+      <dl class="kv"><dt>Proved by</dt><dd class="pass">agent1 confirmed Henrik's case → Resolved. agent2 trying to confirm agent1's case → HTTP 400. (live run)</dd></dl>
+    </div></div>
+
+    <div class="step" data-k="code"><div class="lt">n</div><div class="body">
+      <div class="top"><h3>Idempotency</h3><span class="chip c-code">Code</span></div>
+      <p>Re-running a job never duplicates work. Inbound and synced messages are deduplicated by Message-ID plus a content fingerprint. Notifications are unique per case + email + type. The same rule applies to escalations (one per case + level).</p>
+      <dl class="kv"><dt>Proved by</dt><dd class="pass"><code>IdempotencyTests</code> (automated)</dd><dt>Limit</dt><dd class="warnt">Message-ID dedupe is enforced in the application only, not by a database unique index</dd></dl>
+    </div></div>
+
+    <div class="step" data-k="human"><div class="lt">o</div><div class="body">
+      <div class="top"><h3>Management view</h3><span class="chip c-human">Person</span></div>
+      <p><code>/inquiries/overview</code> shows counts per agent and stage, plus overdue and escalated. In the CMS: Case Management → Inquiry Supervision.</p>
+    </div></div>
+
+    <div class="step" data-k="human"><div class="lt">p</div><div class="body">
+      <div class="top"><h3>Inquiry analytics</h3><span class="chip c-human">Person</span></div>
+      <p><code>GET /api/v1/inquiries/analytics</code> and the CMS page <code>/inquiry-analytics</code> show: volume; open, resolved, overdue and escalated counts; response and resolution times (average, median, p90, all wall-clock); reopens; rejections; and AI accuracy.</p>
+      <dl class="kv"><dt>Proved by</dt><dd class="pass"><code>InquiryAnalyticsTests</code> (automated)</dd></dl>
+    </div></div>
+
+    <div class="step" data-k="code"><div class="lt">q</div><div class="body">
+      <div class="top"><h3>Job monitoring and AI audit</h3><span class="chip c-code">Code</span></div>
+      <p><code>GET /api/v1/system-health/jobs</code> reports, per scheduled job, last success, last failure, duration, retries and pending count, and classifies it Healthy, Stale or Failing; this feeds the health check and the CMS System Health "Scheduled jobs" table. <code>GET /api/v1/ai-usage/audit</code> lists every AI call with model, model version, prompt version, decision, confidence, explanation, attempts, failure category and cost.</p>
+      <dl class="kv"><dt>Proved by</dt><dd class="pass"><code>JobMonitoringTests</code>, <code>Ai/AiAuditTests</code>, <code>SecurityReviewTests</code> (automated)</dd><dt>Limit</dt><dd class="warnt">Job history is kept in memory and is lost on restart</dd></dl>
+    </div></div>
+
+  </div>
+</section>
+
+<section>
+  <h2>What the filter and AI decided for each test email</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Email</th><th>Routed to</th><th>Filter</th><th>AI used?</th><th>Outcome</th></tr></thead>
+    <tbody>
+      <tr><td>Spa hotel inquiry (Henrik)</td><td>agent1</td><td class="num">Inquiry +8</td><td>No</td><td class="pass">CASE-000037</td></tr>
+      <tr><td>Heater fault (Megan)</td><td>agent2</td><td class="num">Inquiry +8</td><td>No</td><td class="pass">CASE-000038</td></tr>
+      <tr><td>Dealer request (Lukas)</td><td>agent2</td><td class="num">Dealer +16</td><td>No</td><td class="pass">CASE-000036</td></tr>
+      <tr><td>Newsletter</td><td>—</td><td class="num">NotInquiry −3</td><td>No</td><td class="pass">No case</td></tr>
+      <tr><td>Internal logistics email</td><td>—</td><td>Internal domain</td><td>No</td><td class="pass">No case</td></tr>
+      <tr><td>"Great to meet you in Lyon"</td><td>—</td><td class="num">Uncertain 0</td><td><span class="chip c-ai">Qwen · 0.95</span></td><td class="pass">NotImportant, no case</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>The three test conversations</h2>
+  <div class="threads">
+    <div class="thread">
+      <h3>Henrik · spa hotel · CASE-000037</h3>
+      <ol>
+        <li>Agent1 sends an acknowledgement → <span class="tag c-ai">AI AcknowledgedOnly 0.95</span>, stays open</li>
+        <li>Henrik's follow-up joins the same case</li>
+        <li>Henrik says thanks → <span class="tag c-ai">AI AppearsResolved 0.95</span> → PotentiallyResolved (workStatus 12)</li>
+        <li>Agent1 presses Confirm Resolved → <span class="pass">Resolved</span></li>
+      </ol>
+      <p class="note">At the time, agent1's full proposal was never stored (fixed since: see Known gaps).</p>
+    </div>
+    <div class="thread">
+      <h3>Megan · heater fault · CASE-000038</h3>
+      <ol>
+        <li>No reply from agent2 → Reminder 1 → Reminder 2</li>
+        <li>Escalation email sent; pop-ups New Email, Reminder, Escalation Warning, Escalated</li>
+        <li>Agent2 replies → <span class="tag c-ai">AI InProgress</span></li>
+        <li><span class="pass">No second escalation</span> (checked by hand in the mailbox)</li>
+      </ol>
+    </div>
+    <div class="thread">
+      <h3>Lukas · dealer request · CASE-000036</h3>
+      <ol>
+        <li>Agent2 forwards internally; export@sawo.com replies → both stored as Internal</li>
+        <li>export@sawo.com did not start a new case</li>
+        <li>Agent2 replies to Lukas → <span class="tag c-ai">AI AppearsResolved</span> → PotentiallyResolved</li>
+      </ol>
+      <p class="note warnt">The agent ended with a question and the customer hadn't answered, so "resolved" was too early. It stayed safe because only a person can close it. Today the ResolutionGuard would downgrade this verdict (agent's last message ended with a question).</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Known gaps</h2>
+  <div class="gap fixed">
+    <h3>FIXED: the agent's last reply could go missing from the record</h3>
+    <p>Found by the live run on 2026-11-17. conversation-sync ran only every 5 minutes and skipped Resolved cases. If the agent confirmed before the next sync, their last reply was never stored, and the AI judged "resolved" without seeing it. The timeline below is kept as history.</p>
+    <div class="tl">
+      <span class="t">23:57:07</span><span>Agent1 sends the full proposal to Henrik</span>
+      <span class="t">23:57:09</span><span>Henrik replies "thanks"</span>
+      <span class="t">23:58</span><span>AI judges AppearsResolved, without the proposal</span>
+      <span class="t">23:59:20</span><span>Agent1 confirms → Resolved</span>
+      <span class="t">00:00</span><span class="x">Then (old behaviour): sync skipped the now-Resolved case. Proposal never stored.</span>
+    </div>
+    <p class="note">Stored conversation at the time: Customer, Agent, Customer, Customer. <b>Fix:</b> the case's mailbox is synced when the agent confirms or rejects (and on other agent actions), and Resolved cases keep syncing for a 1-day grace window. Covered by <code>ConversationSyncOnConfirmTests</code>; a live re-run is still needed to confirm it end to end.</p>
+  </div>
+  <div class="cols">
+    <div class="box"><h3>Mitigated: AI may say "resolved" too early</h3><p class="note">The deterministic ResolutionGuard now downgrades AppearsResolved in the cases that caused this (agent spoke last, agent asked a question or promised later action, customer asked a question, thanks only, open items). The 75% threshold stays. The new prompts are not yet validated live.</p></div>
+    <div class="box"><h3>Resolved: ReviewRequired branch</h3><p class="note">ReviewRequired and AI-failure emails now go to a manual review queue (CMS Email Classification, <code>/api/v1/classification-reviews</code>, supervisor and above). Not yet exercised in a live run.</p></div>
+    <div class="box"><h3>Not covered by the live run</h3><ul><li>Real Windows Agent GUI (protocol only; still untested by automation)</li><li>Real customer mailboxes (GreenMail only)</li><li>Everything added on 2026-11-18: <code>live_simulation.py</code> must be re-run</li></ul></div>
+    <div class="box"><h3>Leftover test data</h3><p class="note">CASE-000033/34/35 (aborted first run), 36 and 38, plus older AI-test cases, are still open in the inq database.</p></div>
+  </div>
+  <h3>Remaining gaps</h3>
+  <div class="cols">
+    <div class="box"><h3>Data protection and access</h3><ul><li>Inbound customer bodies are stored unencrypted. Only agent replies are encrypted.</li><li>No department scoping for supervisors: a supervisor can act on cases outside their department.</li></ul></div>
+    <div class="box"><h3>Database constraints</h3><ul><li>Message-ID dedupe is application-level only. There is no DB unique index, and existing data may already contain duplicates.</li><li>The escalation unique index (case + level) is created only if the existing data has no duplicates.</li></ul></div>
+    <div class="box"><h3>Monitoring and metrics</h3><ul><li>Job-monitoring history is in memory and is lost on restart.</li><li>Analytics uses wall-clock time, not business hours.</li></ul></div>
+    <div class="box"><h3>Validation still owed</h3><ul><li>The new prompts have not been validated against a live model.</li><li>The Windows Agent GUI is still untested by automation.</li><li>A live re-run of <code>live_simulation.py</code> is needed.</li></ul></div>
+  </div>
+</section>
+
+<section>
+  <h2>How to check it yourself</h2>
+  <div class="cols">
+    <div class="box">
+      <h3>Re-run the live simulation</h3>
+      <pre class="cmd">python inquiry-supervision/live-test/live_simulation.py</pre>
+      <p class="note">During the run it switches on the test clock (1 business hour = 1 minute), pauses the real mailbox and real SMTP account, and activates the GreenMail outbound account. All are put back afterwards, even if the run fails.</p>
+    </div>
+    <div class="box">
+      <h3>Other checks already in the repo</h3>
+      <ul>
+        <li><code>server/tests/Iemas.Tests</code>: 867 tests, including <code>Inquiries/InquiryLifecycleEndToEndTests.cs</code></li>
+        <li><code>live-test/live_e2e.py</code>, <code>live_agent.py</code>, <code>live_ai.py</code></li>
+        <li><code>inquiry-supervision/PROGRESS.md</code></li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>New test files (2026-11-18)</h3>
+      <ul>
+        <li><code>ProductionScenarioEndToEndTests.cs</code></li>
+        <li><code>ConversationSyncOnConfirmTests</code>, <code>ThreadFollowUpTests</code>, <code>IdempotencyTests</code></li>
+        <li><code>Ai/ResolutionGuardTests</code>, <code>Ai/OpenRouterReliabilityTests</code>, <code>Ai/AiAuditTests</code></li>
+        <li><code>ClassificationReviewServiceTests</code></li>
+        <li><code>BusinessCalendarHardeningTests</code>, <code>SupervisionHardeningRulesTests</code></li>
+        <li><code>EscalationReliabilityTests</code>, <code>JobMonitoringTests</code></li>
+        <li><code>InquiryAnalyticsTests</code>, <code>SecurityReviewTests</code></li>
+      </ul>
+      <pre class="cmd">dotnet test server/tests/Iemas.Tests</pre>
+    </div>
+    <div class="box">
+      <h3>New endpoints and migration</h3>
+      <ul>
+        <li><code>GET /api/v1/system-health/jobs</code></li>
+        <li><code>GET /api/v1/ai-usage/audit</code></li>
+        <li><code>/api/v1/classification-reviews</code> (supervisor and above)</li>
+        <li><code>GET /api/v1/inquiries/analytics</code>; CMS page <code>/inquiry-analytics</code></li>
+        <li>Migration <code>20261118004752_InquiryImprovementsPass</code></li>
+      </ul>
+    </div>
+
+    <div class="box">
+      <h3>Where to look while it runs</h3>
+      <ul>
+        <li>Hangfire dashboard in <code>iemas-inq-api</code>: the recurring jobs, and CMS System Health → Scheduled jobs</li>
+        <li>CMS: Email Classification (review queue) and <code>/inquiry-analytics</code></li>
+        <li>CMS: Case Management → Inquiry Supervision</li>
+        <li><code>/inquiries/overview</code> and <code>/inquiries/setup-check</code></li>
+        <li><code>ai_usage_records</code> for every AI call and its cost</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script>
+(function(){
+  var on={ai:true,code:true,ext:true,human:true};
+  var btns=document.querySelectorAll('button.chip[data-f]');
+  function apply(){
+    document.querySelectorAll('#steps .step').forEach(function(s){ s.hidden=!on[s.dataset.k]; });
+  }
+  btns.forEach(function(b){
+    b.addEventListener('click',function(){
+      var k=b.dataset.f; on[k]=!on[k];
+      b.setAttribute('aria-pressed',String(on[k])); apply();
+    });
+  });
+})();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<script>
+  var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  mermaid.initialize({ startOnLoad: true, theme: dark ? 'dark' : 'default', flowchart: { htmlLabels: true, curve: 'basis' } });
+</script>
+</body>
+</html>

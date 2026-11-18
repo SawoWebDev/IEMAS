@@ -71,6 +71,13 @@ public class Notification : Entity
     public NotificationType Type { get; set; }
     public NotificationDeliveryStatus Status { get; set; } = NotificationDeliveryStatus.Scheduled;
 
+    /// <summary>
+    /// The email this notification was raised for, when it was raised for one (new email, customer wrote
+    /// again). At most one notification exists per (Case, EmailMessageId, Type): a retried or concurrent job
+    /// run can never alert the agent twice about the same email. Null for time-driven notifications.
+    /// </summary>
+    public Guid? EmailMessageId { get; set; }
+
     public string Title { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
 

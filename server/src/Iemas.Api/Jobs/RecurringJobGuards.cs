@@ -59,6 +59,7 @@ public class RecurringJobGuards
     private readonly IBackgroundJobClient _jobs;
     private readonly IConfiguration _configuration;
     private readonly ILogger<RecurringJobGuards> _logger;
+    private readonly JobExecutionTracker? _tracker;
 
     public RecurringJobGuards(
         ReminderExecutionService reminderExecutionService,
@@ -72,8 +73,10 @@ public class RecurringJobGuards
         Iemas.Application.Inquiries.InquiryConversationService conversation,
         IBackgroundJobClient jobs,
         IConfiguration configuration,
-        ILogger<RecurringJobGuards> logger)
+        ILogger<RecurringJobGuards> logger,
+        JobExecutionTracker? tracker = null)
     {
+        _tracker = tracker;
         _reminderExecutionService = reminderExecutionService;
         _escalationService = escalationService;
         _emailIntakeService = emailIntakeService;
@@ -106,8 +109,14 @@ public class RecurringJobGuards
     public Task RunInquirySupervisionAsync(int batchSize, CancellationToken cancellationToken) =>
         RunJobAsync("inquiry-supervision", async () =>
         {
-            var result = await _supervision.RunAsync(batchSize, cancellationToken);
-            foreach (var action in result.Actions) _logger.LogInformation("Supervision: {Action}", action);
+            var (ran, result) = await Iemas.Application.Inquiries.InquirySupervisionService.TryRunExclusiveAsync(
+                () => _supervision.RunAsync(batchSize, cancellationToken), cancellationToken);
+            if (!ran)
+            {
+                _logger.LogInformation("Inquiry supervision skipped: a manual run is in progress; the next scheduled run continues.");
+                return;
+            }
+            foreach (var action in result!.Actions) _logger.LogInformation("Supervision: {Action}", action);
         });
 
     /// <summary>
@@ -170,16 +179,19 @@ public class RecurringJobGuards
         using (LogContext.PushProperty("CorrelationId", correlationId))
         {
             var stopwatch = Stopwatch.StartNew();
+            var startedAt = DateTimeOffset.UtcNow;
             _logger.LogInformation("Recurring job {JobName} starting", jobName);
             try
             {
                 await action();
+                _tracker?.Record(jobName, startedAt, stopwatch.Elapsed, true, null);
                 _logger.LogInformation(
                     "Recurring job {JobName} completed in {ElapsedMilliseconds}ms",
                     jobName, stopwatch.ElapsedMilliseconds);
             }
             catch (Exception ex)
             {
+                _tracker?.Record(jobName, startedAt, stopwatch.Elapsed, false, ex.Message);
                 _logger.LogError(
                     ex,
                     "Recurring job {JobName} failed after {ElapsedMilliseconds}ms",

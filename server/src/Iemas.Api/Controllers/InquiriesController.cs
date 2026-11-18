@@ -20,6 +20,7 @@ public sealed record ReassignInquiryRequest(Guid EmployeeId);
 public class InquiriesController : ControllerBase
 {
     private readonly InquiryOverviewService _overview;
+    private readonly InquiryAnalyticsService _analytics;
     private readonly InquiryConversationService _conversation;
     private readonly InquirySupervisionService _supervision;
     private readonly ConversationSyncService _sync;
@@ -28,8 +29,9 @@ public class InquiriesController : ControllerBase
 
     public InquiriesController(
         InquiryOverviewService overview, InquiryConversationService conversation, InquirySupervisionService supervision,
-        ConversationSyncService sync, ICurrentUserService currentUser, IAuditService audit)
+        ConversationSyncService sync, ICurrentUserService currentUser, IAuditService audit, InquiryAnalyticsService analytics)
     {
+        _analytics = analytics;
         _overview = overview;
         _conversation = conversation;
         _supervision = supervision;
@@ -37,6 +39,17 @@ public class InquiriesController : ControllerBase
         _currentUser = currentUser;
         _audit = audit;
     }
+
+    /// <summary>
+    /// Volume over time, open/resolved/overdue, escalations by level, first-response and resolution time
+    /// (wall-clock minutes: average, median, p90, per agent), reopen/rejection counts and AI accuracy.
+    /// Filters: from, to (default last 30 days), employeeId, departmentId, granularity=day|week.
+    /// </summary>
+    [HttpGet("analytics")]
+    public async Task<ActionResult<InquiryAnalyticsDto>> Analytics(
+        [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, [FromQuery] Guid? employeeId,
+        [FromQuery] Guid? departmentId, [FromQuery] string? granularity, CancellationToken cancellationToken) =>
+        Ok(await _analytics.GetAsync(new InquiryAnalyticsFilter(from, to, employeeId, departmentId, granularity), cancellationToken));
 
     [HttpGet("overview")]
     public async Task<ActionResult<InquiryOverviewDto>> Overview(CancellationToken cancellationToken) =>
@@ -63,12 +76,20 @@ public class InquiriesController : ControllerBase
     }
 
     [HttpPost("{id:guid}/confirm-resolved")]
-    public async Task<IActionResult> ConfirmResolved(Guid id, [FromBody] ResolutionDecisionRequest request, CancellationToken cancellationToken) =>
-        ToResult(await _conversation.ConfirmResolvedAsync(id, null, Note(request.Comment), cancellationToken));
+    public async Task<IActionResult> ConfirmResolved(Guid id, [FromBody] ResolutionDecisionRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _conversation.ConfirmResolvedAsync(id, null, Note(request.Comment), cancellationToken);
+        if (result.Succeeded) await _audit.LogAsync("INQUIRY_RESOLUTION_CONFIRMED", "Case", id.ToString(), $"By {_currentUser.Email}", cancellationToken);
+        return ToResult(result);
+    }
 
     [HttpPost("{id:guid}/reject-resolution")]
-    public async Task<IActionResult> RejectResolution(Guid id, [FromBody] ResolutionDecisionRequest request, CancellationToken cancellationToken) =>
-        ToResult(await _conversation.RejectResolutionAsync(id, null, Note(request.Comment), cancellationToken));
+    public async Task<IActionResult> RejectResolution(Guid id, [FromBody] ResolutionDecisionRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _conversation.RejectResolutionAsync(id, null, Note(request.Comment), cancellationToken);
+        if (result.Succeeded) await _audit.LogAsync("INQUIRY_RESOLUTION_REJECTED", "Case", id.ToString(), $"By {_currentUser.Email}", cancellationToken);
+        return ToResult(result);
+    }
 
     [HttpPost("{id:guid}/reassign")]
     public async Task<IActionResult> Reassign(Guid id, [FromBody] ReassignInquiryRequest request, CancellationToken cancellationToken)
@@ -86,9 +107,15 @@ public class InquiriesController : ControllerBase
     [Authorize(Policy = "RequireAdministrator")]
     public async Task<IActionResult> RunNow(CancellationToken cancellationToken)
     {
-        var sync = await _sync.RunAsync(200, cancellationToken);
-        var supervision = await _supervision.RunAsync(1000, cancellationToken);
-        return Ok(new { sync, supervision });
+        var (ran, outcome) = await InquirySupervisionService.TryRunExclusiveAsync(async () =>
+        {
+            await _audit.LogAsync("INQUIRY_SUPERVISION_RUN_MANUAL", "Inquiry", null, $"By {_currentUser.Email}", cancellationToken);
+            var sync = await _sync.RunAsync(200, cancellationToken);
+            var supervision = await _supervision.RunAsync(1000, cancellationToken);
+            return new { sync, supervision };
+        }, cancellationToken);
+        if (!ran) return Conflict(new { message = "A supervision run is already in progress. Try again in a moment." });
+        return Ok(outcome);
     }
 
     private string? Note(string? comment) =>

@@ -46,6 +46,12 @@ export const NAV_SECTIONS: NavSection[] = [
         help: "Every customer inquiry, followed until the agent confirms it is resolved: how many each agent has awaiting a first reply, waiting on the customer, inactive, potentially resolved, overdue or escalated. Click a number to list them; open one to read the whole conversation (customer, agent and internal messages) and confirm, reject or reassign it.",
         tasks: ["See which agent has inquiries waiting on them", "Open an inquiry to read the full conversation", "Confirm an inquiry is resolved, or keep it open", "Reassign an inquiry to another agent"],
       },
+      {
+        label: "Inquiry Analytics",
+        path: "/inquiry-analytics",
+        help: "Inquiry volume over time, open, resolved and overdue counts, escalations by level, how fast each agent first replies and resolves (average, median, 90th percentile), reopen counts and how often the AI was right.",
+        tasks: ["Compare agents' response times", "See inquiry volume by day or week", "Check how accurate the AI has been"],
+      },
     ],
   },
   {

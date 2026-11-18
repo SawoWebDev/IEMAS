@@ -104,6 +104,14 @@ public class EscalationEventConfiguration : IEntityTypeConfiguration<EscalationE
         // pattern rather than every possible business rule needing its own DB constraint.
         builder.HasIndex(e => new { e.CaseId, e.EscalationPolicyId, e.Level, e.Outcome });
 
+        // Duplicate-escalation guard: a Case escalates to a given level at most once, even if two
+        // supervision runs race. Only Executed rows (Outcome = 0) count; Skipped/unresolved rows may
+        // repeat. Column names are the PascalCase CLR names (no naming convention is configured).
+        builder.HasIndex(e => new { e.CaseId, e.Level }).IsUnique().HasFilter("\"Outcome\" = 0");
+
+        // Two runs retrying one failed email: the loser's UPDATE finds RetryCount changed and is skipped.
+        builder.Property(e => e.RetryCount).IsConcurrencyToken();
+
         builder.HasOne(e => e.Case)
             .WithMany()
             .HasForeignKey(e => e.CaseId)

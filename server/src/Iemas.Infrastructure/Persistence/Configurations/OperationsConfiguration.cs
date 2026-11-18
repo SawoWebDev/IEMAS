@@ -32,6 +32,11 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         builder.HasIndex(n => new { n.CaseId, n.Status });
         builder.HasIndex(n => new { n.EmployeeId, n.CreatedAt });
 
+        // One notification per (case, email, type): the database refuses a duplicate from a retry or a race.
+        builder.HasIndex(n => new { n.CaseId, n.EmailMessageId, n.Type })
+            .IsUnique()
+            .HasFilter("\"EmailMessageId\" IS NOT NULL");
+
         builder.HasOne(n => n.Case)
             .WithMany()
             .HasForeignKey(n => n.CaseId)
@@ -98,6 +103,11 @@ public class AiUsageRecordConfiguration : IEntityTypeConfiguration<AiUsageRecord
         builder.Property(r => r.ErrorMessage).HasMaxLength(1000);
         builder.Property(r => r.GenerationId).HasMaxLength(200);
         builder.Property(r => r.CostUsd).HasPrecision(18, 8);
+        builder.Property(r => r.ModelVersion).HasMaxLength(200);
+        builder.Property(r => r.PromptVersion).HasMaxLength(50);
+        builder.Property(r => r.Decision).HasMaxLength(200);
+        builder.Property(r => r.Explanation).HasMaxLength(1000);
+        builder.Property(r => r.FailureCategory).HasMaxLength(50);
         builder.HasIndex(r => r.CreatedAt);
         builder.HasIndex(r => new { r.ModelIdentifier, r.CreatedAt });
         builder.HasIndex(r => r.EmailMessageId);
