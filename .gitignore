@@ -53,3 +53,4 @@ agent-publish/
 
 # Local credential notes - never commit
 crede.txt
+__pycache__/
