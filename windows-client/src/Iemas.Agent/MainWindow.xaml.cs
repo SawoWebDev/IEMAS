@@ -131,6 +131,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         OnboardingMessage.Text = message;
         RegistrationForm.Visibility = showForm && _useApproval ? Visibility.Visible : Visibility.Collapsed;
         MailboxForm.Visibility = showForm && !_useApproval ? Visibility.Visible : Visibility.Collapsed;
+        // With an installer key, registering by email alone connects at once; without one it waits for approval.
+        UseApprovalButton.Content = App.Session.HasInstallKey
+            ? "Connect with the installer instead (email only)"
+            : "Ask an administrator to approve this PC instead";
         ServerHint.Text = $"IEMAS server: {App.Session.ServerUrl}  (change it under Settings)";
     }
 

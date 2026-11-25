@@ -71,24 +71,24 @@ Full steps with screenshots are in the Rollout Tutorial.
 
 **Server PC (once)**
 
-1. Install Docker Desktop and Git. `git clone` this repository.
+1. Install Docker Desktop and Git, then run `git clone https://github.com/SawoWebDev/IEMAS.git`.
 2. Copy `.env.example` to `.env` and fill in new random secrets, the admin login, the OpenRouter key, `DOMAIN` (the server's IP or DNS name) and `CORS_ORIGIN` (`https://<server>:8443`).
 3. Double-click **`Build-IEMAS.bat`**. It builds and starts the database, API, CMS and HTTPS proxy, checks each one and writes a log to `logs/`.
 4. Allow inbound TCP 8443 in the Windows firewall.
-5. Open `https://<server>:8443`, sign in, and work through **System → Setup Checklist**: employees, mailboxes and owners, outbound email, supervisors, working hours and holidays, and the **CMS web address** setting. The default Reminder Policy already has working hours (Mon–Thu 07:00–18:00, Fri 07:00–16:00, Asia/Manila) from the database migration. Check them and add public holidays.
-6. For company mailboxes, the **Mailbox defaults** settings hold the mail server (mail.sawo.com, IMAP 993, SMTP 465, SSL/TLS) and the domain (sawo.com), so only an address and password are needed. Use **Test connection** before saving.
+5. Open `https://<server>:8443`, sign in, and work through **System → Setup Checklist**: employees, mailboxes and owners, outbound email, supervisors (every mailbox owner needs one), working hours and holidays, and the **CMS web address** setting. The default Reminder Policy already has working hours (Mon–Thu 07:00–18:00, Fri 07:00–16:00, Asia/Manila) from the database migration. Check them and add public holidays. If this server was upgraded, timings an administrator changed earlier keep their old values: reset them to the defaults in **System Settings**.
+6. For company mailboxes, the **Mailbox defaults** settings hold the mail server (mail.sawo.com, IMAP 993, SMTP 465, SSL/TLS) and the domain (sawo.com), so only an address and password are needed. Use **Test connection** before saving. Employees can also sign in with their own mailbox from their PC; switch that off in the same settings group if you do not want it.
 
 **Each employee PC** (no approval step)
 
-1. In the CMS: **People & Devices → Windows Agents → Download installer**. Pick one person's mailbox (nothing to type on the PC) or "Everyone" (each person types their email once), check the server address, download the zip.
-2. On the PC: extract the zip and double-click **`Install-IEMAS-Agent.bat`**. It installs the .NET 8 Desktop Runtime if missing, installs the Agent for that Windows user, turns on Start with Windows, starts it, and the Agent registers and is approved automatically.
-3. The first time the Agent starts, it offers a short "Show me around" walkthrough with a practice inquiry. Administrators can start one for a PC from CMS Windows Agents → **Practice run**.
+1. In the CMS: **People & Devices → Windows Agents → Download installer**. Pick one person's mailbox (nothing to type on the PC) or "Everyone" (each person types their work email and password once), check the server address, download the zip.
+2. On the PC: extract the zip and double-click **`Install-IEMAS-Agent.bat`**. It installs the .NET 8 Desktop Runtime if missing, installs the Agent for that Windows user, turns on Start with Windows and starts it. A one-person installer connects straight away and is approved automatically; an Everyone installer asks the employee for their work email and password.
+3. The first time the Agent starts, it offers a short "Show me around" walkthrough with a practice inquiry. The practice inquiry is removed when the employee presses Finish or after 1 hour. Administrators can start one for a PC from CMS Windows Agents → **Practice run**.
 
 Each installer carries an installer key. Keys have no expiry date and no PC limit. A key can be withdrawn in the CMS, and only its hash is stored. Manual setup (copy `windows-client/agent-release/IemasAgent.exe`, enter the server address, register, approve under Windows Agents) still works.
 
 **Signing in with email (Windows Agent 1.3.0)**
 
-The Agent can also connect by sign-in: the employee enters their work email and password, chooses **Test connection**, then **Connect**. The server checks the password with the company mail server, adds or updates the mailbox, creates the employee if needed, approves the PC, and sends a confirmation email. If the mailbox owner already has other mailboxes under a different email, the PC waits for admin approval. Passwords travel from the PC to the server, so use the `https` address. The Agent asks before sending a password over plain `http`.
+The Agent can also connect by sign-in: the employee enters their work email and password, chooses **Test connection**, then **Connect**. The server checks the password with the company mail server, adds or updates the mailbox, creates the employee if needed, approves the PC, and sends a confirmation email. If the mailbox owner already has other mailboxes under a different email, the PC waits for admin approval. Passwords travel from the PC to the server, so use the `https` address. The Agent asks before sending a password over plain `http`. Five wrong passwords for one address stop sign-in for 15 minutes.
 
 **Updating**
 

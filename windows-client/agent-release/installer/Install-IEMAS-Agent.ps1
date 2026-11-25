@@ -129,6 +129,6 @@ Write-Host ""
 if ($setup.emailAddress) {
     Write-Host "The Agent connects by itself in a few seconds. The light at the top left turns green." -ForegroundColor White
 } else {
-    Write-Host "In the Agent window, type your company email address and click Register. It connects straight away." -ForegroundColor White
+    Write-Host "In the Agent window, enter your work email and password, click Test connection, then Connect." -ForegroundColor White
 }
 exit 0

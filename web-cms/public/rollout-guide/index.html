@@ -193,13 +193,13 @@ footer { margin-top: 60px; padding-top: 18px; border-top: 1px solid var(--line);
   <div class="eyebrow">SAWO · IEMAS Inquiry Monitoring</div>
   <h1>IEMAS rollout guide</h1>
   <p class="lede">How to put IEMAS live: set up the server PC once, install the IEMAS Agent on each employee's PC, connect the two, and learn what the alerts look like before the first real customer email arrives.</p>
-  <div class="meta"><span>For: IT / system administrator, and each employee for Parts 4–5</span><span>Version: main branch, Agent 1.2.0</span></div>
+  <div class="meta"><span>For: IT / system administrator, and each employee for Parts 4–5</span><span>Version: main branch, Agent 1.3.0</span></div>
 </header>
 
 <div class="overview">
   <div class="ov"><span class="n">PART 1</span><h3>Server PC</h3><p>Install Docker, fill in one settings file, double-click Build-IEMAS.</p><span class="time">≈ 30 min · once</span></div>
   <div class="ov"><span class="n">PART 2</span><h3>Configure in the CMS</h3><p>Mailboxes, employees, managers, working hours.</p><span class="time">≈ 30 min · once</span></div>
-  <div class="ov"><span class="n">PART 3</span><h3>Each employee PC</h3><p>Download a one-click installer from the CMS and run it. It connects by itself.</p><span class="time">≈ 2 min per PC</span></div>
+  <div class="ov"><span class="n">PART 3</span><h3>Each employee PC</h3><p>Download an installer from the CMS and run it. A one-person installer connects by itself; the others ask for a work email and password.</p><span class="time">≈ 2 min per PC</span></div>
   <div class="ov"><span class="n">PART 4–5</span><h3>First use and alerts</h3><p>What employees see, and a live simulator of every pop-up.</p><span class="time">≈ 10 min per person</span></div>
 </div>
 
@@ -299,9 +299,9 @@ footer { margin-top: 60px; padding-top: 18px; border-top: 1px solid var(--line);
       <div class="step-body">
         <p>Install <a href="https://git-scm.com/download/win" target="_blank" rel="noopener">Git for Windows</a>, then in a command prompt:</p>
 <pre>cd C:\
-git clone https://github.com/arnielmontero/Intelligent-Email-Monitoring-Alert-System-v2.git IEMAS
+git clone https://github.com/SawoWebDev/IEMAS.git IEMAS
 cd IEMAS</pre>
-        <p>Later updates are <code>git pull</code> followed by double-clicking <b>Build-IEMAS.bat</b> again.</p>
+        <p>Before every update, back up the database with <code>scripts/backup-database.sh</code> (run it from Git Bash). Then run <code>git pull</code> and double-click <b>Build-IEMAS.bat</b> again. Database changes are applied when the API starts.</p>
       </div></li>
     <li><h3>Fill in the settings file</h3>
       <div class="step-body">
@@ -353,22 +353,20 @@ cd IEMAS</pre>
     <h2>Configure IEMAS in the CMS</h2>
     <p class="who">Who: <b>IT administrator</b>, with the list of mailboxes, employees and managers. <b>System → Setup Checklist</b> shows what is still missing; work down it until every line is green.</p>
   </div>
-  <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;System → Setup Checklist</div><img src="img/cms-setup.png" alt="Setup checklist page" loading="lazy"><figcaption>The Setup Checklist lists every missing setting with a Fix link. Here, only business hours are left.</figcaption></figure>
+  <p>Every missing setting is listed with a <b>Fix</b> link. Work down the list until nothing is marked as missing.</p>
   <ol class="steps">
     <li><h3>Add the employees</h3>
       <div class="step-body">
-        <p><b>People &amp; Devices → Employees.</b> You can skip this for people whose email address names them: IEMAS adds the employee by itself when their mailbox is added. Add managers here, and set each person's <b>Supervisor</b>.</p>
-        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;People &amp; Devices → Employees</div><img src="img/cms-employees.png" alt="Employees page" loading="lazy"></figure>
+        <p><b>People &amp; Devices → Employees.</b> Add the employees and managers, and set each person's <b>Supervisor</b>. When an employee signs in on their PC (Part 3), their record is created if it is missing.</p>
       </div></li>
     <li><h3>Add each mailbox and choose its owner</h3>
       <div class="step-body">
-        <p><b>Email → Email Accounts → Add.</b> For a company address, enter only the <b>email address</b> and <b>password</b>; the company mail server is already filled in. Press <b>Test connection</b>, then <b>Add account</b>. The <b>owner</b> (the employee whose PC gets the alerts) is chosen automatically by email address. Employees can also add their own mailbox from their PC (Part 3), so you do not have to collect passwords.</p>
-        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Email → Email Accounts</div><img src="img/cms-email-accounts.png" alt="Email accounts page" loading="lazy"></figure>
+        <p><b>Email → Email Accounts → Add.</b> For a company address, enter only the <b>email address</b> and <b>password</b>. The mail server, ports, encryption and domain come from <b>Mailbox defaults</b> in System Settings (mail.sawo.com, IMAP 993, SMTP 465, SSL/TLS, sawo.com), so they are already filled in. Press <b>Test connection</b>, then <b>Add account</b>. The <b>owner</b> (the employee whose PC gets the alerts) is chosen automatically by email address. Set the owner's <b>Supervisor</b> on the Employees page, or escalations for this mailbox have no recipient.</p>
+        <p>Employees can also sign in with their own mailbox from their PC (Part 3), so you do not have to collect passwords. To stop that, switch off employee self-registration in the <b>Mailbox defaults</b> group.</p>
       </div></li>
     <li><h3>Set the outgoing mail account</h3>
       <div class="step-body">
-        <p><b>Email → Outbound Email.</b> One SMTP account IEMAS uses to send escalation emails. <b>Test connection</b> checks the login without sending anything. After the next step, use <b>Test escalation</b> on an employee's row (Employees page) to send a real sample to their manager.</p>
-        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Email → Outbound Email</div><img src="img/cms-outbound-email.png" alt="Outbound email page" loading="lazy"></figure>
+        <p><b>Email → Outbound Email.</b> One SMTP account IEMAS uses to send escalation emails, practice samples and the confirmation email sent when a PC connects. <b>Test connection</b> checks the login without sending anything. Once the employees are set up, use <b>Test escalation</b> on an employee's row (Employees page) to send a real sample to their manager.</p>
       </div></li>
     <li><h3>Set who gets escalations</h3>
       <div class="step-body">
@@ -379,7 +377,11 @@ cd IEMAS</pre>
       <div class="step-body">
         <p><b>Alerts &amp; Escalation → Reminder Policies → Default.</b> The office hours are pre-set to <b>Monday to Thursday 07:00-18:00 and Friday 07:00-16:00</b>, Asia/Manila time. Add the public holidays. Every deadline counts only these hours, and reminders and escalations are only sent during them. Friday is set to 16:00 on purpose: on days people stay until 18:00 they still get pop-ups and their replies count, but nobody is escalated for leaving on time.</p>
         <div class="note warn"><b>Add the holidays before go-live,</b> otherwise a holiday counts as a normal working day.</div>
-        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Alerts &amp; Escalation → Reminder Policies</div><img src="img/cms-reminder-policies.png" alt="Reminder policies page" loading="lazy"></figure>
+      </div></li>
+    <li><h3>Check the timings</h3>
+      <div class="step-body">
+        <p>The defaults are: first reply 8 working hours; 2 reminders 4 working hours apart; supervisor emailed 4 working hours after the last reminder; customer follow-up 1 business day; quiet conversation 3 business days; customer silent 5 calendar days; waiting on a colleague 2 business days; resolution target 10 business days; next escalation level 2 business days later.</p>
+        <div class="note warn"><b>Settings changed before this version keep their old values.</b> In <b>System → System Settings</b>, reset any timing you had changed to these defaults, or keep it on purpose.</div>
       </div></li>
     <li><h3>Check the system is healthy</h3>
       <div class="step-body">
@@ -402,11 +404,11 @@ cd IEMAS</pre>
         <p><b>People &amp; Devices → Windows Agents → Download installer.</b> Choose who it is for:</p>
         <ul>
           <li><b>One person</b> (pick their mailbox): nothing to type on the PC at all. Best when IT sets up each PC.</li>
-          <li><b>Everyone</b>: one zip for the whole team; each person types their own email address once.</li>
+          <li><b>Everyone</b>: one zip for the whole team; each person types their own work email and password once.</li>
         </ul>
-        <p>Check the <b>server address</b> (the address the PCs use, for example <code>https://172.16.2.68:8443</code>), keep <b>Server uses its own certificate</b> ticked when the server is reached by IP address, then <b>Download zip</b>.</p>
-        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;People &amp; Devices → Windows Agents</div><img src="img/cms-agent-installer.png" alt="Download installer panel on the Windows Agents page" loading="lazy"><figcaption>Every installer has an expiry date and a maximum number of PCs, and can be withdrawn here. PCs already connected keep working.</figcaption></figure>
-        <div class="note warn"><b>Treat the zip like a password.</b> Until it expires or is used up, anyone who runs it can connect a PC to IEMAS for the mailbox it allows. Send it directly to the person, not to a group or a shared folder.</div>
+        <p>Check the <b>server address</b> (the address the PCs use, for example <code>https://172.16.2.68:8443</code>), then <b>Download zip</b>. An https address also tells the Agent to accept the server's own certificate, so there is no certificate option to set.</p>
+        <p>Installers do not expire and have no PC limit. The <b>Installers downloaded</b> list under the button shows each zip and lets you <b>Withdraw</b> it: PCs already connected keep working, but the withdrawn zip cannot connect new PCs.</p>
+        <div class="note warn"><b>Treat the zip like a password.</b> Until you withdraw it, anyone who runs it can connect a PC to IEMAS for the mailbox it allows. Send it directly to the person, not to a group or a shared folder.</div>
       </div></li>
     <li><h3>Run it on the PC</h3>
       <div class="step-body">
@@ -416,22 +418,23 @@ cd IEMAS</pre>
           <li>installs the .NET 8 Desktop Runtime if the PC doesn't have it (Windows may ask to allow the change: click <b>Yes</b>),</li>
           <li>installs the Agent for the signed-in user and adds it to the Start menu,</li>
           <li>sets the server address and certificate option, and turns on <b>Start with Windows</b>,</li>
-          <li>starts the Agent, which registers itself and is <b>approved automatically</b>.</li>
+          <li>starts the Agent. A one-person installer connects straight away and is <b>approved automatically</b>. An Everyone installer asks for the work email and password (next step).</li>
         </ul>
       </div></li>
     <li><h3>Check the light is green</h3>
       <div class="step-body">
-        <p>With a one-person installer, the Agent shows <b>● Connected</b> and the employee's name within a few seconds. Otherwise the person types their <b>work email and password</b>, clicks <b>Test connection</b>, then <b>Connect</b>. IEMAS signs in to the company mail server to check them, adds the mailbox to the CMS, approves the PC and sends a confirmation email to their inbox.</p>
-        <div class="note warn"><b>Use the https address (port 8443).</b> The password travels from the PC to the server; the Agent asks before sending it over plain http.</div>
+        <p>With a one-person installer, the Agent shows <b>● Connected</b> and the employee's name within a few seconds. Otherwise the person types their <b>work email and password</b>, clicks <b>Test connection</b>, then <b>Connect</b>. IEMAS checks the password with the company mail server, adds the mailbox to the CMS, approves the PC and sends a confirmation email to their inbox.</p>
+        <p>If the mailbox owner already has other mailboxes under a different email address, the PC waits for an administrator to approve it under Windows Agents. On a PC that came from an installer, the sign-in screen offers <b>Connect with the installer instead (email only)</b>; on other PCs it offers <b>Ask an administrator to approve this PC instead</b>.</p>
+        <div class="note warn"><b>Use the https address (port 8443).</b> The password travels from the PC to the server; the Agent asks before sending it over plain http. Five wrong passwords for one address stop sign-in for 15 minutes.</div>
         <div class="shots-2">
-          <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;"Everyone" installer · first start</div><img src="img/agent-connect.png" alt="Agent asking for the email address after an Everyone installer" loading="lazy"></figure>
+          <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;IEMAS Agent · sign in</div><img src="img/agent-signin.png" alt="Agent sign-in screen with work email, password, Test connection and Connect" loading="lazy"><figcaption>The sign-in screen on a PC without a one-person installer. The server address shown is a test name; yours is the https address of your server.</figcaption></figure>
           <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Connected</div><img src="img/agent-main.png" alt="Agent connected and listing inquiries" loading="lazy"></figure>
         </div>
       </div></li>
   </ol>
   <details class="faq"><summary>Setting up a PC by hand instead (no installer)</summary>
-    <p>With "Employees can register their own mailbox" on (System Settings → Mailbox defaults), a PC set up by hand needs only the server address and the work email and password. The approval steps below are for when it is off.</p>
-    <p>Install the runtime with <code>winget install Microsoft.DotNet.DesktopRuntime.8</code>, copy <code>IemasAgent.exe</code> from the server's <code>windows-clientgent-release</code> folder and start it. In <b>Settings</b> enter the server address, tick <b>Allow self-signed certificates</b>, and Save. Register with the company email address; the PC then appears as <b>Pending</b> under Windows Agents until an administrator chooses the employee and presses <b>Approve</b>. An installer that has expired falls back to this same Pending request.</p>
+    <p>With employee self-registration on (the <b>Mailbox defaults</b> group in System Settings), a PC set up by hand needs only the server address and the work email and password. The approval steps below are for when it is off.</p>
+    <p>Install the runtime with <code>winget install Microsoft.DotNet.DesktopRuntime.8</code>, copy <code>IemasAgent.exe</code> from the server's <code>windows-client/agent-release</code> folder and start it. In <b>Settings</b> enter the server address and Save. Tick <b>Allow self-signed certificates</b> only if your administrator tells you to. Register with the company email address; the PC then appears as <b>Pending</b> under Windows Agents until an administrator chooses the employee and presses <b>Approve</b>. A withdrawn installer falls back to this same Pending request.</p>
   </details>
   <div class="note"><b>Updating the Agent later:</b> download a new installer and run it the same way. The registration is kept.</div>
 </section>
@@ -441,12 +444,18 @@ cd IEMAS</pre>
   <div class="part-head">
     <div class="eyebrow">Part 4 · for every employee</div>
     <h2>Using the Agent the first time</h2>
-    <p>The first time it connects, the Agent opens <b>Show me around</b>: what appears on the PC, the real reply and escalation times for that person, and a <b>practice inquiry</b> that goes from new email to escalation while they watch. Only that employee receives its pop-ups and emails, and it is deleted afterwards. It can be opened again from the Help tab, and an administrator can start it from <b>Windows Agents → Practice run</b>.</p>
+    <p>The first time it connects, the Agent opens <b>Show me around</b>: five short pages. They explain what appears on the PC and the reply and escalation times for that employee, and end with a <b>practice inquiry</b> that goes from new email to escalation while they watch. Only that employee receives its pop-ups and emails. The practice inquiry is removed when they press <b>Finish</b>, or after 1 hour. It can be opened again from the Help tab or the tray icon's menu, and an administrator can start a practice run for a PC from <b>Windows Agents → Practice run</b>.</p>
     <p>The Agent shows the inquiries that need you. You still answer customers in Outlook. When the customer's request is fully handled, you confirm it in the Agent.</p>
   </div>
   <div class="shots-2">
+    <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Show me around · page 1</div><img src="img/agent-tour-welcome.png" alt="Show me around, page 1: welcome" loading="lazy"><figcaption>Page 1: what IEMAS does. Nothing to click after you reply in Outlook.</figcaption></figure>
+    <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Show me around · page 2</div><img src="img/agent-tour-what-you-see.png" alt="Show me around, page 2: the pop-up colours and the app window" loading="lazy"><figcaption>Page 2: the pop-up colours, and what the app window shows.</figcaption></figure>
+    <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Show me around · page 4</div><img src="img/agent-tour-timing.png" alt="Show me around, page 4: reply and escalation times" loading="lazy"><figcaption>Page 4: the reply and escalation times for this employee, with the working hours.</figcaption></figure>
+    <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Show me around · page 5</div><img src="img/agent-tour-try-it.png" alt="Show me around, page 5: the practice inquiry" loading="lazy"><figcaption>Page 5: the practice inquiry. Each press of <b>Show what happens next</b> moves it on one step.</figcaption></figure>
+  </div>
+  <div class="shots-2">
     <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;IEMAS Agent</div><img src="img/agent-main.png" alt="IEMAS Agent main window with the Action Required list" loading="lazy"><figcaption><b>Action Required</b> lists every open inquiry that still needs you. The light at the top left must be green.</figcaption></figure>
-    <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;IEMAS Agent → inquiry</div><img src="img/agent-case.png" alt="An inquiry opened in the Agent" loading="lazy"><figcaption>Click <b>Open</b> on an inquiry to see the latest customer email and what to do next.</figcaption></figure>
+    <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;IEMAS Agent → inquiry</div><img src="img/agent-practice-inquiry.png" alt="The practice inquiry opened in the Agent" loading="lazy"><figcaption>Click <b>Open</b> on an inquiry to see the latest customer email and what to do next. This one is the practice inquiry, with sample data.</figcaption></figure>
   </div>
   <div class="table-wrap"><table>
     <thead><tr><th>Button</th><th>When to use it</th></tr></thead>
@@ -469,7 +478,7 @@ cd IEMAS</pre>
   <div class="part-head">
     <div class="eyebrow">Part 5 · try it</div>
     <h2>Alert simulator</h2>
-    <p>These are the real pop-up designs and wording the Agent uses. Press a button to see one appear in the bottom-right corner, or play one inquiry from start to finish. Pop-ups stay on top until you act on them, even with Windows "Do not disturb" on, and play a short sound.</p>
+    <p>These show the pop-up colours and the kind of wording the Agent uses. The sample text is invented. The wording an employee sees comes from the <b>Pop-up Messages</b> templates in the CMS (Alerts &amp; Escalation → Pop-up Messages), which an administrator can edit. Press a button to see one appear in the bottom-right corner, or play one inquiry from start to finish. Pop-ups stay on top until you act on them, even with Windows "Do not disturb" on, and play a short sound.</p>
   </div>
   <div class="sim">
     <div class="controls">
@@ -489,11 +498,7 @@ cd IEMAS</pre>
     </div>
   </div>
 
-  <div class="shots-2">
-    <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Real pop-up · new email</div><img src="img/popup-real-1.png" alt="Real New Email pop-up from the Agent" loading="lazy"></figure>
-    <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Real pop-up · escalation warning</div><img src="img/popup-real-2.png" alt="Real Escalation Warning pop-up from the Agent" loading="lazy"></figure>
-  </div>
-  <p class="who">Above: two real pop-ups captured from the Agent during the live test, for comparison with the simulator.</p>
+  <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Agent pop-up · escalation warning</div><img src="img/agent-popup-escalation-warning.png" alt="Escalation warning pop-up as shown by the Agent" loading="lazy"><figcaption>The escalation warning as the Agent shows it on the PC, from the test system. Compare it with the simulator above.</figcaption></figure>
   <div class="timeline" id="timeline" aria-label="Inquiry timeline"></div>
 
   <h3>What each colour means</h3>
@@ -520,15 +525,16 @@ cd IEMAS</pre>
     <div class="eyebrow">If something is not right</div>
     <h2>Troubleshooting</h2>
   </div>
-  <details class="faq"><summary>The Agent stays on "Connecting…"</summary><p>Check the Server URL in Settings (https, port 8443) and that "Allow self-signed certificates" is ticked. From the PC, open https://172.16.2.68:8443 in a browser: if that fails too, check the server's firewall rule and that Docker Desktop is running on the server.</p></details>
-  <details class="faq"><summary>Registration fails, or the installer "can no longer be used"</summary><p>The email must be a mailbox IEMAS watches, with an owner set on the Email Accounts page. An installer that expired, was used up or was withdrawn still installs the Agent, but the PC then waits as Pending under Windows Agents: approve it there, or download a new installer.</p></details>
+  <details class="faq"><summary>The Agent stays on "Connecting…"</summary><p>Check the Server URL in Settings (https, port 8443). Tick "Allow self-signed certificates" only if your administrator tells you to; the installer sets it for you. From the PC, open https://172.16.2.68:8443 in a browser: if that fails too, check the server's firewall rule and that Docker Desktop is running on the server.</p></details>
+  <details class="faq"><summary>Sign-in fails, or the PC says it is waiting</summary><p>The email must be a mailbox IEMAS watches, with an owner set on the Email Accounts page. A PC waits as Pending under Windows Agents when the mailbox owner has other mailboxes under a different email address, or when it was set up by hand: approve it there. A withdrawn installer still installs the Agent, and its PC waits in the same way.</p></details>
+  <details class="faq"><summary>Sign-in says the password is wrong or there were too many attempts</summary><p>Use the password you use in Outlook for that mailbox. After 5 wrong passwords for one address, sign-in waits 15 minutes before it accepts another try.</p></details>
   <details class="faq"><summary>I replied but still get reminders</summary><p>Wait 2 minutes for the Sent-folder check. Reply to the customer's own email (not a new email) from the mailbox the customer wrote to. If you answered by phone, open the inquiry and use Mark as resolved or add a note.</p></details>
-  <details class="faq"><summary>A customer email did not become an inquiry</summary><p>Allow a couple of minutes. Newsletters, auto-replies and internal mail are filtered out on purpose. Emails the AI was unsure about wait for a supervisor in the Review queue (Email → Email Classification).</p></details>
+  <details class="faq"><summary>A customer email did not become an inquiry</summary><p>Allow a couple of minutes. Newsletters, auto-replies and internal mail are filtered out on purpose. An email the filter calls an inquiry is double-checked by the AI; if the AI cannot be reached, the filter's decision stands. Emails the AI was unsure about wait for a supervisor in the Review queue (Email → Email Classification).</p></details>
   <details class="faq"><summary>No pop-ups appear</summary><p>The tray icon's dot must be green. Pop-ups go to the owner of the mailbox the email arrived in. Pop-ups missed while the PC was off are shown when it connects again.</p></details>
   <details class="faq"><summary>Nothing works after the server restarted</summary><p>Docker Desktop must be running. Double-click Build-IEMAS.bat again; it starts everything and reports what is wrong.</p></details>
 </section>
 
-<footer>IEMAS · Intelligent Email Monitoring &amp; Alert System. Screenshots are from the live test system and show test data.</footer>
+<footer>IEMAS · Intelligent Email Monitoring &amp; Alert System. Screenshots show test data; the names and addresses in them are invented.</footer>
 </div>
 
 <script>
@@ -652,14 +658,16 @@ const ITEMS = [
   "Every mailbox added, connection tested, Sent folder found",
   "Outbound email set; Test escalation (Employees page) reached a manager",
   "Every employee added with the right mailbox",
-  "Every employee has the right supervisor (and escalation groups, if used)",
-  "Default reminder policy: office hours, time zone, weekends and holidays set",
+  "Every mailbox owner has a Supervisor (and escalation groups, if used)",
+  "Default reminder policy: office hours checked and public holidays added",
   "System Settings: CMS web address set; TEST MODE (count hours as minutes) is off",
+  "System Settings: timings checked; changed values reset to the defaults, or kept on purpose",
+  "Mailbox defaults checked; employee self-registration switched on or off on purpose",
   "Every employee PC: installer run, light is green; unused installers withdrawn",
-  "Each employee has opened the Agent's Help tab once and tried the alert simulator",
+  "Each employee has finished Show me around (the practice inquiry) on their PC",
   "Daily database backup scheduled and one restore tested",
 ];
-const KEY = "iemas-golive-v1";
+const KEY = "iemas-golive-v2";
 let state = {};
 try { state = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { state = {}; }
 const cl = document.getElementById("checklist");

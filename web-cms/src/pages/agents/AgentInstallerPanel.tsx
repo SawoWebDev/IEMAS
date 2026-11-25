@@ -96,7 +96,7 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
       setMessage(
         forEmail
           ? `Installer for ${forEmail} downloaded. Send it to that person (or run it on their PC): it installs everything and connects by itself.`
-          : "Installer downloaded. Share it with the employees: they run it and type their own email address once.",
+          : "Installer downloaded. Share it with the employees: they run it and type their own work email and password once.",
       );
       await load();
       onChanged();
@@ -132,8 +132,8 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
           <h2 style={{ fontSize: 16, margin: 0 }}>Install the Agent on a PC</h2>
           <p style={{ color: "var(--color-text-muted)", fontSize: 13, margin: "4px 0 0", maxWidth: 760 }}>
             Download a ready-made installer. On the PC, extract the zip and double-click <b>Install-IEMAS-Agent.bat</b>: it installs
-            the .NET runtime if needed, installs and starts the Agent, and connects it. PCs installed this way are approved
-            automatically; nothing to approve below.
+            the .NET runtime if needed, installs and starts the Agent, and connects it. PCs installed this way are normally approved
+            automatically; a PC that waits appears below as Pending in Windows Agents.
           </p>
         </div>
         <button className="btn-primary" onClick={() => setOpen((o) => !o)} disabled={availability?.available === false}
@@ -149,9 +149,9 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
       {open && availability?.available && (
         <div style={formStyle}>
           <label style={labelStyle}>
-            <span>Who is it for?<InfoTip text="For one person: the PC connects with no typing at all. For everyone: one zip for many PCs; each person types their own email address once." /></span>
+            <span>Who is it for?<InfoTip text="For one person: the PC connects with no typing at all. For everyone: one zip for many PCs; each person types their own work email and password once." /></span>
             <select value={forEmail} onChange={(e) => choose(e.target.value)} id="installer-for">
-              <option value={EVERYONE}>Everyone (each person types their email once)</option>
+              <option value={EVERYONE}>Everyone (each person types their work email and password once)</option>
               {mailboxOptions.map((m) => (
                 <option key={m.id} value={m.emailAddress}>{ownerName(m.ownerEmployeeId)} — {m.emailAddress}</option>
               ))}

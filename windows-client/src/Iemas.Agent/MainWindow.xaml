@@ -115,7 +115,7 @@
                         </StackPanel>
                         <TextBlock x:Name="MailboxStatus" TextWrapping="Wrap" Margin="0,10,0,0"/>
                         <TextBlock x:Name="ServerHint" FontSize="11" Foreground="#6B7280" TextWrapping="Wrap" Margin="0,10,0,0"/>
-                        <Button Content="Ask an administrator to approve this PC instead" Style="{StaticResource TabButton}" Foreground="#2563EB"
+                        <Button x:Name="UseApprovalButton" Content="Ask an administrator to approve this PC instead" Style="{StaticResource TabButton}" Foreground="#2563EB"
                                 HorizontalAlignment="Left" Padding="0,8" Click="UseApproval_Click"/>
                     </StackPanel>
                     <StackPanel x:Name="RegistrationForm">
