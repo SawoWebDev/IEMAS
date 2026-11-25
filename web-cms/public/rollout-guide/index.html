@@ -316,7 +316,7 @@ cd IEMAS</pre>
             <tr><td class="k">BOOTSTRAP_ADMIN_EMAIL / _PASSWORD</td><td>Your own CMS login. Created on the first start only.</td></tr>
             <tr><td class="k">OPENROUTER_API_KEY</td><td>The AI key from openrouter.ai/keys.</td></tr>
             <tr><td class="k">DOMAIN</td><td>The server's IP address, for example <code>172.16.2.68</code> (or a DNS name if you have one).</td></tr>
-            <tr><td class="k">CORS_ORIGIN</td><td><code>https://172.16.2.68:8443</code> (the address people open the CMS on).</td></tr>
+            <tr><td class="k">CORS_ORIGIN</td><td><code>http://172.16.2.68:8191</code> (the address people open the CMS on).</td></tr>
             <tr><td class="k">ASPNETCORE_ENVIRONMENT</td><td>Leave as <code>Production</code>.</td></tr>
           </tbody>
         </table></div>
@@ -336,8 +336,8 @@ cd IEMAS</pre>
       </div></li>
     <li><h3>Log in to the CMS</h3>
       <div class="step-body">
-        <p>From any PC open <code>https://172.16.2.68:8443</code>. The browser warns about the certificate the first time because the server made its own; choose <b>Advanced → Continue</b>. Log in with the admin email and password from <code>.env</code>.</p>
-        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;https://172.16.2.68:8443/login</div><img src="img/cms-login.png" alt="IEMAS CMS login page" loading="lazy"><figcaption>The CMS login page.</figcaption></figure>
+        <p>From any PC open <code>http://172.16.2.68:8191</code>. Log in with the admin email and password from <code>.env</code>.</p>
+        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;http://172.16.2.68:8191/login</div><img src="img/cms-login.png" alt="IEMAS CMS login page" loading="lazy"><figcaption>The CMS login page.</figcaption></figure>
       </div></li>
     <li><h3>Schedule a daily backup</h3>
       <div class="step-body">
@@ -383,7 +383,7 @@ cd IEMAS</pre>
       </div></li>
     <li><h3>Check the system is healthy</h3>
       <div class="step-body">
-        <p><b>System → System Health.</b> All background jobs should show a recent successful run. In <b>System → System Settings</b>, set <b>CMS web address</b> to <code>https://172.16.2.68:8443</code> (the "Open case" button in escalation emails uses it), and make sure <b>TEST MODE: count hours as minutes</b> is off.</p>
+        <p><b>System → System Health.</b> All background jobs should show a recent successful run. In <b>System → System Settings</b>, set <b>CMS web address</b> to <code>http://172.16.2.68:8191</code> (the "Open case" button in escalation emails uses it), and make sure <b>TEST MODE: count hours as minutes</b> is off.</p>
         <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;System → System Health</div><img src="img/cms-system-health.png" alt="System health page" loading="lazy"></figure>
       </div></li>
   </ol>
@@ -404,7 +404,7 @@ cd IEMAS</pre>
           <li><b>One person</b> (pick their mailbox): nothing to type on the PC at all. Best when IT sets up each PC.</li>
           <li><b>Everyone</b>: one zip for the whole team; each person types their own email address once.</li>
         </ul>
-        <p>Check the <b>server address</b> (the address the PCs use, for example <code>https://172.16.2.68:8443</code>), keep <b>Server uses its own certificate</b> ticked when the server is reached by IP address, then <b>Download zip</b>.</p>
+        <p>Check the <b>server address</b> (the address the PCs use, for example <code>http://172.16.2.68:8191</code>), keep <b>Server uses its own certificate</b> ticked when the server is reached by IP address, then <b>Download zip</b>.</p>
         <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;People &amp; Devices → Windows Agents</div><img src="img/cms-agent-installer.png" alt="Download installer panel on the Windows Agents page" loading="lazy"><figcaption>Every installer has an expiry date and a maximum number of PCs, and can be withdrawn here. PCs already connected keep working.</figcaption></figure>
         <div class="note warn"><b>Treat the zip like a password.</b> Until it expires or is used up, anyone who runs it can connect a PC to IEMAS for the mailbox it allows. Send it directly to the person, not to a group or a shared folder.</div>
       </div></li>
@@ -517,7 +517,7 @@ cd IEMAS</pre>
     <div class="eyebrow">If something is not right</div>
     <h2>Troubleshooting</h2>
   </div>
-  <details class="faq"><summary>The Agent stays on "Connecting…"</summary><p>Check the Server URL in Settings (https, port 8443) and that "Allow self-signed certificates" is ticked. From the PC, open https://172.16.2.68:8443 in a browser: if that fails too, check the server's firewall rule and that Docker Desktop is running on the server.</p></details>
+  <details class="faq"><summary>The Agent stays on "Connecting…"</summary><p>Check the Server URL in Settings (https, port 8443) and that "Allow self-signed certificates" is ticked. From the PC, open http://172.16.2.68:8191 in a browser: if that fails too, check the server's firewall rule and that Docker Desktop is running on the server.</p></details>
   <details class="faq"><summary>Registration fails, or the installer "can no longer be used"</summary><p>The email must be a mailbox IEMAS watches, with an owner set on the Email Accounts page. An installer that expired, was used up or was withdrawn still installs the Agent, but the PC then waits as Pending under Windows Agents: approve it there, or download a new installer.</p></details>
   <details class="faq"><summary>I replied but still get reminders</summary><p>Wait 2 minutes for the Sent-folder check. Reply to the customer's own email (not a new email) from the mailbox the customer wrote to. If you answered by phone, open the inquiry and use Mark as resolved or add a note.</p></details>
   <details class="faq"><summary>A customer email did not become an inquiry</summary><p>Allow a couple of minutes. Newsletters, auto-replies and internal mail are filtered out on purpose. Emails the AI was unsure about wait for a supervisor in the Review queue (Email → Email Classification).</p></details>

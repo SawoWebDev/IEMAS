@@ -169,7 +169,7 @@
                             <TextBlock Style="{StaticResource HelpText}" Text="2. The AI reads it straight away: is it a real business email, and does it need a reply? Newsletters, auto-replies and similar do not become Cases."/>
                             <TextBlock Style="{StaticResource HelpText}" Text="3. If it needs a reply, a Case is created and you get a pop-up. Follow-up emails from the same customer about the same topic are added to the same Case. This usually happens within about a minute of the email arriving (a little longer if the AI service is slow)."/>
                             <TextBlock Style="{StaticResource HelpText}" Text="4. Every 2 minutes IEMAS looks in the mailbox's Sent folder for your reply. Once it is found, the Case is marked replied and reminders stop."/>
-                            <TextBlock Style="{StaticResource HelpText}" Text="5. No reply yet? You get reminder pop-ups (how often is set by your administrator). After enough reminders the Case becomes Escalated and your supervisor's details are recorded for it."/>
+                            <TextBlock Style="{StaticResource HelpText}" Text="5. No reply yet? Deadlines count working hours only (evenings, weekends and holidays do not count). After the reply deadline you get a reminder, then an escalation warning, and only then is your supervisor emailed. The welcome tour (tray icon, right-click, Welcome tour) shows the exact times and lets you send yourself a practice inquiry."/>
                         </StackPanel>
                     </Border>
 

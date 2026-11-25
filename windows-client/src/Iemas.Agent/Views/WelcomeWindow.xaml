@@ -1,0 +1,40 @@
+<Window x:Class="Iemas.Agent.Views.WelcomeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Welcome to IEMAS" Width="640" Height="600" MinWidth="560" MinHeight="520"
+        Icon="pack://application:,,,/IemasAgent;component/Assets/iemas.ico"
+        WindowStartupLocation="CenterScreen" ResizeMode="CanResize" Background="#F3F4F6">
+    <!-- First-run tour: what the employee will see on this PC, with live sample pop-ups and a practice inquiry. -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#1E3A8A" Padding="24,18">
+            <StackPanel>
+                <TextBlock x:Name="StepText" Foreground="#BFDBFE" FontSize="12" FontWeight="SemiBold" Text="STEP 1 OF 5"/>
+                <TextBlock x:Name="HeadingText" Foreground="White" FontSize="22" FontWeight="Bold" Margin="0,4,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="PageHost" Margin="24,18,24,18"/>
+        </ScrollViewer>
+
+        <Border Grid.Row="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="0,1,0,0" Padding="24,12">
+            <Grid>
+                <Button x:Name="SkipButton" Content="Skip the tour" HorizontalAlignment="Left" Background="Transparent" BorderThickness="0"
+                        Foreground="#6B7280" Cursor="Hand" Click="Skip_Click"
+                        ToolTip="Close the tour. You can open it again any time from the tray icon (right-click, Welcome tour)."/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button x:Name="BackButton" Content="Back" Padding="16,7" Margin="0,0,8,0" Click="Back_Click"
+                            Background="#E5E7EB" Foreground="#111827" BorderThickness="0" Cursor="Hand"/>
+                    <Button x:Name="NextButton" Content="Next" Padding="20,7" Click="Next_Click"
+                            Background="#2563EB" Foreground="White" BorderThickness="0" Cursor="Hand"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

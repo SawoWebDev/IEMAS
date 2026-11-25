@@ -133,6 +133,24 @@ public class IemasApiClient : IDisposable
             return await ReadResultAsync<AgentSentMessagesResult>(response, ct);
         });
 
+    public Task<ApiResult<WorkingRulesDto>> GetWorkingRulesAsync(CancellationToken ct) =>
+        ExecuteAsync<WorkingRulesDto>(async () =>
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "api/v1/agent/working-rules");
+            ApplyAuth(request);
+            using var response = await _http.SendAsync(request, ct);
+            return await ReadResultAsync<WorkingRulesDto>(response, ct);
+        });
+
+    public Task<ApiResult<PracticeInquiryResult>> SendPracticeInquiryAsync(CancellationToken ct) =>
+        ExecuteAsync<PracticeInquiryResult>(async () =>
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "api/v1/agent/practice-inquiry");
+            ApplyAuth(request);
+            using var response = await _http.SendAsync(request, ct);
+            return await ReadResultAsync<PracticeInquiryResult>(response, ct);
+        });
+
     /// <summary>§8.1 "Report errors."</summary>
     public async Task ReportErrorAsync(string detail, CancellationToken ct)
     {

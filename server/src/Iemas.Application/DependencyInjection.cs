@@ -72,6 +72,7 @@ public static class DependencyInjection
         services.AddScoped<Iemas.Application.Inquiries.ConversationSyncService>();
         services.AddScoped<Iemas.Application.Inquiries.ResolutionAssessmentService>();
         services.AddScoped<Iemas.Application.Inquiries.InquirySupervisionService>();
+        services.AddScoped<Iemas.Application.Inquiries.PracticeInquiryService>();
         services.AddScoped<Iemas.Application.Inquiries.InquiryOverviewService>();
         services.AddScoped<Iemas.Application.Inquiries.InquiryAnalyticsService>();
         return services;

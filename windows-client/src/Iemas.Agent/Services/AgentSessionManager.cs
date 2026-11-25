@@ -244,6 +244,7 @@ public class AgentSessionManager : IAsyncDisposable
         }
 
         await RefreshSyncAsync();
+        if (!_settings.WelcomeTourShown) WelcomeTourDue?.Invoke();
         _heartbeatTimer.Start();
         _sentItemsTimer.Start();
         _ = ReportOutlookRepliesAsync();
@@ -358,6 +359,21 @@ public class AgentSessionManager : IAsyncDisposable
 
     /// <summary>§8.1 "Report errors" — exposed for the app-wide unhandled-exception handler (see App.xaml.cs), best-effort, never throws.</summary>
     public Task ReportErrorAsync(string detail) => _api.ReportErrorAsync(detail, CancellationToken.None);
+
+    public Task<ApiResult<WorkingRulesDto>> GetWorkingRulesAsync() => _api.GetWorkingRulesAsync(CancellationToken.None);
+
+    public Task<ApiResult<PracticeInquiryResult>> SendPracticeInquiryAsync() => _api.SendPracticeInquiryAsync(CancellationToken.None);
+
+    /// <summary>Raised once, the first time this PC connects (the welcome tour has not been shown yet).</summary>
+    public event Action? WelcomeTourDue;
+
+    /// <summary>Records that the welcome tour was shown, so it does not open again on the next start.</summary>
+    public void MarkWelcomeTourShown()
+    {
+        if (_settings.WelcomeTourShown) return;
+        _settings.WelcomeTourShown = true;
+        try { _settings.Save(); } catch (System.IO.IOException) { /* shown again next time; harmless */ }
+    }
 
     public void ApplyServerUrlChange(string newServerUrl, bool allowInsecureTls)
     {

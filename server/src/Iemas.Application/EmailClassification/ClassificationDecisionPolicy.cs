@@ -92,6 +92,46 @@ public static class ClassificationDecisionPolicy
         };
     }
 
+    /// <summary>
+    /// The rules scored the email as an inquiry and the AI was asked to confirm. Two independent signals:
+    /// - AI agrees with medium confidence: open the inquiry (rules + AI together are enough).
+    /// - AI agrees with low confidence: a person reviews it (unchanged).
+    /// - AI disagrees: not an inquiry, unless the AI itself was unsure (low band), then a person reviews it.
+    /// </summary>
+    public static DecisionPolicyResult CombineWithRules(DecisionPolicyResult ai, bool ruleSaysInquiry, bool aiRelevant, string? kind)
+    {
+        if (!ruleSaysInquiry) return ai;
+
+        if (aiRelevant && ai.Decision == ImportanceDecision.ReviewRequired && ai.Band == ConfidenceBand.Medium)
+        {
+            return ai with
+            {
+                Decision = ImportanceDecision.Important,
+                Reason = "The inquiry rules and the AI agree (AI confidence medium). " + ai.Reason,
+            };
+        }
+
+        if (!aiRelevant && ai.Band == ConfidenceBand.Low)
+        {
+            return ai with
+            {
+                Decision = ImportanceDecision.ReviewRequired,
+                Reason = "The inquiry rules say inquiry but the AI, unsure, says not; a person should review it. " + ai.Reason,
+            };
+        }
+
+        if (ai.Decision == ImportanceDecision.NotImportant)
+        {
+            var judged = string.IsNullOrWhiteSpace(kind) ? "not an inquiry" : "\"" + kind.Replace('_', ' ') + "\"";
+            return ai with
+            {
+                Reason = $"The inquiry rules matched, but the AI judged it {judged}, so no inquiry was opened. " + ai.Reason,
+            };
+        }
+
+        return ai;
+    }
+
     private static ConfidenceBand BandFor(double confidence, double high, double medium)
     {
         if (confidence >= high) return ConfidenceBand.High;

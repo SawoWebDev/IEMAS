@@ -706,6 +706,7 @@ button.link-button:hover:not(:disabled) {
   padding-right: 42px;
 }
 
+.login-card .password-toggle,
 .password-toggle {
   position: absolute;
   top: 50%;
@@ -725,8 +726,9 @@ button.link-button:hover:not(:disabled) {
   cursor: pointer;
 }
 
+.login-card .password-toggle:hover:not(:disabled),
 .password-toggle:hover {
-  background: var(--color-surface-alt);
+  background: transparent;
   color: var(--color-text);
 }
 

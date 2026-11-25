@@ -71,7 +71,8 @@ public class InquirySupervisionService
         var paused = await _db.IsPausedAsync(PauseControl.Reminders, cancellationToken)
             || await _db.IsPausedAsync(PauseControl.AgentNotifications, cancellationToken);
 
-        var calendar = settings.TestClockMinutes ? BusinessCalendar.FastTestClock() : await BusinessCalendar.LoadAsync(_db, cancellationToken);
+        var realCalendar = settings.TestClockMinutes ? BusinessCalendar.FastTestClock() : await BusinessCalendar.LoadAsync(_db, cancellationToken);
+        var practiceCalendar = BusinessCalendar.PracticeClock();
         var caseIds = await _db.Cases
             .Where(c => c.Stage != InquiryStage.Resolved && c.Stage != InquiryStage.Closed
                 && c.WorkStatus != CaseWorkStatus.Completed && c.WorkStatus != CaseWorkStatus.Cancelled)
@@ -86,6 +87,8 @@ public class InquirySupervisionService
         {
             cancellationToken.ThrowIfCancellationRequested();
             var c = await _db.Cases.FirstAsync(x => x.Id == caseId, cancellationToken);
+            // A practice inquiry (first-run training email) runs on its own fast clock.
+            var calendar = PracticeInquiry.IsPractice(c) ? practiceCalendar : realCalendar;
             var action = SupervisionRules.Evaluate(c, settings, calendar, now);
             if (action?.Kind == SupervisionActionKind.SetResolutionDue)
             {

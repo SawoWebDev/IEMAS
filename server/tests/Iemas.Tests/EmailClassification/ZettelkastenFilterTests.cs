@@ -305,9 +305,10 @@ public class ZettelkastenFilterTests
         new(db, ai, new NoOpRetryDelay(), new Iemas.Application.Common.Ai.AiCircuitBreakerStore(TimeProvider.System), NullLogger<EmailClassificationService>.Instance);
 
     [Fact]
-    public async Task ConfidentInquiry_BecomesImportant_WithoutCallingAi()
+    public async Task ConfidentInquiry_WithAiDoubleCheckOff_BecomesImportant_WithoutCallingAi()
     {
         var (db, account) = Seed();
+        db.SystemSettings.Add(new Iemas.Domain.Operations.SystemSetting { Key = SystemSettingKeys.AiConfirmsRuleInquiries, Value = "false" });
         var message = Message(account.Id, "buyer@customer.example", "Request for quotation",
             "I would like to request a quotation for 20 heaters. How much per unit?");
         db.EmailMessages.Add(message);
@@ -320,6 +321,103 @@ public class ZettelkastenFilterTests
         Assert.Empty(ai.CallsByModel);
         var classification = await db.EmailClassifications.SingleAsync();
         Assert.StartsWith("Zettelkasten: Inquiry", classification.DeterministicFilterReason);
+    }
+
+    [Fact]
+    public async Task ConfidentInquiry_IsDoubleCheckedByTheAi_ByDefault()
+    {
+        var (db, account) = Seed();
+        var message = Message(account.Id, "buyer@customer.example", "Request for quotation",
+            "I would like to request a quotation for 20 heaters. How much per unit?");
+        db.EmailMessages.Add(message);
+        await db.SaveChangesAsync();
+        var ai = new FakeAiClassificationProvider();
+
+        var decision = await Service(db, ai).ClassifyOneAsync(message.Id, CancellationToken.None);
+
+        Assert.Equal(ImportanceDecision.Important, decision);
+        Assert.Single(ai.CallsByModel);
+        var classification = await db.EmailClassifications.SingleAsync();
+        Assert.Contains("Sent to the AI to confirm", classification.DeterministicFilterReason);
+    }
+
+    [Fact]
+    public async Task SupplierPitch_ScoredAsInquiryByRules_IsRejectedByTheAi_NoAlert()
+    {
+        var (db, account) = Seed();
+        var message = Message(account.Id, "sales@rocksalt.example", "Himalayan Rock Salt Suppliers",
+            "Dear buyer, we are interested in your sauna business. Please send your requirements and we will quote the best price for salt bricks. Interested in becoming our distributor?");
+        db.EmailMessages.Add(message);
+        await db.SaveChangesAsync();
+        var ai = new FakeAiClassificationProvider
+        {
+            Behavior = (_, model, _, _) => Task.FromResult(new ClassificationAttemptResult(true, "OpenRouter", model,
+                new ClassificationResponse(false, "Vendor pitch", false, false, "LOW", 0.92, "A salt supplier offering its products.", false, "vendor_pitch"), null, 5)),
+        };
+
+        var decision = await Service(db, ai).ClassifyOneAsync(message.Id, CancellationToken.None);
+
+        Assert.Equal(ImportanceDecision.NotImportant, decision);
+        var classification = await db.EmailClassifications.SingleAsync();
+        Assert.Contains("vendor pitch", classification.DecisionReason);
+    }
+
+    [Fact]
+    public async Task ConfidentInquiry_AiAgreesWithMediumConfidence_StillOpensTheInquiry()
+    {
+        var (db, account) = Seed();
+        var message = Message(account.Id, "buyer@customer.example", "Request for quotation",
+            "I would like to request a quotation for 20 heaters. How much per unit?");
+        db.EmailMessages.Add(message);
+        await db.SaveChangesAsync();
+        var ai = new FakeAiClassificationProvider
+        {
+            Behavior = (_, model, _, _) => Task.FromResult(new ClassificationAttemptResult(true, "OpenRouter", model,
+                new ClassificationResponse(true, "Product inquiry", true, true, "MEDIUM", 0.7, "Asks for a quote.", true, "customer_inquiry"), null, 5)),
+        };
+
+        Assert.Equal(ImportanceDecision.Important, await Service(db, ai).ClassifyOneAsync(message.Id, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ConfidentInquiry_AiUnavailable_TheRulesDecide_NothingIsLost()
+    {
+        var (db, account) = Seed();
+        var message = Message(account.Id, "buyer@customer.example", "Request for quotation",
+            "I would like to request a quotation for 20 heaters. How much per unit?");
+        db.EmailMessages.Add(message);
+        await db.SaveChangesAsync();
+        var ai = new FakeAiClassificationProvider
+        {
+            Behavior = (_, model, _, _) => Task.FromResult(new ClassificationAttemptResult(false, "OpenRouter", model, null, "down", 5,
+                ClassificationFailureCategory.AuthenticationFailure)),
+        };
+
+        var decision = await Service(db, ai).ClassifyOneAsync(message.Id, CancellationToken.None);
+
+        Assert.Equal(ImportanceDecision.Important, decision);
+        var classification = await db.EmailClassifications.SingleAsync();
+        Assert.Contains("the rules decided", classification.DeterministicFilterReason);
+    }
+
+    [Fact]
+    public async Task PracticeEmail_FromOurOutboundAccount_WithTheMailboxCode_OpensAPracticeInquiry()
+    {
+        var (db, account) = Seed();
+        db.EmailAccounts.Add(new EmailAccount
+        {
+            EmailAddress = "icare@sawo.com", Purpose = EmailAccountPurpose.Outbound, Protocol = EmailProtocol.Imap,
+            Host = "smtp.example.com", Port = 465, Encryption = "SSL/TLS", Username = "icare@sawo.com", AuthMethod = EmailAuthMethod.Password, IsActive = true,
+        });
+        var practice = Message(account.Id, "icare@sawo.com", $"{Iemas.Application.Inquiries.PracticeInquiry.SubjectTag(account.EmailAddress)} Quotation request", "Sample");
+        var forged = Message(account.Id, "icare@sawo.com", "[IEMAS practice P-00000000] Quotation request", "Sample");
+        db.EmailMessages.AddRange(practice, forged);
+        await db.SaveChangesAsync();
+        var ai = new FakeAiClassificationProvider();
+
+        Assert.Equal(ImportanceDecision.Important, await Service(db, ai).ClassifyOneAsync(practice.Id, CancellationToken.None));
+        Assert.Equal(ImportanceDecision.NotImportant, await Service(db, ai).ClassifyOneAsync(forged.Id, CancellationToken.None));
+        Assert.Empty(ai.CallsByModel);
     }
 
     [Fact]

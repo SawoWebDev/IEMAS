@@ -25,13 +25,28 @@ public class AgentOperationsController : ControllerBase
     private readonly AgentCaseActionService _actionService;
 
     private readonly Iemas.Application.Inquiries.ConversationSyncService _conversationSync;
+    private readonly Iemas.Application.Inquiries.PracticeInquiryService _practice;
 
     public AgentOperationsController(AgentSyncService syncService, AgentCaseActionService actionService,
-        Iemas.Application.Inquiries.ConversationSyncService conversationSync)
+        Iemas.Application.Inquiries.ConversationSyncService conversationSync, Iemas.Application.Inquiries.PracticeInquiryService practice)
     {
         _syncService = syncService;
         _actionService = actionService;
         _conversationSync = conversationSync;
+        _practice = practice;
+    }
+
+    /// <summary>The employee's own working hours and supervision times, for the Agent's welcome tour.</summary>
+    [HttpGet("working-rules")]
+    public async Task<ActionResult<Iemas.Application.Inquiries.WorkingRulesDto>> WorkingRules(CancellationToken cancellationToken) =>
+        Ok(await _practice.GetWorkingRulesAsync(EmployeeId, cancellationToken));
+
+    /// <summary>"Send me a practice inquiry" in the Agent's welcome tour: a sample customer email to this employee's own mailbox.</summary>
+    [HttpPost("practice-inquiry")]
+    public async Task<ActionResult<Iemas.Application.Inquiries.PracticeInquiryResult>> SendPracticeInquiry(CancellationToken cancellationToken)
+    {
+        var result = await _practice.SendAsync(EmployeeId, $"the employee's Agent ({AgentId})", cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : BadRequest(new { message = result.Error });
     }
 
     /// <summary>

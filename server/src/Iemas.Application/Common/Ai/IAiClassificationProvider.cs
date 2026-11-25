@@ -16,7 +16,9 @@ public record ClassificationRequest(
     /// <summary>Admin-defined rules (System Configuration) for what counts as a legitimate business email.</summary>
     string? LegitimacyRules = null,
     /// <summary>Admin-defined rules (System Configuration) for when the sender expects a reply.</summary>
-    string? ResponseRules = null);
+    string? ResponseRules = null,
+    /// <summary>Who we are and what we sell (organisation name and product vocabulary), so the AI can tell buyers from sellers.</summary>
+    string? OrganizationContext = null);
 
 public static class AiUsagePurpose
 {

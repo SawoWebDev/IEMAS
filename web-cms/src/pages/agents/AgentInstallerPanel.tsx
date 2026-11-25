@@ -133,7 +133,9 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
           <p style={{ color: "var(--color-text-muted)", fontSize: 13, margin: "4px 0 0", maxWidth: 760 }}>
             Download a ready-made installer. On the PC, extract the zip and double-click <b>Install-IEMAS-Agent.bat</b>: it installs
             the .NET runtime if needed, installs and starts the Agent, and connects it. PCs installed this way are approved
-            automatically; nothing to approve below.
+            automatically; nothing to approve below. On first start the Agent shows a short welcome tour of the pop-ups the
+            employee will see, and offers to send them a <b>practice inquiry</b> so they watch it reach the escalation in about
+            10 minutes. You can also send one from <b>People → Employees → Practice inquiry</b>.
           </p>
         </div>
         <button className="btn-primary" onClick={() => setOpen((o) => !o)} disabled={availability?.available === false}

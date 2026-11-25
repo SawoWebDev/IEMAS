@@ -117,7 +117,28 @@ public class EscalationService
         EscalationLevel? level = null;
         List<(string Name, string Email)> recipients = new();
         string? firstUnresolved = null;
-        foreach (var candidate in candidates)
+
+        // A practice inquiry (first-run training) escalates for real - pop-up, history, email - but the
+        // email goes only to the employee themself, marked as practice. Management is never told.
+        var practice = Inquiries.PracticeInquiry.IsPractice(targetCase);
+        if (practice)
+        {
+            var wouldReach = await ResolveRecipientListAsync(targetCase, candidates[0], cancellationToken);
+            var practiceOwner = targetCase.OwnerEmployeeId is Guid practiceOwnerId
+                ? await _db.Employees.AsNoTracking().FirstOrDefaultAsync(e => e.Id == practiceOwnerId, cancellationToken)
+                : null;
+            if (practiceOwner is null || string.IsNullOrWhiteSpace(practiceOwner.Email))
+            {
+                return new SupervisionEscalationResult(EscalationOutcome.RecipientUnresolved, "Practice inquiry without an owner with an email address.");
+            }
+            level = candidates[0];
+            recipients = new() { (practiceOwner.FullName, practiceOwner.Email) };
+            reason = "PRACTICE - in real use this email goes to "
+                + (wouldReach.Count > 0 ? string.Join(", ", wouldReach.Select(r => r.Name)) : "your supervisor")
+                + ", not to you. " + reason;
+        }
+
+        foreach (var candidate in practice ? Enumerable.Empty<EscalationLevel>() : candidates)
         {
             var resolved = await ResolveRecipientListAsync(targetCase, candidate, cancellationToken);
             if (resolved.Count > 0)

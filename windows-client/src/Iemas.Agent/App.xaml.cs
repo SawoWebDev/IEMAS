@@ -77,6 +77,7 @@ public partial class App : Application
 
         Session.StateUpdated += UpdateTrayState;
         Session.PushReceived += ShowPopup;
+        Session.WelcomeTourDue += () => Dispatcher.Invoke(ShowWelcomeTour);
 
         await Session.StartAsync();
     }
@@ -95,6 +96,7 @@ public partial class App : Application
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Settings", null, (_, _) => { ShowMainWindow(); _mainWindow?.ShowSettings(); });
         menu.Items.Add("Help", null, (_, _) => { ShowMainWindow(); _mainWindow?.ShowHelp(); });
+        menu.Items.Add("Welcome tour", null, (_, _) => ShowWelcomeTour());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitApplication());
         _notifyIcon.ContextMenuStrip = menu;
@@ -164,6 +166,24 @@ public partial class App : Application
                 _ => "IEMAS Agent - Not Registered",
             };
         });
+    }
+
+    private Views.WelcomeWindow? _welcome;
+
+    /// <summary>The first-run tour (also from the tray menu). One at a time; marked as shown when it opens.</summary>
+    public void ShowWelcomeTour()
+    {
+        if (_welcome is not null) { _welcome.Activate(); return; }
+        if (Session.State != SessionState.Connected && Session.State != SessionState.Authenticating && string.IsNullOrEmpty(Session.EmployeeName))
+        {
+            MessageBox.Show("The welcome tour is available once this PC is connected to IEMAS.", "IEMAS Agent", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        Session.MarkWelcomeTourShown();
+        _welcome = new Views.WelcomeWindow(Session.EmployeeName, Session.GetWorkingRulesAsync, Session.SendPracticeInquiryAsync);
+        _welcome.Closed += (_, _) => _welcome = null;
+        _welcome.Show();
+        _welcome.Activate();
     }
 
     public void ShowMainWindow()

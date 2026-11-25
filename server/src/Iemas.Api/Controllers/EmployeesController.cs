@@ -11,10 +11,24 @@ namespace Iemas.Api.Controllers;
 public class EmployeesController : ControllerBase
 {
     private readonly EmployeeService _employeeService;
+    private readonly Iemas.Application.Inquiries.PracticeInquiryService _practice;
 
-    public EmployeesController(EmployeeService employeeService)
+    public EmployeesController(EmployeeService employeeService, Iemas.Application.Inquiries.PracticeInquiryService practice)
     {
         _employeeService = employeeService;
+        _practice = practice;
+    }
+
+    /// <summary>
+    /// Sends a practice inquiry to this employee's monitored mailbox: a sample customer email that runs through
+    /// the real pop-up, reminder, warning and escalation steps within minutes. Management is never emailed.
+    /// </summary>
+    [HttpPost("{id:guid}/practice-inquiry")]
+    [Authorize(Policy = "RequireAdministrator")]
+    public async Task<ActionResult<Iemas.Application.Inquiries.PracticeInquiryResult>> SendPracticeInquiry(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _practice.SendAsync(id, User.Identity?.Name ?? "an administrator", cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : BadRequest(new { message = result.Error });
     }
 
     [HttpGet]

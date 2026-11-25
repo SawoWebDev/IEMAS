@@ -25,7 +25,7 @@ namespace Iemas.Infrastructure.Ai;
 public class OpenRouterClassificationProvider : IAiClassificationProvider
 {
     /// <summary>Bump whenever <see cref="SystemPrompt"/> or the user-prompt layout changes; recorded with every AI decision.</summary>
-    public const string PromptVersion = "classification-2026-11-v3";
+    public const string PromptVersion = "classification-2026-11-v4";
 
     private readonly HttpClient _httpClient;
     private readonly IAiProviderConnectionResolver _connectionResolver;
@@ -194,24 +194,48 @@ public class OpenRouterClassificationProvider : IAiClassificationProvider
         automated shipping notification is not relevant even if it mentions a product name, while
         a genuine customer pricing question is relevant even without an exact keyword match.
 
-        WHO WANTS WHAT decides "relevant". Relevant means the sender wants something FROM us:
-        a customer, prospect, installer, project or company asking about our products, prices,
-        quotes, availability, orders, deliveries, spare parts, manuals, support, repairs or
-        complaints, or a business asking to buy, resell, distribute or represent OUR products.
-        Short, vague, misspelled or non-English messages from such senders are still relevant.
-        NOT relevant: the sender is trying to SELL to us — a company introducing or offering its
-        own products, materials, components, services, data or contact lists, trade-show extras,
-        marketing/SEO/web services, or a "collaboration" whose real aim is to become our supplier —
-        even when it is polite, personalised and mentions our industry or products. Such unsolicited
-        sales pitches are also not "legitimate" for this purpose. Unless a profile rule says
-        otherwise, judge relevance this way.
+        WHO WANTS WHAT decides "relevant". A wrong "inquiry" pops up an alert on an employee's screen and
+        can escalate them to their manager, so a false alarm is costly. Decide in two steps:
+
+        STEP 1 - who is the sender, relative to us?
+          customer / prospect / installer / project / existing customer, dealer or distributor (they BUY from
+          us), supplier or vendor (they SELL to us), logistics (freight forwarder, shipping line, courier,
+          customs broker), finance (bank, accounting, payment), event organiser, recruiter, colleague,
+          automated system, spammer, unknown.
+        STEP 2 - which way does the value flow?
+          The sender wants to GET something from us: our products, a price or quotation for OUR products,
+          availability, delivery of THEIR order, spare parts, manuals, technical help, warranty or repair,
+          a complaint about our product, where to buy, or to buy / resell / distribute / represent OUR
+          products  -> an inquiry.
+          The sender wants to GIVE or SELL us something: their products, raw materials, components,
+          manufacturing, OEM capacity, freight rates or cargo space, software, apps, websites, SEO,
+          marketing, influencer or "brand partnership" deals, property, investment, loans, staff
+          -> NOT an inquiry, however polite or personalised, even if it mentions saunas, our brand or a quote.
+
+        Patterns that are NOT inquiries (seen in our real mailboxes):
+        - A forwarder, shipping line or courier sending rates, "cargo availability", booking or shipment
+          confirmations, B/L, certificate of origin or customs documents. They quote US: business_correspondence.
+        - A supplier replying in a thread about something WE are buying from THEM ("Re: Request for Quotation"
+          where they quote us, "Re: Himalayan Rock Salt Suppliers", "Softwood exporter", components, packaging,
+          stones, wood, LED displays, chemicals, testing instruments): vendor_pitch or business_correspondence.
+        - "Dispatch from the factory", "manufacturer & exporter", "we are a leading ...", "we can supply",
+          "partnership for @ourbrand", "transform your business with an app": vendor_pitch.
+        - Invoices, payment and remittance notices, PO payment confirmations, statements: business_correspondence.
+        - A vague one-liner ("Hi", "info", "business req", "notice") with no product, from an unknown sender,
+          especially with a scammy or generic tone: spam or other, low confidence.
+        - Newsletters, trade-show marketing, out-of-office, delivery failures: automated.
+        Patterns that ARE inquiries:
+        - Asking for a price, quotation, catalogue, specification, manual or spare part for OUR products, even
+          one short line, misspelled or in another language ("Kiuastiedustelu", "sAWO 917-D", "Heater replacement").
+        - An existing customer or dealer ordering again, asking about their order, delivery, invoice for goods
+          they bought from us, or reporting a problem with our product.
+        - A company asking to become our dealer or distributor, or to buy our products wholesale.
 
         "email_kind": what the email IS. A Case is opened ONLY for an inquiry, so be strict. One of:
-          "customer_inquiry"  - an end customer, installer, project or prospect asking us about our products, prices, quotes, orders, delivery, parts, support or a complaint;
+          "customer_inquiry"  - the sender wants something from us about OUR products or their order (see above);
           "dealer_inquiry"    - a business wanting to buy, resell, distribute or represent OUR products;
           "business_correspondence" - everyday business mail that is NOT an inquiry about our products:
-              trade-show / exhibition / event organisers (booth numbers, schedules, passes, invoices,
-              registration), suppliers and vendors we already work with, agencies, freight/logistics and
+              event organisers, suppliers and vendors we already work with, agencies, freight/logistics and
               customs, banks/accounting/legal, partners, colleagues, replies inside our own marketing or
               internal threads, meeting scheduling;
           "vendor_pitch"      - someone selling their products or services to us;
@@ -221,8 +245,10 @@ public class OpenRouterClassificationProvider : IAiClassificationProvider
         An email that merely mentions our company, our products or our own campaign (for example a quoted
         newsletter inside a reply) is NOT a customer inquiry. Someone correcting or confirming details of
         an event, booking or order that WE placed is business_correspondence, even if a reply is expected.
-        When in doubt between customer_inquiry and business_correspondence, choose business_correspondence
-        and lower your confidence.
+        When in doubt between an inquiry and anything else, choose the other kind and lower your confidence.
+
+        "confidence": how sure you are about email_kind. Use 0.85 or more only when the evidence is clear;
+        use 0.7 or less when you had to guess.
 
         "category": a short label (e.g. "Product inquiry", "Dealer / Reseller", "Support",
         "Complaint", "Vendor pitch", "Marketing", "Automated"); use the profile's categories when given.
@@ -236,6 +262,8 @@ public class OpenRouterClassificationProvider : IAiClassificationProvider
 
         Respond with ONLY a JSON object matching this exact shape, no other text:
         {
+          "sender_role": string (from step 1, a few words),
+          "sender_wants": string (from step 2, one short sentence),
           "relevant": boolean,
           "legitimate": boolean,
           "email_kind": "customer_inquiry" | "dealer_inquiry" | "business_correspondence" | "vendor_pitch" | "automated" | "spam" | "other",
@@ -256,6 +284,8 @@ public class OpenRouterClassificationProvider : IAiClassificationProvider
         // the model can distinguish "what defines relevance" (profile) from "what to classify"
         // (email), matching the SECURITY instruction in the system prompt (Finding #3).
         return $"""
+            About us: {(string.IsNullOrWhiteSpace(request.OrganizationContext) ? "(not configured)" : request.OrganizationContext)}
+
             Classification profile: {request.ProfileName}
             Categories: {request.ProfileCategories}
             Include signals: {request.ProfileIncludeDefinitions}

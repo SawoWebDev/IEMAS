@@ -72,6 +72,7 @@ public static class SystemSettingKeys
     public const string DealerPhrases = "inquiry.dealer_phrases";
     public const string InquiryScoreThreshold = "inquiry.inquiry_score_threshold";
     public const string NotInquiryScoreThreshold = "inquiry.not_inquiry_score_threshold";
+    public const string AiConfirmsRuleInquiries = "inquiry.ai_confirms_rule_inquiries";
 
     // Inquiry supervision timers - Q1 decisions (inquiry-supervision/PROGRESS.md section 5).
     public const string SupervisionEnabled = "inquiry.supervision_enabled";
@@ -84,6 +85,7 @@ public static class SystemSettingKeys
     public const string ResolutionTargetBusinessDays = "inquiry.resolution_target_business_days";
     public const string EscalationRepeatBusinessDays = "inquiry.escalation_repeat_business_days";
     public const string SupervisionHolidays = "inquiry.holidays";
+    public const string ShorterWorkingDays = "inquiry.shorter_working_days";
 
     // AI resolution assessment - Q2 decisions.
     public const string AiResolutionEnabled = "inquiry.ai_resolution_enabled";
@@ -287,36 +289,47 @@ public class SystemSettingsService
             "At or above this score, with no negative signal, the email is treated as an inquiry without calling the AI.", SettingValueType.Integer, "5", 1, 50, Unit: "points"),
         new(SystemSettingKeys.NotInquiryScoreThreshold, "Inquiry detection", "Score to reject without AI",
             "At or below minus this score the email is treated as not an inquiry without calling the AI. Anything in between goes to the AI.", SettingValueType.Integer, "3", 1, 50, Unit: "points"),
+        new(SystemSettingKeys.AiConfirmsRuleInquiries, "Inquiry detection", "AI double-checks every new inquiry",
+            "On (recommended): an email the phrase rules score as an inquiry still goes to the AI, which must agree before anyone is alerted. "
+            + "This stops supplier sales pitches, freight quotes and invoices that use words like \"price\" or \"quotation\" from alerting the employee. "
+            + "If the AI is unavailable, the rules decide on their own so no inquiry is lost. Off: a high rule score alone opens the inquiry.",
+            SettingValueType.Boolean, "true"),
         new(SystemSettingKeys.SupervisionEnabled, "Inquiry supervision", "Supervise inquiries until resolved",
             "On: inquiries are followed through every stage until the agent confirms they are resolved, with reminders and management escalation. "
             + "Off: the older reminder and escalation engines are used, which stop at the first reply.", SettingValueType.Boolean, "true"),
         new(SystemSettingKeys.FirstResponseBusinessHours, "Inquiry supervision", "Time allowed for the first reply",
-            "From the moment a customer's email arrives, how long the agent has to send the first reply before the reminders start.", SettingValueType.Integer, "4", 1, 240, Unit: "business hours"),
+            "From the moment a customer's email arrives, how long the agent has to send the first reply before the reminders start. "
+            + "8 business hours means an email that arrives in the morning should be answered the same day, one that arrives in the afternoon by the next late morning.", SettingValueType.Integer, "8", 1, 240, Unit: "business hours"),
         new(SystemSettingKeys.ReminderIntervalBusinessHours, "Inquiry supervision", "Time between reminders",
-            "The gap between the missed deadline and reminder 1, between each reminder, and between the last reminder and the management escalation.", SettingValueType.Integer, "2", 1, 240, Unit: "business hours"),
+            "The gap between the missed deadline and reminder 1, between each reminder, and between the last reminder and the management escalation.", SettingValueType.Integer, "3", 1, 240, Unit: "business hours"),
         new(SystemSettingKeys.RemindersBeforeEscalation, "Inquiry supervision", "Reminders before management is told",
             "How many reminders the agent gets first. 0 means no reminders: management is told one reminder interval after the deadline.", SettingValueType.Integer, "2", 0, 10, Unit: "reminders"),
         new(SystemSettingKeys.IdleBusinessDays, "Inquiry supervision", "Time allowed to answer a customer follow-up",
             "When the customer writes again, or a conversation stalls while the agent owes the next step, and nothing happens for this long, the same reminder and escalation steps start.", SettingValueType.Integer, "1", 1, 30, Unit: "business days"),
         new(SystemSettingKeys.CustomerWaitCalendarDays, "Inquiry supervision", "Wait for the customer's reply",
-            "After the agent has replied, how long without an answer from the customer before the agent is told a follow-up may be needed. This never closes the inquiry.", SettingValueType.Integer, "3", 1, 60, Unit: "calendar days"),
+            "After the agent has replied, how long without an answer from the customer before the agent is told a follow-up may be needed. This never closes the inquiry.", SettingValueType.Integer, "5", 1, 60, Unit: "calendar days"),
         new(SystemSettingKeys.InternalWaitBusinessDays, "Inquiry supervision", "Wait for another department",
-            "When the agent is waiting on a colleague or department and nothing happens for this long, the agent is asked for an update.", SettingValueType.Integer, "1", 1, 60, Unit: "business days"),
+            "When the agent is waiting on a colleague or department and nothing happens for this long, the agent is asked for an update.", SettingValueType.Integer, "2", 1, 60, Unit: "business days"),
         new(SystemSettingKeys.ResolutionTargetBusinessDays, "Inquiry supervision", "Resolution target",
-            "An inquiry still unresolved after this long is marked overdue. It is only a target: it never closes the inquiry.", SettingValueType.Integer, "5", 1, 120, Unit: "business days"),
+            "An inquiry still unresolved after this long is marked overdue. It is only a target: it never closes the inquiry.", SettingValueType.Integer, "10", 1, 120, Unit: "business days"),
         new(SystemSettingKeys.EscalationRepeatBusinessDays, "Inquiry supervision", "Move to the next escalation level after",
-            "If management has been told and the inquiry is still neglected after this long, the next escalation level is notified.", SettingValueType.Integer, "1", 1, 60, Unit: "business days"),
+            "If management has been told and the inquiry is still neglected after this long, the next escalation level is notified.", SettingValueType.Integer, "2", 1, 60, Unit: "business days"),
         new(SystemSettingKeys.SupervisionHolidays, "Inquiry supervision", "Company holidays",
             "Dates that do not count as business days for reminder and escalation timing, as ISO dates (2026-12-25) separated by commas or new lines. "
             + "Added to any holidays on the default Reminder Policy. The business time zone comes from that policy, or from the default time zone above.",
             SettingValueType.LongText, "", 0, 4000),
+        new(SystemSettingKeys.ShorterWorkingDays, "Inquiry supervision", "Shorter working days",
+            "Weekdays that end earlier (or start differently) than the business hours on the default Reminder Policy, e.g. \"Fri 16:00\" or \"Fri 07:00-16:00\", "
+            + "separated by commas or new lines. Deadlines stop counting at that time, so nobody is reminded or escalated for hours when the team has already gone home. "
+            + "Email that arrives later is still detected and shown straight away.",
+            SettingValueType.LongText, "", 0, 200),
         new(SystemSettingKeys.TestClockMinutes, "Inquiry supervision", "TEST MODE: count hours as minutes",
             "For trying the system out only. On: every supervision time above runs 60 times faster (1 hour = 1 minute, 1 day = 24 minutes) "
             + "and business hours, weekends and holidays are ignored. Turn it OFF before real use.", SettingValueType.Boolean, "false"),
         new(SystemSettingKeys.AiResolutionEnabled, "Inquiry supervision", "AI checks whether inquiries look resolved",
             "The AI reads the conversation and may mark an inquiry Potentially resolved. Only the agent can confirm it resolved.", SettingValueType.Boolean, "true"),
         new(SystemSettingKeys.AiResolutionMinConfidence, "Inquiry supervision", "AI confidence needed to suggest \"resolved\"",
-            "The AI must be at least this confident before an inquiry is marked Potentially resolved.", SettingValueType.Integer, "75", 50, 100, Unit: "%"),
+            "The AI must be at least this confident before an inquiry is marked Potentially resolved.", SettingValueType.Integer, "80", 50, 100, Unit: "%"),
         new(SystemSettingKeys.AgentReplyRetentionDays, "Inquiry supervision", "Keep stored agent replies for",
             "The encrypted text of agent replies is erased this many days after the inquiry is closed. 0 keeps it.", SettingValueType.Integer, "365", 0, 36500, Unit: "days"),
         new(SystemSettingKeys.PasswordMinLength, "Security", "Minimum password length",
@@ -565,6 +578,14 @@ public class SystemSettingsService
                     "false" or "off" or "no" or "0" => ("false", null),
                     _ => (null, $"{definition.Label} must be true or false."),
                 };
+
+            case SettingValueType.LongText when definition.Key == SystemSettingKeys.ShorterWorkingDays:
+            {
+                var (_, invalid, normalized) = Inquiries.BusinessCalendar.ParseShorterDays(value);
+                if (invalid.Count > 0) return (null, $"{definition.Label}: '{invalid[0]}' is not understood; write a weekday and the time work ends, e.g. Fri 16:00 or Fri 07:00-16:00.");
+                var joined = string.Join(", ", normalized);
+                return joined.Length > (definition.Max ?? 200) ? (null, $"{definition.Label} is too long.") : (joined, null);
+            }
 
             case SettingValueType.LongText when definition.Key == SystemSettingKeys.SupervisionHolidays:
             {

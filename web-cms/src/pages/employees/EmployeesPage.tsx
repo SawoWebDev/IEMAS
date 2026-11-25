@@ -132,6 +132,25 @@ export default function EmployeesPage() {
     }
   }
 
+  async function handlePracticeInquiry(emp: EmployeeDto) {
+    if (!window.confirm(
+      `Send a PRACTICE inquiry to ${emp.fullName}'s mailbox?
+
+` +
+      "It is a sample customer email from the outbound account. On their PC they will see the new-email pop-up, then " +
+      "(if they do not reply) the reminder, the escalation warning and the escalation, all within about 10 minutes. " +
+      "The escalation email goes only to them, never to their supervisor.")) return;
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await apiClient.post<{ sent: boolean; message: string; error: string | null }>(`/employees/${emp.id}/practice-inquiry`);
+      if (res.data.sent) setNotice(res.data.message);
+      else setError(res.data.message);
+    } catch (err: any) {
+      setError(err.response?.data?.message ?? "Failed to send the practice inquiry.");
+    }
+  }
+
   if (loading) return <p>Loading...</p>;
 
   return (
@@ -259,6 +278,13 @@ export default function EmployeesPage() {
                       : "Set a supervisor first: level-1 escalations go to the supervisor."}
                   >
                     Test escalation
+                  </button>
+                  <button
+                    onClick={() => handlePracticeInquiry(emp)}
+                    disabled={!emp.isActive}
+                    data-tip="Send a sample customer inquiry to this person's mailbox so they can see the pop-up, reminder, warning and escalation on their PC within about 10 minutes. Management is never emailed."
+                  >
+                    Practice inquiry
                   </button>
                   <button
                     className="btn-danger"

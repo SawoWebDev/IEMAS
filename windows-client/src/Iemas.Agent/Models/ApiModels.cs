@@ -98,4 +98,11 @@ public enum AgentRegistrationStatus { Pending = 0, Approved = 1, Rejected = 2, R
 /// CANCEL_NOTIFICATION/SYNC_REQUIRED/PING), not an int, so it is deserialized manually rather than
 /// as a typed record — see SignalRAgentConnection.
 /// </summary>
+/// <summary>GET api/v1/agent/working-rules: this company's working hours and supervision times, for the welcome tour.</summary>
+public record WorkingRulesDto(string WorkingHours, int FirstReplyBusinessHours, int ReminderIntervalBusinessHours,
+    int RemindersBeforeEscalation, int CustomerWaitCalendarDays, string? SupervisorName);
+
+/// <summary>POST api/v1/agent/practice-inquiry.</summary>
+public record PracticeInquiryResult(bool Sent, string Mailbox, string Subject, string Message, string? Error);
+
 public record AgentPushMessage(string Type, Guid? CaseId, string? CaseNumber, string? Title, string? Message, DateTimeOffset? ServerTimeUtc);

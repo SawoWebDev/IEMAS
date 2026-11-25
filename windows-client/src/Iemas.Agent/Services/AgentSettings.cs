@@ -28,6 +28,9 @@ public class AgentSettings
     /// <summary>The mailbox the installer package was made for, if any; registration then needs no typing.</summary>
     public string? InstallEmail { get; set; }
 
+    /// <summary>Set once the first-run welcome tour has been shown on this PC.</summary>
+    public bool WelcomeTourShown { get; set; }
+
     public static AgentSettings Load()
     {
         try

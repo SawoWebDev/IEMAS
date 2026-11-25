@@ -11,7 +11,7 @@ namespace Iemas.Application.Inquiries;
 ///
 /// The calendar comes from the default Reminder Policy (time zone, hours, weekends, holidays), so
 /// holidays are managed in one place in the CMS. Without a default policy: Mon-Fri 08:00-17:00 in
-/// the system's default time zone.
+/// the system's default time zone. Shorter working days ("Fri 16:00") come from their own setting.
 /// </summary>
 public sealed class BusinessCalendar
 {
@@ -22,18 +22,36 @@ public sealed class BusinessCalendar
     private readonly TimeSpan _end;
     private readonly bool _excludeWeekends;
     private readonly HashSet<DateOnly> _holidays;
+    private readonly IReadOnlyDictionary<DayOfWeek, (TimeSpan? Start, TimeSpan End)> _dayHours;
     private readonly double _scale = 1.0;
 
-    public BusinessCalendar(TimeZoneInfo zone, TimeSpan start, TimeSpan end, bool excludeWeekends, IEnumerable<DateOnly> holidays)
+    /// <param name="dayHours">
+    /// Working hours that differ on some weekdays, e.g. Friday 07:00-16:00 while Monday-Thursday run 07:00-18:00
+    /// (the "Shorter working days" setting). Days not listed use <paramref name="start"/>-<paramref name="end"/>.
+    /// </param>
+    public BusinessCalendar(TimeZoneInfo zone, TimeSpan start, TimeSpan end, bool excludeWeekends, IEnumerable<DateOnly> holidays,
+        IReadOnlyDictionary<DayOfWeek, (TimeSpan? Start, TimeSpan End)>? dayHours = null)
     {
         _zone = zone;
         _start = start;
         _end = end > start ? end : start + TimeSpan.FromHours(1);
         _excludeWeekends = excludeWeekends;
         _holidays = holidays.ToHashSet();
+        _dayHours = dayHours ?? new Dictionary<DayOfWeek, (TimeSpan? Start, TimeSpan End)>();
     }
 
-    /// <summary>Length of one business day, e.g. 9 hours for 08:00-17:00. "1 business day" means this much business time.</summary>
+    /// <summary>Business hours on a given weekday: the regular hours unless a shorter day is configured for it.</summary>
+    public (TimeSpan Start, TimeSpan End) HoursOn(DayOfWeek day)
+    {
+        if (!_dayHours.TryGetValue(day, out var hours)) return (_start, _end);
+        var start = hours.Start ?? _start;
+        return hours.End > start ? (start, hours.End) : (_start, _end);
+    }
+
+    /// <summary>
+    /// Length of one regular business day, e.g. 11 hours for 07:00-18:00. "1 business day" means this much business
+    /// time, so on a week with a shorter Friday a deadline of 1 business day can reach into the next morning.
+    /// </summary>
     public TimeSpan BusinessDayLength => _end - _start;
 
     /// <summary>
@@ -42,6 +60,14 @@ public sealed class BusinessCalendar
     /// </summary>
     public static BusinessCalendar FastTestClock() =>
         new(TimeZoneInfo.Utc, TimeSpan.Zero, TimeSpan.FromHours(24), false, Array.Empty<DateOnly>(), 1.0 / 60);
+
+    /// <summary>
+    /// Practice inquiries (the employee's first-run training email): round the clock and 180 times faster
+    /// (1 business hour = 20 seconds), so with the normal settings the employee sees the reminder, the
+    /// escalation warning and the escalation within about 6 minutes instead of 1.5 working days.
+    /// </summary>
+    public static BusinessCalendar PracticeClock() =>
+        new(TimeZoneInfo.Utc, TimeSpan.Zero, TimeSpan.FromHours(24), false, Array.Empty<DateOnly>(), 1.0 / 180);
 
     private BusinessCalendar(TimeZoneInfo zone, TimeSpan start, TimeSpan end, bool excludeWeekends, IEnumerable<DateOnly> holidays, double scale)
         : this(zone, start, end, excludeWeekends, holidays) => _scale = scale;
@@ -54,17 +80,73 @@ public sealed class BusinessCalendar
             .Where(p => p.Enabled && p.IsDefault)
             .FirstOrDefaultAsync(cancellationToken);
         var settingHolidays = ParseHolidays(await SystemSettingsService.GetValueAsync(db, SystemSettingKeys.SupervisionHolidays, cancellationToken)).Dates;
+        var shorterDays = ParseShorterDays(await SystemSettingsService.GetValueAsync(db, SystemSettingKeys.ShorterWorkingDays, cancellationToken)).Days;
 
         if (policy is null)
         {
             var zone = await SystemSettingsService.GetDefaultTimeZoneAsync(db, cancellationToken);
-            return new BusinessCalendar(zone, TimeSpan.FromHours(8), TimeSpan.FromHours(17), true, settingHolidays);
+            return new BusinessCalendar(zone, TimeSpan.FromHours(8), TimeSpan.FromHours(17), true, settingHolidays, shorterDays);
         }
 
         var start = policy.RestrictToBusinessHours ? policy.BusinessHoursStart : TimeSpan.Zero;
         var end = policy.RestrictToBusinessHours ? policy.BusinessHoursEnd : TimeSpan.FromHours(24);
         return new BusinessCalendar(ReminderTimingCalculator.ResolveTimeZone(policy.TimeZoneId), start, end, policy.ExcludeWeekends,
-            policy.Holidays.Select(h => h.Date).Concat(settingHolidays));
+            policy.Holidays.Select(h => h.Date).Concat(settingHolidays),
+            policy.RestrictToBusinessHours ? shorterDays : null);
+    }
+
+    /// <summary>
+    /// Parses the "Shorter working days" setting: entries separated by commas or new lines, each a weekday and
+    /// the time work ends, optionally with its own start: "Fri 16:00" or "Friday 07:00-16:00". A null start means
+    /// the regular start time. Returns the parsed days, every entry that could not be read, and the entries in
+    /// their stored form ("Fri 16:00").
+    /// </summary>
+    public static (Dictionary<DayOfWeek, (TimeSpan? Start, TimeSpan End)> Days, List<string> Invalid, List<string> Normalized) ParseShorterDays(string? text)
+    {
+        var days = new Dictionary<DayOfWeek, (TimeSpan? Start, TimeSpan End)>();
+        var invalid = new List<string>();
+        foreach (var token in (text ?? "").Split(new[] { ',', ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(token,
+                @"^(?<day>[A-Za-z]{3,9})\.?\s+(?:(?<start>\d{1,2}:\d{2})\s*-\s*)?(?<end>\d{1,2}:\d{2})$");
+            if (!m.Success || ParseDay(m.Groups["day"].Value) is not DayOfWeek day
+                || !TryParseClock(m.Groups["end"].Value, out var end) || end <= TimeSpan.Zero)
+            {
+                invalid.Add(token);
+                continue;
+            }
+            TimeSpan? start = null;
+            if (m.Groups["start"].Success)
+            {
+                if (!TryParseClock(m.Groups["start"].Value, out var s) || s >= end)
+                {
+                    invalid.Add(token);
+                    continue;
+                }
+                start = s;
+            }
+            days[day] = (start, end);
+        }
+        var normalized = days.OrderBy(d => ((int)d.Key + 6) % 7)
+            .Select(d => d.Value.Start is TimeSpan st
+                ? $@"{d.Key.ToString()[..3]} {st:hh\:mm}-{d.Value.End:hh\:mm}"
+                : $@"{d.Key.ToString()[..3]} {d.Value.End:hh\:mm}")
+            .ToList();
+        return (days, invalid, normalized);
+    }
+
+    private static bool TryParseClock(string text, out TimeSpan value) =>
+        TimeSpan.TryParseExact(text, @"h\:mm", System.Globalization.CultureInfo.InvariantCulture, out value) && value <= TimeSpan.FromHours(24);
+
+    private static DayOfWeek? ParseDay(string text)
+    {
+        var t = text.ToLowerInvariant();
+        foreach (var day in Enum.GetValues<DayOfWeek>())
+        {
+            var name = day.ToString().ToLowerInvariant();
+            if (t == name || (t.Length >= 3 && name.StartsWith(t, StringComparison.Ordinal))) return day;
+        }
+        return null;
     }
 
     /// <summary>
@@ -108,10 +190,11 @@ public sealed class BusinessCalendar
         {
             if (IsBusinessDay(date))
             {
-                var windowStart = timeOfDay < _start ? _start : timeOfDay;
-                if (windowStart < _end)
+                var (dayStart, dayEnd) = HoursOn(date.DayOfWeek);
+                var windowStart = timeOfDay < dayStart ? dayStart : timeOfDay;
+                if (windowStart < dayEnd)
                 {
-                    var available = _end - windowStart;
+                    var available = dayEnd - windowStart;
                     if (remaining <= available)
                     {
                         return ToUtc(date, windowStart + remaining);
@@ -161,7 +244,7 @@ public sealed record SupervisionSettings(
     bool TestClockMinutes = false)
 {
     /// <summary>The product owner's Q1/Q2 defaults - also what an empty settings table yields.</summary>
-    public static readonly SupervisionSettings Defaults = new(true, 4, 2, 2, 1, 3, 1, 5, 1, true, 75, 365);
+    public static readonly SupervisionSettings Defaults = new(true, 8, 3, 2, 1, 5, 2, 10, 2, true, 80, 365);
 
     public static async Task<SupervisionSettings> LoadAsync(IAppDbContext db, CancellationToken cancellationToken)
     {

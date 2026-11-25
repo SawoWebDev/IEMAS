@@ -126,16 +126,38 @@ public class EmailClassificationService
             }
         }
 
+        // The practice inquiry IEMAS sent to this employee's own mailbox (first-run training): opened as an
+        // inquiry without screening, because it comes from our own outbound account, which the internal-sender
+        // rule would otherwise reject.
+        if (account is not null)
+        {
+            var outboundAddresses = await _db.EmailAccounts.AsNoTracking()
+                .Where(a => a.Purpose == EmailAccountPurpose.Outbound).Select(a => a.EmailAddress).ToListAsync(cancellationToken);
+            if (Inquiries.PracticeInquiry.IsGenuinePracticeEmail(message.Subject, message.FromAddress, account.EmailAddress, outboundAddresses))
+            {
+                return await PersistDeterministicInquiryAsync(message, profile,
+                    new DeterministicFilterResult(false, "Practice inquiry sent by IEMAS to this mailbox for training; opened without screening."),
+                    stopwatch, cancellationToken, category: "Practice");
+            }
+        }
+
         // Module 3 - the Zettelkasten screening stage. Only an Uncertain verdict reaches the AI.
         var zettelkasten = await EvaluateZettelkastenAsync(message, profile, cancellationToken);
-        var filterResult = new DeterministicFilterResult(zettelkasten.Verdict == InquiryFilterVerdict.Uncertain, zettelkasten.Describe());
+
+        // A high rule score is not proof: supplier pitches, freight quotes and invoices use the same words as
+        // buyers ("price", "quotation", "partnership"). By default the AI must agree before an employee is
+        // alerted; the rules alone decide only when the AI cannot be reached, so no real inquiry is lost.
+        var ruleSaysInquiry = zettelkasten.Verdict == InquiryFilterVerdict.Inquiry;
+        var aiConfirms = ruleSaysInquiry && await SystemSettingsService.GetBoolAsync(_db, SystemSettingKeys.AiConfirmsRuleInquiries, cancellationToken);
+        var filterResult = new DeterministicFilterResult(zettelkasten.Verdict == InquiryFilterVerdict.Uncertain || aiConfirms,
+            aiConfirms ? zettelkasten.Describe() + " Sent to the AI to confirm." : zettelkasten.Describe());
 
         if (zettelkasten.Verdict == InquiryFilterVerdict.NotInquiry)
         {
             return await PersistDeterministicOnlyAsync(message, profile, filterResult, stopwatch, cancellationToken);
         }
 
-        if (zettelkasten.Verdict == InquiryFilterVerdict.Inquiry)
+        if (ruleSaysInquiry && !aiConfirms)
         {
             return await PersistDeterministicInquiryAsync(message, profile, filterResult, stopwatch, cancellationToken, zettelkasten.Category);
         }
@@ -145,6 +167,13 @@ public class EmailClassificationService
             .Where(m => m.Enabled && m.TaskCapability == "EmailClassification")
             .OrderBy(m => m.FallbackOrder)
             .ToListAsync(cancellationToken);
+
+        if (models.Count == 0 && ruleSaysInquiry)
+        {
+            return await PersistDeterministicInquiryAsync(message, profile,
+                new DeterministicFilterResult(false, zettelkasten.Describe() + " No AI model is configured, so the rules decided."),
+                stopwatch, cancellationToken, zettelkasten.Category);
+        }
 
         if (models.Count == 0)
         {
@@ -167,7 +196,8 @@ public class EmailClassificationService
             message.Id,
             AiUsagePurpose.EmailClassification,
             rules.Legitimacy,
-            rules.Response);
+            rules.Response,
+            await BuildOrganizationContextAsync(cancellationToken));
 
         ClassificationAttemptResult? lastAttempt = null;
 
@@ -246,7 +276,8 @@ public class EmailClassificationService
                     message.Id, model.Provider, model.ModelIdentifier, attemptCount,
                     model.FallbackOrder > 0 ? " (used a fallback model, not the primary)" : "");
                 return await PersistSuccessAsync(message, profile, filterResult, lastAttempt, stopwatch, cancellationToken,
-                    fallbackUsed: !string.Equals(model.ModelIdentifier, models[0].ModelIdentifier, StringComparison.Ordinal));
+                    fallbackUsed: !string.Equals(model.ModelIdentifier, models[0].ModelIdentifier, StringComparison.Ordinal),
+                    ruleSaysInquiry: ruleSaysInquiry);
             }
 
             _logger.LogWarning(
@@ -260,6 +291,15 @@ public class EmailClassificationService
         var failureReason = !anyModelAttempted
             ? "All configured AI models are currently circuit-open (temporarily unavailable); no model was attempted."
             : lastAttempt?.ErrorMessage ?? "All configured AI models failed.";
+
+        if (ruleSaysInquiry)
+        {
+            // The AI could not double-check: trust the strong rule score rather than leave a likely customer waiting in review.
+            _logger.LogWarning("Email {EmailMessageId}: AI confirmation unavailable ({Reason}); the rule verdict opens the inquiry.", message.Id, failureReason);
+            return await PersistDeterministicInquiryAsync(message, profile,
+                new DeterministicFilterResult(false, zettelkasten.Describe() + $" The AI could not confirm it ({Truncate(failureReason, 200)}), so the rules decided."),
+                stopwatch, cancellationToken, zettelkasten.Category);
+        }
 
         return await PersistFailureAsync(
             message, profile, filterResult,
@@ -304,6 +344,19 @@ public class EmailClassificationService
         PersistDeterministicInquiryAsync(message, profile,
             new DeterministicFilterResult(false, $"Part of the existing conversation of {caseNumber}; linked to that inquiry without screening."),
             stopwatch, cancellationToken, category: "Conversation");
+
+    /// <summary>Who we are and what we sell, for the AI prompt: the organisation name and the product vocabulary setting.</summary>
+    private async Task<string> BuildOrganizationContextAsync(CancellationToken cancellationToken)
+    {
+        var name = await SystemSettingsService.GetValueAsync(_db, SystemSettingKeys.OrganizationName, cancellationToken);
+        var products = InquiryFilterSettings.Lines(await SystemSettingsService.GetValueAsync(_db, SystemSettingKeys.ProductTerms, cancellationToken))
+            .Take(40).ToList();
+        var who = string.IsNullOrWhiteSpace(name) || name == "IEMAS" ? "The company that owns this mailbox" : name;
+        return products.Count == 0
+            ? $"{who}. Its customers write to it about its products."
+            : $"{who} makes and sells products described by these words: {string.Join(", ", products)}. "
+              + "Its customers and dealers write to buy these; suppliers and service companies write to sell to it.";
+    }
 
     private async Task<InquiryFilterResult> EvaluateZettelkastenAsync(EmailMessage message, ClassificationProfile? profile, CancellationToken cancellationToken)
     {
@@ -363,7 +416,7 @@ public class EmailClassificationService
 
     private async Task<ImportanceDecision> PersistSuccessAsync(
         EmailMessage message, ClassificationProfile? profile, DeterministicFilterResult filterResult,
-        ClassificationAttemptResult attempt, Stopwatch stopwatch, CancellationToken cancellationToken, bool fallbackUsed = false)
+        ClassificationAttemptResult attempt, Stopwatch stopwatch, CancellationToken cancellationToken, bool fallbackUsed = false, bool ruleSaysInquiry = false)
     {
         var response = attempt.Response!;
         var policyResult = ClassificationDecisionPolicy.Decide(
@@ -372,6 +425,7 @@ public class EmailClassificationService
             response.Legitimate, response.ResponseExpected,
             await SystemSettingsService.GetBoolAsync(_db, SystemSettingKeys.RequireResponseForCase, cancellationToken),
             response.Kind);
+        policyResult = ClassificationDecisionPolicy.CombineWithRules(policyResult, ruleSaysInquiry, response.Relevant, response.Kind);
 
         var classification = await GetOrCreateClassificationAsync(message.Id, cancellationToken);
         classification.ClassificationProfileId = profile?.Id;

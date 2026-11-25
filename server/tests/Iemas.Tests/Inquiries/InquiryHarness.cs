@@ -8,6 +8,7 @@ using Iemas.Application.EmailIntake;
 using Iemas.Application.Escalations;
 using Iemas.Application.Inquiries;
 using Iemas.Application.Notifications;
+using Iemas.Application.Operations;
 using Iemas.Application.Reminders;
 using Iemas.Domain.Ai;
 using Iemas.Domain.Cases;
@@ -119,6 +120,11 @@ public sealed class InquiryHarness : IDisposable
         policy.Levels.Add(new EscalationLevel { EscalationPolicyId = policy.Id, Level = 1, RecipientType = EscalationRecipientType.EmployeeSupervisor });
         policy.Levels.Add(new EscalationLevel { EscalationPolicyId = policy.Id, Level = 2, RecipientType = EscalationRecipientType.SpecificEmployee, SpecificEmployeeId = Director.Id });
         Db.EscalationPolicies.Add(policy);
+        Db.SaveChanges();
+        LegacyTimings.Seed(Db);
+        // These end-to-end scenarios are about supervision; the fake AI below is not a real judge of rule-scored
+        // inquiries, so rule-confident inquiries open without the AI double-check (covered by its own tests).
+        Db.SystemSettings.Add(new Iemas.Domain.Operations.SystemSetting { Key = SystemSettingKeys.AiConfirmsRuleInquiries, Value = "false" });
         Db.SaveChanges();
 
         // AI classification for whatever the Zettelkasten filter leaves Uncertain: someone asking us

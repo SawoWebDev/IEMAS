@@ -34,7 +34,14 @@ public class EscalationReliabilityTests : IDisposable
 
     private static OutboundEmailResult Fail(string why = "SMTP server unreachable") => new(false, null, why);
 
-    private readonly TestDbContext _db = TestDbContext.CreateNew();
+    private readonly TestDbContext _db = CreateDb();
+
+    private static TestDbContext CreateDb()
+    {
+        var db = TestDbContext.CreateNew();
+        Iemas.Tests.Inquiries.LegacyTimings.Seed(db);
+        return db;
+    }
     private readonly ScriptedSender _sender = new();
     private readonly Employee _supervisor = new() { FullName = "Sue Supervisor", Email = "sue@sawo.com" };
     private readonly Employee _deptManager = new() { FullName = "Dave Manager", Email = "dave@sawo.com" };
