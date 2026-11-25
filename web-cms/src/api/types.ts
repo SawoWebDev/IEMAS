@@ -341,7 +341,17 @@ export interface ReminderPolicyHolidayDto {
   label: string | null;
 }
 
+export interface MailboxDefaultsDto {
+  imapHost: string;
+  imapPort: number;
+  encryption: string;
+  smtpPort: number;
+  companyDomains: string[];
+  allowSelfEnrollment: boolean;
+}
+
 export interface ReminderPolicyDto {
+  weeklyHours: string | null;
   id: string;
   name: string;
   description: string | null;

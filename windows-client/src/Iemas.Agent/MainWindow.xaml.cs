@@ -89,14 +89,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         switch (App.Session.State)
         {
             case SessionState.NotRegistered:
-                if (App.Session.HasInstallKey)
+                if (_useApproval && App.Session.HasInstallKey)
                 {
                     ShowOnboarding("Connect this PC to IEMAS", "Enter your company email address (the mailbox IEMAS watches for you) and click Register. This PC was installed with an IEMAS installer, so it connects straight away; no approval is needed.", showForm: true);
                     if (string.IsNullOrWhiteSpace(EmailTextBox.Text) && !string.IsNullOrWhiteSpace(App.Session.InstallEmail)) EmailTextBox.Text = App.Session.InstallEmail;
                 }
+                else if (_useApproval)
+                {
+                    ShowOnboarding("Register this device", "Enter your enrolled email address to request registration; an administrator must approve it before you can connect.", showForm: true);
+                }
                 else
                 {
-                    ShowOnboarding("Register this device", "This computer is not yet registered with IEMAS. Enter your enrolled email address to request registration; an administrator must approve it before you can connect.", showForm: true);
+                    ShowOnboarding("Connect this PC to IEMAS", "Sign in with your work email. IEMAS checks the password with the mail server, adds your mailbox and connects this PC.", showForm: true);
+                    if (string.IsNullOrWhiteSpace(MailboxEmailTextBox.Text) && !string.IsNullOrWhiteSpace(App.Session.InstallEmail)) MailboxEmailTextBox.Text = App.Session.InstallEmail;
                 }
                 if (!string.IsNullOrWhiteSpace(App.Session.AutoRegistrationError)) RegistrationError.Text = App.Session.AutoRegistrationError;
                 break;
@@ -124,7 +129,80 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         OnboardingPanel.Visibility = Visibility.Visible;
         OnboardingTitle.Text = title;
         OnboardingMessage.Text = message;
-        RegistrationForm.Visibility = showForm ? Visibility.Visible : Visibility.Collapsed;
+        RegistrationForm.Visibility = showForm && _useApproval ? Visibility.Visible : Visibility.Collapsed;
+        MailboxForm.Visibility = showForm && !_useApproval ? Visibility.Visible : Visibility.Collapsed;
+        ServerHint.Text = $"IEMAS server: {App.Session.ServerUrl}  (change it under Settings)";
+    }
+
+    // --- Sign in with the mailbox password ---
+
+    /// <summary>True when the person chose the administrator-approval form instead of signing in.</summary>
+    private bool _useApproval;
+
+    private void UseApproval_Click(object sender, RoutedEventArgs e) { _useApproval = true; RenderForState(); }
+    private void UsePassword_Click(object sender, RoutedEventArgs e) { _useApproval = false; RenderForState(); }
+    private void ShowTour_Click(object sender, RoutedEventArgs e) => ((App)System.Windows.Application.Current).ShowTour();
+
+    private async void TestMailbox_Click(object sender, RoutedEventArgs e) => await WithMailboxLoginAsync(async (email, password) =>
+    {
+        ShowMailboxStatus("Checking with the mail server...", null);
+        var result = await App.Session.TestMailboxAsync(email, password);
+        ShowMailboxStatus(result.Succeeded ? "✓ " + result.Value?.Message : result.Error ?? "The test failed.", result.Succeeded);
+    });
+
+    private async void ConnectMailbox_Click(object sender, RoutedEventArgs e) => await WithMailboxLoginAsync(async (email, password) =>
+    {
+        ShowMailboxStatus("Connecting...", null);
+        var result = await App.Session.EnrollMailboxAsync(email, password);
+        if (!result.Succeeded)
+        {
+            ShowMailboxStatus(result.Error ?? "Could not connect.", false);
+            return;
+        }
+        MailboxPasswordBox.Clear();
+        ShowMailboxStatus(result.Value?.Message ?? "Connected.", true);
+    });
+
+    private async Task WithMailboxLoginAsync(Func<string, string, Task> action)
+    {
+        var email = MailboxEmailTextBox.Text.Trim();
+        var password = MailboxPasswordBox.Password;
+        if (string.IsNullOrWhiteSpace(email) || password.Length == 0)
+        {
+            ShowMailboxStatus("Enter your work email address and its password.", false);
+            return;
+        }
+
+        // The password travels to the server, so an unencrypted address needs a deliberate yes.
+        if (Uri.TryCreate(App.Session.ServerUrl, UriKind.Absolute, out var server) && server.Scheme == Uri.UriSchemeHttp && !server.IsLoopback
+            && System.Windows.MessageBox.Show(this,
+                $"The server address {App.Session.ServerUrl} is not encrypted (http). Your password could be read by others on the network.\n\n"
+                + "Ask your IT team for the https address, or continue only if they told you to.\n\nSend the password anyway?",
+                "Unencrypted connection", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        TestMailboxButton.IsEnabled = ConnectMailboxButton.IsEnabled = false;
+        try
+        {
+            await action(email, password);
+        }
+        finally
+        {
+            TestMailboxButton.IsEnabled = ConnectMailboxButton.IsEnabled = true;
+        }
+    }
+
+    private void ShowMailboxStatus(string text, bool? ok)
+    {
+        MailboxStatus.Text = text;
+        MailboxStatus.Foreground = new SolidColorBrush(ok switch
+        {
+            true => Color.FromRgb(6, 95, 70),
+            false => Color.FromRgb(185, 28, 28),
+            _ => Color.FromRgb(75, 85, 99),
+        });
     }
 
     private void RenderCaseList()

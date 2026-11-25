@@ -15,6 +15,7 @@ public class ReminderPolicyConfiguration : IEntityTypeConfiguration<ReminderPoli
         builder.HasIndex(p => p.Name).IsUnique();
 
         builder.Property(p => p.TimeZoneId).IsRequired().HasMaxLength(100);
+        builder.Property(p => p.WeeklyHours).HasMaxLength(400);
 
         builder.HasIndex(p => p.ClassificationProfileId);
         builder.HasIndex(p => p.IsDefault);

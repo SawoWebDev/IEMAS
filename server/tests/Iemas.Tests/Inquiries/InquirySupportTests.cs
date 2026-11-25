@@ -131,7 +131,7 @@ public class SupervisionSwitchAndActionsTests
         Assert.Equal(1, await h.Db.CaseEvents.CountAsync(e => e.CaseId == c.Id && e.EventType == CaseEventType.Reassigned));
         await h.RunAsync(Day(0, 13));
         await h.RunAsync(Day(0, 15));
-        Assert.Contains("Reminder", h.PopUpTitlesFor("agent2@sawo.com"));
+        Assert.Contains("Friendly reminder", h.PopUpTitlesFor("agent2@sawo.com"));
         Assert.DoesNotContain("Reminder", h.PopUpTitlesFor(Agent1));
     }
 

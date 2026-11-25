@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { apiClient } from "../../api/client";
 import type { ClassificationProfileDto, ReminderPolicyDto } from "../../api/types";
 import { InfoTip, TipLabel } from "../../components/help/Tooltip";
+import WeeklyHoursEditor from "./WeeklyHoursEditor";
+import { SAWO_HOURS } from "./weeklyHours";
 
 const EMPTY_GUID = "00000000-0000-0000-0000-000000000000";
 
@@ -37,6 +39,8 @@ interface FormState {
   businessHoursStart: string;
   businessHoursEnd: string;
   excludeWeekends: boolean;
+  /** "" = the same hours every working day. */
+  weeklyHours: string;
   timeZoneId: string;
   expirationDays: number | "";
   classificationProfileId: string;
@@ -54,10 +58,11 @@ const emptyForm: FormState = {
   maxReminders: 3,
   minimumIntervalHours: 1,
   restrictToBusinessHours: true,
-  businessHoursStart: "08:00",
-  businessHoursEnd: "17:00",
+  businessHoursStart: "07:00",
+  businessHoursEnd: "18:00",
   excludeWeekends: true,
-  timeZoneId: "UTC",
+  weeklyHours: SAWO_HOURS,
+  timeZoneId: "Asia/Manila",
   expirationDays: 3,
   classificationProfileId: "",
   escalationThresholdReminderCount: null,
@@ -115,6 +120,7 @@ export default function ReminderPoliciesPage() {
       businessHoursStart: p.businessHoursStart.slice(0, 5),
       businessHoursEnd: p.businessHoursEnd.slice(0, 5),
       excludeWeekends: p.excludeWeekends,
+      weeklyHours: p.weeklyHours ?? "",
       timeZoneId: p.timeZoneId,
       expirationDays: p.expirationWindow ? Math.round(timeSpanToHours(p.expirationWindow) / 24) : "",
       classificationProfileId: p.classificationProfileId ?? "",
@@ -143,6 +149,7 @@ export default function ReminderPoliciesPage() {
       businessHoursStart: `${form.businessHoursStart}:00`,
       businessHoursEnd: `${form.businessHoursEnd}:00`,
       excludeWeekends: form.excludeWeekends,
+      weeklyHours: form.restrictToBusinessHours ? form.weeklyHours || null : null,
       timeZoneId: form.timeZoneId,
       expirationWindow: form.expirationDays === "" ? null : hoursToTimeSpan(Number(form.expirationDays) * 24),
       escalationThresholdReminderCount: form.escalationThresholdReminderCount,
@@ -183,7 +190,7 @@ export default function ReminderPoliciesPage() {
         initialDelay: p.initialDelay, reminderInterval: p.reminderInterval, maxReminders: p.maxReminders,
         minimumInterval: p.minimumInterval, restrictToBusinessHours: p.restrictToBusinessHours,
         businessHoursStart: p.businessHoursStart, businessHoursEnd: p.businessHoursEnd,
-        excludeWeekends: p.excludeWeekends, timeZoneId: p.timeZoneId, expirationWindow: p.expirationWindow,
+        excludeWeekends: p.excludeWeekends, weeklyHours: p.weeklyHours, timeZoneId: p.timeZoneId, expirationWindow: p.expirationWindow,
         escalationThresholdReminderCount: p.escalationThresholdReminderCount,
         holidays: p.holidays.map((h) => ({ id: h.id, date: h.date, label: h.label })),
       });
@@ -235,8 +242,8 @@ export default function ReminderPoliciesPage() {
               <td style={tdStyle}>{timeSpanToHours(p.reminderInterval)}h</td>
               <td style={tdStyle}>{p.maxReminders}</td>
               <td style={tdStyle}>
-                {p.restrictToBusinessHours ? `${p.businessHoursStart.slice(0, 5)}-${p.businessHoursEnd.slice(0, 5)}` : "Any time"}
-                {p.excludeWeekends ? ", no weekends" : ""}
+                {!p.restrictToBusinessHours ? "Any time" : p.weeklyHours ?? `${p.businessHoursStart.slice(0, 5)}-${p.businessHoursEnd.slice(0, 5)}`}
+                {p.excludeWeekends && !(p.restrictToBusinessHours && p.weeklyHours) ? ", no weekends" : ""}
                 {p.holidays.length > 0 && `, ${p.holidays.length} holiday${p.holidays.length === 1 ? "" : "s"}`}
               </td>
               <td style={tdStyle}>
@@ -308,6 +315,15 @@ export default function ReminderPoliciesPage() {
               onChange={(e) => setForm({ ...form, restrictToBusinessHours: e.target.checked })} /> Restrict to business hours<InfoTip text="Only send reminders, and only count time, during the hours below." /></label>
           </div>
           {form.restrictToBusinessHours && (
+            <div>
+              <label><input type="checkbox" checked={form.weeklyHours !== ""}
+                onChange={(e) => setForm({ ...form, weeklyHours: e.target.checked ? SAWO_HOURS : "" })} /> Different hours per day<InfoTip text="Use this when days differ, for example a shorter Friday." /></label>
+            </div>
+          )}
+          {form.restrictToBusinessHours && form.weeklyHours !== "" && (
+            <WeeklyHoursEditor value={form.weeklyHours} onChange={(weeklyHours) => setForm({ ...form, weeklyHours })} />
+          )}
+          {form.restrictToBusinessHours && form.weeklyHours === "" && (
             <>
               <div>
                 <label><TipLabel tip="When the working day starts.">Start</TipLabel></label><br />
@@ -319,10 +335,12 @@ export default function ReminderPoliciesPage() {
               </div>
             </>
           )}
-          <div>
-            <label><input type="checkbox" checked={form.excludeWeekends}
-              onChange={(e) => setForm({ ...form, excludeWeekends: e.target.checked })} /> Exclude weekends<InfoTip text="Saturdays and Sundays do not count and no reminders are sent then." /></label>
-          </div>
+          {!(form.restrictToBusinessHours && form.weeklyHours !== "") && (
+            <div>
+              <label><input type="checkbox" checked={form.excludeWeekends}
+                onChange={(e) => setForm({ ...form, excludeWeekends: e.target.checked })} /> Exclude weekends<InfoTip text="Saturdays and Sundays do not count and no reminders are sent then." /></label>
+            </div>
+          )}
           <div>
             <label><input type="checkbox" checked={form.enabled}
               onChange={(e) => setForm({ ...form, enabled: e.target.checked })} /> Enabled</label>

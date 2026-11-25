@@ -1,4 +1,5 @@
 using Iemas.Application.Common.Interfaces;
+using Iemas.Application.Reminders;
 using Iemas.Domain.Ai;
 using Iemas.Domain.Escalations;
 using Iemas.Domain.Reminders;
@@ -61,12 +62,29 @@ public static class DbSeeder
     /// <summary>§51/§52 — the six predefined notification messages, editable afterwards in the CMS. Existing rows are never overwritten.</summary>
     private static async Task SeedNotificationTemplatesAsync(AppDbContext db)
     {
-        var existing = await db.NotificationTemplates.Select(t => t.Type).ToListAsync();
-        foreach (var type in Enum.GetValues<NotificationType>().Where(t => !existing.Contains(t)))
+        var existing = await db.NotificationTemplates.ToListAsync();
+        foreach (var type in Enum.GetValues<NotificationType>().Where(t => existing.All(e => e.Type != t)))
         {
             db.NotificationTemplates.Add(NotificationTemplateDefaults.For(type));
         }
+        RefreshUnchangedTemplates(existing);
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>Gives templates nobody edited the current wording; edited ones are left alone.</summary>
+    public static void RefreshUnchangedTemplates(IEnumerable<NotificationTemplate> templates)
+    {
+        foreach (var template in templates)
+        {
+            if (NotificationTemplateDefaults.PreviousDefaultMessages.TryGetValue(template.Type, out var previous)
+                && template.MessageText == previous)
+            {
+                var current = NotificationTemplateDefaults.For(template.Type);
+                template.Title = current.Title;
+                template.MessageText = current.MessageText;
+                template.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+        }
     }
 
     /// <summary>
@@ -86,10 +104,9 @@ public static class DbSeeder
     {
         if (!await db.ReminderPolicies.AnyAsync())
         {
-            // Business hours only make sense in the organisation's time zone; while it is still UTC (not set yet),
-            // reminders are not limited to business hours rather than arriving at the wrong local time.
+            // Office hours are read in the organisation's time zone: the one set in General settings, else SAWO's.
             var timeZone = await db.SystemSettings.Where(s => s.Key == SystemSettingKeys.DefaultTimeZone).Select(s => s.Value).FirstOrDefaultAsync();
-            var hasTimeZone = !string.IsNullOrWhiteSpace(timeZone) && timeZone != "UTC" && TimeZoneInfo.TryFindSystemTimeZoneById(timeZone, out _);
+            if (string.IsNullOrWhiteSpace(timeZone) || !TimeZoneInfo.TryFindSystemTimeZoneById(timeZone, out _)) timeZone = WeeklySchedule.SawoTimeZone;
             db.ReminderPolicies.Add(new ReminderPolicy
             {
                 Name = "Standard follow-up",
@@ -100,11 +117,12 @@ public static class DbSeeder
                 ReminderInterval = TimeSpan.FromHours(2),
                 MaxReminders = 3,
                 MinimumInterval = TimeSpan.FromMinutes(30),
-                RestrictToBusinessHours = hasTimeZone,
-                BusinessHoursStart = TimeSpan.FromHours(8),
-                BusinessHoursEnd = TimeSpan.FromHours(17),
-                ExcludeWeekends = hasTimeZone,
-                TimeZoneId = hasTimeZone ? timeZone! : "UTC",
+                RestrictToBusinessHours = true,
+                BusinessHoursStart = TimeSpan.FromHours(7),
+                BusinessHoursEnd = TimeSpan.FromHours(18),
+                ExcludeWeekends = true,
+                WeeklyHours = WeeklySchedule.SawoDefault,
+                TimeZoneId = timeZone,
                 ExpirationWindow = TimeSpan.FromDays(3),
             });
         }

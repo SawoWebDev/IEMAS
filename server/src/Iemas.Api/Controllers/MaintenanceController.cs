@@ -58,11 +58,21 @@ public class MaintenanceController : ControllerBase
     [Authorize(Policy = "RequireSuperAdministrator")]
     public async Task<ActionResult<EmailDataResetResultDto>> ResetEmailData([FromBody] ResetEmailDataRequest request, CancellationToken cancellationToken)
     {
-        var result = await _resetService.ResetAsync(request.Confirmation, request.RemoveTestRecordIds, cancellationToken);
+        if (request.KeepEmailAccountIds is { Count: 0 })
+        {
+            return BadRequest(new { message = "Tick at least one mailbox to keep." });
+        }
+        var result = await _resetService.ResetAsync(request.Confirmation, request.RemoveTestRecordIds, cancellationToken, request.KeepEmailAccountIds);
         return result is null
             ? BadRequest(new { message = $"Type {EmailDataResetService.ConfirmationWord} to confirm the reset." })
             : Ok(result);
     }
+
+    /// <summary>Clean start: what would be removed if only these mailboxes (incoming and outbound) were kept.</summary>
+    [HttpPost("reset-email-data/keep-only-preview")]
+    [Authorize(Policy = "RequireSuperAdministrator")]
+    public async Task<ActionResult<CleanStartPlanDto>> PreviewKeepOnly([FromBody] KeepOnlyRequest request, CancellationToken cancellationToken) =>
+        Ok(await _resetService.PlanKeepOnlyAsync(request.KeepEmailAccountIds ?? new List<Guid>(), cancellationToken));
 
     /// <summary>
     /// Adds sample customer emails to a mailbox for trying the system. Pre-classified samples are turned into Cases
@@ -81,4 +91,7 @@ public class MaintenanceController : ControllerBase
 
 public record SampleDataRunResult(GenerateSampleDataResult Samples, CaseRunResult? CaseRun);
 
-public record ResetEmailDataRequest(string? Confirmation, List<Guid>? RemoveTestRecordIds);
+/// <param name="KeepEmailAccountIds">Clean start: when given, every other mailbox, and the people and PCs only they needed, are removed too.</param>
+public record ResetEmailDataRequest(string? Confirmation, List<Guid>? RemoveTestRecordIds, List<Guid>? KeepEmailAccountIds = null);
+
+public record KeepOnlyRequest(List<Guid>? KeepEmailAccountIds);

@@ -249,6 +249,7 @@ public class BusinessCalendarHardeningTests
     {
         using var db = TestDbContext.CreateNew();
         db.SystemSettings.Add(new SystemSetting { Key = SystemSettingKeys.SupervisionHolidays, Value = "2026-11-09" });
+        db.SystemSettings.Add(new SystemSetting { Key = SystemSettingKeys.DefaultTimeZone, Value = "UTC" });
         await db.SaveChangesAsync();
 
         var cal = await BusinessCalendar.LoadAsync(db, CancellationToken.None);

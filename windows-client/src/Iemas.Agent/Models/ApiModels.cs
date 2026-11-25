@@ -8,6 +8,25 @@ public record RegisterAgentRequest(string EmailAddress, string ClientName, strin
 
 public record RegisterAgentResponse(Guid AgentId, string RegistrationRequestToken, int Status);
 
+/// <summary>A mailbox login typed on this PC. Sent to the server to be checked; never stored here.</summary>
+public record MailboxLoginRequest(string EmailAddress, string Password);
+
+public record EnrollMailboxRequest(string EmailAddress, string Password, string? ClientName, string? ServerAddress, string? AgentVersion, string? DeviceMetadata);
+
+public record MailboxTestResponse(bool Succeeded, string Message);
+
+public record EnrollMailboxResponse(Guid AgentId, string RegistrationRequestToken, int Status, string EmployeeName,
+    bool MailboxCreated, bool ConfirmationEmailSent, string Message);
+
+public record AgentGuideStepDto(string Label, string When);
+
+public record AgentGuideDto(
+    string EmployeeName, List<string> Mailboxes, string? SupervisorName, string WorkingHours, string TimeZone,
+    int FirstReplyHours, int ReminderIntervalHours, int Reminders, int HoursUntilSupervisorIsTold,
+    int FollowUpBusinessDays, int CustomerSilentDays, List<AgentGuideStepDto> Example);
+
+public record PracticeStateDto(Guid CaseId, string CaseNumber, int Step, string Title, string Explanation, bool Finished, bool SampleEmailSent);
+
 public record AgentRegistrationStatusResponse(int Status, string? RegistrationKey, DateTimeOffset? RegistrationKeyExpiresAt, string? RejectionReason);
 
 public record AgentAuthenticateRequest(Guid AgentId, string RegistrationKey);

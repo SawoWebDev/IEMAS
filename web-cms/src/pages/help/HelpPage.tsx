@@ -9,14 +9,14 @@ const FLOW = [
   { title: "Case created", text: "Straight away, only for email that needs work; owned by the mailbox's owner. Usually within about a minute of arriving." },
   { title: "Employee alerted", text: "A pop-up appears on the owner's PC through the Windows Agent." },
   { title: "Reply checked", text: "Every 2 minutes the mailbox's Sent folder is checked for the reply." },
-  { title: "Reminders", text: "No reply yet? The owner gets reminder pop-ups until one is found." },
-  { title: "Escalation", text: "Still no reply? The owner is warned, then the Case is escalated and management is emailed." },
+  { title: "Reminders", text: "No reply yet? The owner gets reminder pop-ups, during working hours only, until one is found." },
+  { title: "Escalation", text: "Still no reply? The owner is warned, then the Case is escalated and management is emailed (during working hours only)." },
   { title: "Resolved", text: "A first reply does not end it: IEMAS follows the conversation until the employee confirms it is resolved." },
 ];
 
 const SETUP = [
   { text: "Add the employee", path: "/employees" },
-  { text: "Add their mailbox and set them as its owner", path: "/email-accounts" },
+  { text: "Add their mailbox (a company address needs only its email and password; the owner is set automatically)", path: "/email-accounts" },
   { text: "Paste the OpenRouter API key and test it", path: "/ai-models" },
   { text: "Download an Agent installer under Windows Agents and run it on their PC (it connects by itself)", path: "/agents" },
   { text: "Review which emails count as work", path: "/system-configuration" },

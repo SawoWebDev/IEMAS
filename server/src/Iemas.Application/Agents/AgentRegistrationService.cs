@@ -125,6 +125,45 @@ public class AgentRegistrationService
     }
 
     /// <summary>
+    /// Registers a PC whose user has just proved the mailbox password (see <see cref="MailboxEnrollmentService"/>).
+    /// With <paramref name="approveFor"/> it is approved at once; without, it waits for an administrator.
+    /// </summary>
+    public async Task<RegisterAgentResponse> RegisterVerifiedAsync(
+        EnrollMailboxRequest request, string email, Employee? approveFor, string? clientIp, CancellationToken cancellationToken)
+    {
+        var agent = new Agent
+        {
+            ClientName = request.ClientName ?? "Employee PC",
+            EnrollmentEmailAddress = email,
+            ServerAddress = request.ServerAddress,
+            AgentVersion = request.AgentVersion,
+            DeviceMetadata = request.DeviceMetadata,
+            LastKnownClientIp = clientIp,
+            RegistrationStatus = AgentRegistrationStatus.Pending,
+            RegistrationRequestToken = GenerateOpaqueToken(),
+        };
+        _db.Agents.Add(agent);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _db.AgentLogs.Add(new AgentLog
+        {
+            AgentId = agent.Id,
+            EventType = AgentLogEventType.RegistrationRequested,
+            Detail = $"{agent.ClientName} ({email}), verified with the mailbox password",
+            IpAddress = clientIp,
+        });
+        await _db.SaveChangesAsync(cancellationToken);
+
+        if (approveFor is not null)
+        {
+            await ApproveCoreAsync(agent, approveFor, null,
+                $"Approved automatically for {approveFor.FullName}: signed in to {email} with its password", cancellationToken);
+        }
+
+        return new RegisterAgentResponse(agent.Id, agent.RegistrationRequestToken, agent.RegistrationStatus);
+    }
+
+    /// <summary>
     /// A usable installer key for this email: not revoked, not expired, uses left, and (when the key names a
     /// mailbox) the same mailbox. The PC is approved for the mailbox's owner, who must be an active employee.
     /// </summary>
@@ -252,7 +291,7 @@ public class AgentRegistrationService
     }
 
     /// <summary>Marks the Agent approved for the employee and generates its key (collected once by the Agent's next poll).</summary>
-    private async Task ApproveCoreAsync(Agent agent, Employee employee, Guid approvedByUserId, string logDetail, CancellationToken cancellationToken)
+    private async Task ApproveCoreAsync(Agent agent, Employee employee, Guid? approvedByUserId, string logDetail, CancellationToken cancellationToken)
     {
         agent.EmployeeId = employee.Id;
         agent.RegistrationStatus = AgentRegistrationStatus.Approved;

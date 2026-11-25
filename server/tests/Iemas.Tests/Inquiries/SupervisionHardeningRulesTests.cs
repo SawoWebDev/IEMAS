@@ -10,7 +10,7 @@ namespace Iemas.Tests.Inquiries;
 public class SupervisionHardeningRulesTests
 {
     private static readonly BusinessCalendar Cal = BusinessCalendar.Default; // Mon-Fri 08-17 UTC
-    private static readonly SupervisionSettings S = SupervisionSettings.Defaults;
+    private static readonly SupervisionSettings S = TestSupport.ShortTimings.Settings;
 
     /// <summary>Day 2 = Monday 2 Nov 2026.</summary>
     private static DateTimeOffset At(int day, int hour, int minute = 0) => new(2026, 11, day, hour, minute, 0, TimeSpan.Zero);

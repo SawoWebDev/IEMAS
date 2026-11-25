@@ -86,6 +86,19 @@ export default function AgentsPage() {
     }
   }
 
+  const [notice, setNotice] = useState<string | null>(null);
+
+  async function handlePractice(agent: AgentDto) {
+    setError(null);
+    setNotice(null);
+    try {
+      await apiClient.post(`/agents/${agent.id}/practice`);
+      setNotice(`The practice run is opening on "${agent.clientName}". Only that employee receives its alerts and emails.`);
+    } catch (err: any) {
+      setError(err.response?.data?.message ?? "Failed to start the practice run.");
+    }
+  }
+
   async function handleDelete(agent: AgentDto) {
     if (!window.confirm(`Permanently delete "${agent.clientName}" (${agent.enrollmentEmailAddress}) and its technical log? This cannot be undone.`)) return;
     setError(null);
@@ -118,10 +131,11 @@ export default function AgentsPage() {
     <div style={{ display: "flex", gap: 24 }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <h1>Windows Agents</h1>
+        {notice && <div role="status" style={{ color: "var(--color-success)", marginBottom: 12, fontSize: 13 }}>{notice}</div>}
         <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
           Each employee's PC runs the IEMAS Agent, which shows pop-up alerts. The easiest way to set up a PC is the installer
-          below: PCs installed with it connect straight away. A PC set up by hand appears here as Pending; approve it for the
-          employee who owns its email account.
+          below: PCs installed with it connect straight away. A PC set up another way appears here as Pending; approve it for the
+          employee who owns its email account. A PC the employee sets up with their work email and password is approved at once.
         </p>
 
         <AgentInstallerPanel employees={employees} onChanged={load} />
@@ -177,7 +191,13 @@ export default function AgentsPage() {
                     </>
                   )}
                   {a.registrationStatus === 1 && (
-                    <button onClick={() => handleRevoke(a)} style={{ marginRight: 8 }} data-tip="Cut this PC off immediately, e.g. lost or replaced. It must register again to reconnect.">Revoke</button>
+                    <>
+                      <button onClick={() => handlePractice(a)} disabled={a.connectionStatus !== 1} style={{ marginRight: 8 }}
+                        data-tip={a.connectionStatus === 1
+                          ? "Open the practice run on this PC: a made-up inquiry that is escalated step by step. Only this employee receives it; reports are not affected."
+                          : "Available while the PC is connected."}>Practice run</button>
+                      <button onClick={() => handleRevoke(a)} style={{ marginRight: 8 }} data-tip="Cut this PC off immediately, e.g. lost or replaced. It must register again to reconnect.">Revoke</button>
+                    </>
                   )}
                   <button onClick={() => openLogs(a.id)} data-tip="Technical connection log for this PC, for troubleshooting.">Logs</button>
                   <button

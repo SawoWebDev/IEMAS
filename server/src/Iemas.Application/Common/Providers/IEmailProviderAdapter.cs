@@ -15,7 +15,8 @@ public record EmailProviderConnectionSettings(
     EmailAuthMethod AuthMethod,
     string Secret);
 
-public record ProviderConnectionTestResult(bool Succeeded, string? ErrorMessage, TimeSpan Duration);
+/// <param name="AuthenticationFailed">True when the server was reached but refused the login.</param>
+public record ProviderConnectionTestResult(bool Succeeded, string? ErrorMessage, TimeSpan Duration, bool AuthenticationFailed = false);
 
 public record ProviderAttachmentSummary(string FileName, string? ContentType, long SizeBytes);
 

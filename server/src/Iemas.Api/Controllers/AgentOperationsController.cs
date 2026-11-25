@@ -26,12 +26,47 @@ public class AgentOperationsController : ControllerBase
 
     private readonly Iemas.Application.Inquiries.ConversationSyncService _conversationSync;
 
+    private readonly AgentGuideService _guide;
+    private readonly Iemas.Application.Inquiries.PracticeInquiryService _practice;
+
     public AgentOperationsController(AgentSyncService syncService, AgentCaseActionService actionService,
-        Iemas.Application.Inquiries.ConversationSyncService conversationSync)
+        Iemas.Application.Inquiries.ConversationSyncService conversationSync,
+        AgentGuideService guide, Iemas.Application.Inquiries.PracticeInquiryService practice)
     {
         _syncService = syncService;
         _actionService = actionService;
         _conversationSync = conversationSync;
+        _guide = guide;
+        _practice = practice;
+    }
+
+    /// <summary>What the first-time walkthrough shows: this employee's mailbox, hours and escalation timing.</summary>
+    [HttpGet("guide")]
+    public async Task<ActionResult<AgentGuideDto>> Guide(CancellationToken cancellationToken)
+    {
+        var guide = await _guide.GetAsync(EmployeeId, cancellationToken);
+        return guide is null ? NotFound() : Ok(guide);
+    }
+
+    [HttpPost("practice")]
+    public async Task<ActionResult<Iemas.Application.Inquiries.PracticeStateDto>> StartPractice(CancellationToken cancellationToken)
+    {
+        var result = await _practice.StartAsync(EmployeeId, cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : BadRequest(new { message = result.Error });
+    }
+
+    [HttpPost("practice/{caseId:guid}/advance")]
+    public async Task<ActionResult<Iemas.Application.Inquiries.PracticeStateDto>> AdvancePractice(Guid caseId, CancellationToken cancellationToken)
+    {
+        var result = await _practice.AdvanceAsync(EmployeeId, caseId, cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : BadRequest(new { message = result.Error });
+    }
+
+    [HttpDelete("practice/{caseId:guid}")]
+    public async Task<IActionResult> EndPractice(Guid caseId, CancellationToken cancellationToken)
+    {
+        await _practice.EndAsync(EmployeeId, caseId, cancellationToken);
+        return NoContent();
     }
 
     /// <summary>

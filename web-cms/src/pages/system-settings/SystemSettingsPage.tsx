@@ -14,6 +14,8 @@ const K = {
   reminders: "inquiry.reminders_before_escalation",
   nextLevel: "inquiry.escalation_repeat_business_days",
   followUp: "inquiry.idle_business_days",
+  stalled: "inquiry.stalled_business_days",
+  workingHoursOnly: "inquiry.alerts_in_working_hours_only",
   customerWait: "inquiry.customer_wait_calendar_days",
   internalWait: "inquiry.internal_wait_business_days",
   target: "inquiry.resolution_target_business_days",
@@ -29,7 +31,7 @@ const SUPERVISION_SECTIONS: { title: string; hint?: string; keys: string[] }[] =
   {
     title: "Deadlines, reminders and escalation",
     hint: "How quickly the agent must answer, how often they are reminded, and when management is told.",
-    keys: [K.firstReply, K.interval, K.reminders, K.nextLevel, K.followUp],
+    keys: [K.firstReply, K.interval, K.reminders, K.nextLevel, K.followUp, K.stalled, K.workingHoursOnly],
   },
   {
     title: "Waiting periods and targets",
@@ -67,6 +69,14 @@ function describeBusinessTime(policy: ReminderPolicyDto | null | undefined): { l
       dayHours: 24,
       warning: true,
     };
+  }
+  if (policy.weeklyHours) {
+    // "1 business day" is the longest working day.
+    const dayHours = Math.max(1, ...policy.weeklyHours.split(",").map((part) => {
+      const m = part.match(/(\d{2}:\d{2})-(\d{2}:\d{2})/);
+      return m ? parseHours(m[2]) - parseHours(m[1]) : 0;
+    }));
+    return { label: "Business time:", text: `${policy.weeklyHours} (${policy.timeZoneId})${holidays}.`, dayHours, warning: false };
   }
   const start = parseHours(policy.businessHoursStart);
   const end = parseHours(policy.businessHoursEnd);
@@ -203,6 +213,7 @@ export default function SystemSettingsPage() {
     reminders: Math.min(10, Math.round(num(K.reminders))),
     nextLevelDays: num(K.nextLevel),
     followUpDays: num(K.followUp),
+    stalledDays: num(K.stalled),
     customerWaitDays: num(K.customerWait),
     internalWaitDays: num(K.internalWait),
     resolutionTargetDays: num(K.target),

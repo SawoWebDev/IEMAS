@@ -336,7 +336,7 @@ public class EscalationService
             .Where(r => r.Status == ReminderStatus.Sent)
             .Select(r => r.CaseId)
             .Distinct()
-            .Join(_db.Cases.Where(c => c.WorkStatus != CaseWorkStatus.Completed && c.WorkStatus != CaseWorkStatus.Cancelled),
+            .Join(_db.Cases.Where(c => !c.IsPractice && c.WorkStatus != CaseWorkStatus.Completed && c.WorkStatus != CaseWorkStatus.Cancelled),
                 caseId => caseId, c => c.Id, (caseId, c) => c.Id)
             .OrderBy(id => id)
             .Take(batchSize)

@@ -123,7 +123,7 @@ public class EmployeeActivityQueryService
             .ToListAsync(cancellationToken);
 
         var openCaseOwners = await _db.Cases.AsNoTracking()
-            .Where(c => c.OwnerEmployeeId != null
+            .Where(c => !c.IsPractice && c.OwnerEmployeeId != null
                         && c.WorkStatus != CaseWorkStatus.Completed && c.WorkStatus != CaseWorkStatus.Cancelled
                         && c.WorkStatus != CaseWorkStatus.Expired)
             .Select(c => c.OwnerEmployeeId!.Value)

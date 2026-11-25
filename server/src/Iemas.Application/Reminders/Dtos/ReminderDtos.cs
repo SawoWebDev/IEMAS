@@ -21,7 +21,8 @@ public record ReminderPolicyDto(
     string TimeZoneId,
     TimeSpan? ExpirationWindow,
     int? EscalationThresholdReminderCount,
-    IReadOnlyList<ReminderPolicyHolidayDto> Holidays);
+    IReadOnlyList<ReminderPolicyHolidayDto> Holidays,
+    string? WeeklyHours = null);
 
 public record ReminderPolicyHolidayDto(Guid Id, DateOnly Date, string? Label);
 
@@ -42,7 +43,8 @@ public record SaveReminderPolicyRequest(
     string TimeZoneId,
     TimeSpan? ExpirationWindow,
     int? EscalationThresholdReminderCount,
-    IReadOnlyList<ReminderPolicyHolidayDto> Holidays);
+    IReadOnlyList<ReminderPolicyHolidayDto> Holidays,
+    string? WeeklyHours = null);
 
 public record ReminderDto(
     Guid Id,

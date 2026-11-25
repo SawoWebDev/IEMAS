@@ -305,9 +305,10 @@ public class ZettelkastenFilterTests
         new(db, ai, new NoOpRetryDelay(), new Iemas.Application.Common.Ai.AiCircuitBreakerStore(TimeProvider.System), NullLogger<EmailClassificationService>.Instance);
 
     [Fact]
-    public async Task ConfidentInquiry_BecomesImportant_WithoutCallingAi()
+    public async Task ConfidentInquiry_BecomesImportant_WithoutCallingAi_WhenTheDoubleCheckIsOff()
     {
         var (db, account) = Seed();
+        db.SystemSettings.Add(new Iemas.Domain.Operations.SystemSetting { Key = Iemas.Application.Operations.SystemSettingKeys.AiConfirmsInquiries, Value = "false" });
         var message = Message(account.Id, "buyer@customer.example", "Request for quotation",
             "I would like to request a quotation for 20 heaters. How much per unit?");
         db.EmailMessages.Add(message);

@@ -25,7 +25,10 @@ public class DefaultPolicySeedTests
         var reminder = await db.ReminderPolicies.SingleAsync();
         Assert.True(reminder.IsDefault && reminder.Enabled);
         Assert.Equal(TimeSpan.FromHours(1), reminder.InitialDelay);
-        Assert.False(reminder.RestrictToBusinessHours); // no time zone set yet, so no business-hours window in UTC
+        // SAWO office hours: Friday closes earlier than the other days.
+        Assert.True(reminder.RestrictToBusinessHours);
+        Assert.Equal("Mon-Thu 07:00-18:00, Fri 07:00-16:00", reminder.WeeklyHours);
+        Assert.Equal("Asia/Manila", reminder.TimeZoneId);
 
         var escalation = await db.EscalationPolicies.Include(p => p.Levels).SingleAsync();
         Assert.True(escalation.IsDefault && escalation.Enabled);

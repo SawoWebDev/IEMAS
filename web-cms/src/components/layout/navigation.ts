@@ -134,7 +134,7 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Email Accounts",
         path: "/email-accounts",
         help: "The mailboxes IEMAS watches for customer email. Each mailbox has an owner — the employee whose PC gets its alerts. The cut-off date means older mailbox history is kept but never becomes Cases.",
-        tasks: ["Add a mailbox (IMAP server, username, password)", "Set or change the owner with Edit", "Test the connection", "Deactivate, then Delete, a mailbox you no longer use"],
+        tasks: ["Add a mailbox (a company address needs only its email address and password)", "Set or change the owner with Edit", "Test the connection", "Deactivate, then Delete, a mailbox you no longer use"],
       },
       {
         label: "Email Classification",
@@ -151,7 +151,7 @@ export const NAV_SECTIONS: NavSection[] = [
       {
         label: "Outbound Email",
         path: "/outbound-email",
-        help: "An SMTP mailbox for IEMAS's own internal email: management escalation emails are sent from it. It never sends, replies to or forwards customer email, and is never checked for customer email.",
+        help: "An SMTP mailbox for IEMAS's own internal email: management escalation emails, practice-run samples and \"PC connected\" confirmations are sent from it. It never sends, replies to or forwards customer email, and is never checked for customer email.",
         tasks: ["Add the SMTP server and password", "Test the connection", "Check Escalation History for emails that could not be sent"],
       },
     ],
@@ -170,12 +170,12 @@ export const NAV_SECTIONS: NavSection[] = [
       {
         label: "Reminder Policies",
         path: "/reminder-policies",
-        help: "How often the Case owner is reminded (by pop-up) while no reply has been found in the Sent folder: delay before the first reminder, time between reminders, maximum number of reminders, optional expiry, business hours with time zone, and whether weekends count. Checked every 5 minutes; reminders stop as soon as a reply is found. Holidays are entered on the policy as well.",
+        help: "How often the Case owner is reminded (by pop-up) while no reply has been found in the Sent folder: delay before the first reminder, time between reminders, maximum number of reminders, optional expiry, business hours with time zone (which can differ for each weekday), and whether weekends count. Reminders are sent only during working hours. Checked every 5 minutes; reminders stop as soon as a reply is found. Holidays are entered on the policy as well.",
       },
       {
         label: "Escalation Policies",
         path: "/escalation-policies",
-        help: "What happens when a Case still has no reply after a number of reminders: after how many reminders and how long a grace period, and up to 3 levels, each with a recipient (the owner, their supervisor, the department manager, a specific employee or a group). Checked every 10 minutes. The Case is marked Escalated, the owner gets an Escalation pop-up, and the chosen recipient is sent an escalation email (through the Outbound Email account) with the customer, subject, owner, status, last activity and reason. Every attempt is recorded in Escalation History.",
+        help: "What happens when a Case still has no reply after a number of reminders: after how many reminders and how long a grace period, and up to 3 levels, each with a recipient (the owner, their supervisor, the department manager, a specific employee or a group). Checked every 10 minutes, and escalations are sent only during working hours. The Case is marked Escalated, the owner gets an Escalation pop-up, and the chosen recipient is sent an escalation email (through the Outbound Email account) with the customer, subject, owner, status, last activity and reason. Every attempt is recorded in Escalation History.",
         tasks: ["Set after how many reminders a Case escalates", "Choose who each level is for", "Test a policy against a Case without recording anything"],
       },
       {
@@ -198,7 +198,7 @@ export const NAV_SECTIONS: NavSection[] = [
       {
         label: "Windows Agents",
         path: "/agents",
-        help: "The IEMAS Agent program on each employee's PC. Download installer gives a zip that installs and connects a PC by itself, with no approval step; installers expire, have a PC limit and can be withdrawn. A PC set up by hand appears as Pending: pick the employee who owns its email account and Approve. Revoke cuts off a lost or old PC immediately.",
+        help: "The IEMAS Agent program on each employee's PC. Download installer gives a zip that installs and connects a PC by itself, with no approval step; installers do not expire, have no PC limit, and can be withdrawn. A PC set up another way appears as Pending: pick the employee who owns its email account and Approve. An employee who sets up their own PC with their work email and password is approved at once. Revoke cuts off a lost or old PC immediately.",
         tasks: ["Download an installer for one person or for everyone", "Withdraw an installer", "Approve a PC set up by hand", "Revoke a lost PC", "Check whether an Agent is connected"],
       },
       {
@@ -239,8 +239,8 @@ export const NAV_SECTIONS: NavSection[] = [
       {
         label: "Emergency Pause",
         path: "/maintenance",
-        help: "Emergency switches to pause email fetching, AI classification, reminders, escalations or pop-ups — for example during a problem or maintenance. Nothing is deleted; work resumes where it stopped. Super administrators also find two tools here. Generate sample data adds sample customer emails (marked [Sample], from random senders and domains) and, the first time, a sample team — a Sample Sales department with a manager, a supervisor and three staff with sample mailboxes and PCs — to try the whole flow — Cases, pop-ups, reply checks, reminders, escalation — either already classified (no AI cost, Cases made immediately) or read by the AI like real mail. Reset email data deletes all emails, Cases and their history and starts fresh from now; tick the sample team and any test records to remove them too. Your real employees, mailboxes, PCs, users, settings and policies are kept.",
-        tasks: ["Pause one engine with a reason, then Resume", "Generate sample emails to test the system", "Reset email data after testing (type RESET to confirm), optionally removing leftover test employees, mailboxes and agents"],
+        help: "Emergency switches to pause email fetching, AI classification, reminders, escalations or pop-ups — for example during a problem or maintenance. Nothing is deleted; work resumes where it stopped. Super administrators also find two tools here. Generate sample data adds sample customer emails (marked [Sample], from random senders and domains) and, the first time, a sample team — a Sample Sales department with a manager, a supervisor and three staff with sample mailboxes and PCs — to try the whole flow — Cases, pop-ups, reply checks, reminders, escalation — either already classified (no AI cost, Cases made immediately) or read by the AI like real mail. Reset email data deletes all emails, Cases and their history and starts fresh from now; tick the sample team and any test records to remove them too. Users, settings and policies are kept. Your real employees, mailboxes and PCs are kept too, unless you use Clean start, which removes every mailbox you do not tick along with the employees and PCs only those mailboxes needed.",
+        tasks: ["Pause one engine with a reason, then Resume", "Generate sample emails to test the system", "Reset email data after testing (type RESET to confirm), optionally removing leftover test employees, mailboxes and agents, or use Clean start to keep only the mailboxes you tick"],
       },
     ],
   },

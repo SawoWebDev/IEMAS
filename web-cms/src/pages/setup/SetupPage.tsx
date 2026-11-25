@@ -8,8 +8,8 @@ const SECTIONS: Array<{ title: string; items: Array<{ label: string; to: string;
   {
     title: "Email",
     items: [
-      { label: "Agent mailboxes", to: "/email-accounts", what: "Add each agent's mailbox (IMAP server, login, password), its owner, and the date monitoring starts." },
-      { label: "Outbound email (management escalations)", to: "/outbound-email", what: "The SMTP account the system sends escalation emails from." },
+      { label: "Agent mailboxes", to: "/email-accounts", what: "Add each agent's mailbox. A company address needs only its email address and password; the owner is set automatically, and the date monitoring starts." },
+      { label: "Outbound email (management escalations)", to: "/outbound-email", what: "The SMTP account the system sends escalation emails, practice samples and PC-connected confirmations from." },
       { label: "Agents (people)", to: "/employees", what: "Add or edit agents, set their supervisor and department, activate or deactivate them." },
     ],
   },
@@ -24,7 +24,7 @@ const SECTIONS: Array<{ title: string; items: Array<{ label: string; to: string;
     title: "Deadlines and escalation",
     items: [
       { label: "Business hours, working days, holidays", to: "/reminder-policies", what: "Edit the default policy: time zone, opening hours, weekends and the holiday list. All deadlines count in this business time." },
-      { label: "Time limits and thresholds", to: "/system-settings", what: "Initial response (4 h), reminder interval (2 h), reminders before escalation, idle, customer wait, resolution target, AI confidence. Group: Inquiry supervision." },
+      { label: "Time limits and thresholds", to: "/system-settings", what: "Initial response (8 business hours), reminder interval (4 business hours), reminders before escalation, idle, customer wait, resolution target, AI confidence. Group: Inquiry supervision." },
       { label: "Who management is", to: "/escalation-policies", what: "Escalation levels and who each level emails (supervisor, department manager, a named person or a group)." },
       { label: "Escalation groups", to: "/escalation-groups", what: "Named lists of people for a level to email." },
       { label: "Notification messages", to: "/notifications", what: "The wording of every pop-up the agents receive." },
@@ -33,7 +33,7 @@ const SECTIONS: Array<{ title: string; items: Array<{ label: string; to: string;
   {
     title: "Detection",
     items: [
-      { label: "Internal company domains and inquiry phrases", to: "/system-settings", what: "Group: Inquiry detection. Internal domains (sawo.com) never start a new inquiry; phrase lists drive the no-AI screening." },
+      { label: "Internal company domains and inquiry phrases", to: "/system-settings", what: "Group: Inquiry detection. Internal domains (sawo.com) never start a new inquiry; phrase lists drive the built-in screening, and the AI double-checks the inquiries it finds (setting: AI double-checks every inquiry)." },
       { label: "Ignored senders and email rules", to: "/system-configuration", what: "Senders to drop completely, and the rules the AI follows." },
     ],
   },

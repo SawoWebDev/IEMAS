@@ -30,7 +30,7 @@ public class SystemSettingsServiceTests
         var result = await CreateService(db, audit).UpdateAsync(new UpdateSystemSettingsRequest(new()
         {
             [SystemSettingKeys.OrganizationName] = "  SAWO  ",
-            [SystemSettingKeys.DefaultTimeZone] = "Asia/Manila",
+            [SystemSettingKeys.DefaultTimeZone] = "Europe/Helsinki",
             ["retention.audit_logs"] = "365",
         }), CancellationToken.None);
 

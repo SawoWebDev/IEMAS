@@ -404,3 +404,98 @@ Code and tests changed on branch `feature/inquiry-supervision`. This section rec
 - Illustrated deployment and first-use guide with an alert simulator: `web-cms/public/rollout-guide/index.html`, shown in the CMS under Help → Rollout Tutorial (screenshots from the live test system).
 - Agent 1.2.0 in `windows-client/agent-release/` (mounted into the API container).
 - **One-click installer** (2026-11-18): CMS Windows Agents > Download installer builds a zip (Agent, `Install-IEMAS-Agent.bat/.ps1`, setup file with server address and a one-time installer key). The script installs the .NET 8 Desktop Runtime if missing, installs the Agent per user, enables Start with Windows and starts it; the Agent registers with the key and is approved at once (audit `AGENT_AUTO_APPROVED`). Keys: per mailbox or for everyone, expiry (max 90 days), max PCs, withdrawable, SHA-256 hash only; an unusable key falls back to a normal Pending request. Migration `AgentInstallKeys`; tests `Agents/AgentInstallKeyTests`. Verified on Windows 11 against the test stack: one-person installer connected with no input; Everyone installer connected after typing the email once.
+
+---
+
+## 11. Hours, timing, setup and practice run (2026-11-25)
+
+Changes on branch `feature/inquiry-supervision` after section 10. `README.md` is updated to match. Sections 1–10 are unchanged.
+
+### Working hours
+- The default Reminder Policy has per-weekday `WeeklyHours`, edited in the CMS. Values: Mon–Thu 07:00–18:00, Fri 07:00–16:00, Asia/Manila.
+- Migration `20261125061116_WorkingHoursAndPracticeInquiries` applies these hours to the existing default policy. A UTC time zone is changed to Asia/Manila. Another zone chosen by an administrator is kept.
+- Friday closes at 16:00 on purpose. People who stay to 18:00 still get pop-ups and their replies count, but nobody is chased or escalated for leaving at 16:00.
+- Public holidays are added in the CMS.
+- Reminders, wait notices and escalations are sent only during working hours (10 minutes' grace after closing). New-email pop-ups are sent at any time. Setting `inquiry.alerts_in_working_hours_only`.
+
+### New default timings
+
+| Timer | Section 4 default | New default |
+|---|---|---|
+| First reply | 4 business hours | 8 working hours |
+| Reminders | 2, 2 business hours apart | 2, 4 working hours apart |
+| Supervisor emailed | 1 reminder interval after the 2nd reminder | 4 working hours after the last reminder (about 2 working days after the email) |
+| Customer follow-up | 1 business day | 1 business day |
+| Quiet conversation | (none) | 3 business days (new setting) |
+| Customer silent | 3 calendar days | 5 calendar days |
+| Waiting on a colleague | 1 business day | 2 business days |
+| Resolution target | 5 business days | 10 business days |
+| Next escalation level | 1 business day later | 2 business days later |
+
+Settings an administrator had already overridden keep their values.
+
+Examples (SAWO hours):
+- Email Mon 09:00: reply due Mon 17:00, supervisor emailed Tue 18:00.
+- Email Thu 08:00: reply due Thu 16:00, supervisor emailed Mon 08:00.
+- Email Fri 15:00: reply due Mon 14:00, supervisor emailed Tue 15:00.
+
+### Pop-up wording
+- Rewritten to be friendlier. It states the reply-by date and when the supervisor would be told.
+- New template variables: `reply_due` and `escalates_at`.
+- Templates an administrator has edited are kept.
+
+### Inquiry detection
+- The AI double-checks emails that the keyword filter calls inquiries. Setting `inquiry.ai_confirms_inquiries`, on.
+- If the AI is unreachable, the filter decides.
+- If the AI disagrees with the filter and its confidence is under 75%, the email goes to the review queue.
+- Quoted reply history is no longer scored.
+- A sender that staff marked "not an inquiry" is not auto-accepted, and the AI is told.
+- Job applications and calendar invitations are excluded.
+- Prompt version `classification-2026-11-v4`, with examples.
+- AI usage is higher than before. Check the AI audit for cost.
+
+### Email setup
+- For company domains, only an address and password are needed.
+- Setting group "Mailbox defaults": mail.sawo.com, IMAP 993, SMTP 465, SSL/TLS, domain sawo.com, self-enrollment on/off.
+- The CMS mailbox form has **Test connection** before saving. The owner is assigned automatically by email.
+
+### Windows Agent 1.3.0
+- Sign in with work email and password (Test connection, then Connect). The server checks the password with the company mail server, adds or updates the mailbox, creates the employee if needed, approves the PC and sends a confirmation email.
+- If the mailbox owner has other mailboxes under a different email, the PC waits for admin approval.
+- Brute-force protection: 5 wrong passwords per address per 15 minutes, plus the IP rate limit.
+- Passwords go from the PC to the server, so the https address must be used. The Agent asks before sending over plain http.
+
+### Practice run
+- First-run "Show me around" walkthrough with a practice inquiry: new, reminder, last reminder, escalated.
+- Only that employee gets pop-ups and sample emails. Practice inquiries are excluded from reports and are deleted on close or after 1 hour.
+- An administrator can start one in the CMS: Windows Agents → "Practice run".
+
+### Clean start (NOT YET RUN on the live server)
+- Maintenance → Reset email data → "Clean start": keeps only the ticked mailboxes (incoming and outbound). The preview lists what is removed and what is kept.
+- Users, policies, settings, AI setup and the audit log are kept.
+- Must be run by a Super Administrator after deploying, by typing RESET.
+- To keep what was asked: tick the mailbox to keep and the outbound account.
+
+### Deploying
+1. `git pull`.
+2. Back up the database: `scripts/backup-database.sh`.
+3. Production: `Build-IEMAS.bat`. For the inquiry-supervision stack: the docker compose command in section 1.
+4. Give PCs a new installer for Agent 1.3.0.
+
+### Tests and build
+- Automated tests: 929 pass.
+- CMS build passes.
+- Tests run on .NET 8. On a PC with only .NET 10, set `DOTNET_ROLL_FORWARD=Major`.
+
+### Not verified
+- Real AI model accuracy with the new prompt. There is no OpenRouter key on the development PC.
+- Real SAWO mail server login and sending.
+- Windows Agent clicked through by hand on an employee PC.
+
+### Local end-to-end check (2026-11-25)
+
+Local stack (fresh PostgreSQL, API, GreenMail test mail server; no OpenRouter key): **26 of 26 checks passed**. Covered: new defaults and office hours, refusal of unreadable hours, mailbox defaults, PC test and connect with email + password, automatic mailbox/owner creation, confirmation email, walkthrough timeline, practice run to escalation with nothing sent to the supervisor, a real inquiry becoming a Case and escalating by email on the fast test clock, newsletter ignored, clean start keeping one mailbox and the outbound account.
+
+The migration data step was also run against old-style policy values (then rolled back). The Agent 1.3.0 sign-in, walkthrough, practice and pop-up screens were rendered against this stack and inspected; no layout defects found.
+
+The CMS Docker image did not build on the development PC because npm downloads inside the container were reset (ECONNRESET); `npm run build` succeeds on Windows. The CMS screens were not clicked through in a browser.

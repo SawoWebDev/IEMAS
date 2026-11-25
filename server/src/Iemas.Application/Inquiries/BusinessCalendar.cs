@@ -23,9 +23,11 @@ public sealed class BusinessCalendar
     private readonly bool _excludeWeekends;
     private readonly HashSet<DateOnly> _holidays;
     private readonly double _scale = 1.0;
+    private readonly WeeklySchedule? _weekly;
 
-    public BusinessCalendar(TimeZoneInfo zone, TimeSpan start, TimeSpan end, bool excludeWeekends, IEnumerable<DateOnly> holidays)
+    public BusinessCalendar(TimeZoneInfo zone, TimeSpan start, TimeSpan end, bool excludeWeekends, IEnumerable<DateOnly> holidays, WeeklySchedule? weekly = null)
     {
+        _weekly = weekly;
         _zone = zone;
         _start = start;
         _end = end > start ? end : start + TimeSpan.FromHours(1);
@@ -33,8 +35,33 @@ public sealed class BusinessCalendar
         _holidays = holidays.ToHashSet();
     }
 
-    /// <summary>Length of one business day, e.g. 9 hours for 08:00-17:00. "1 business day" means this much business time.</summary>
-    public TimeSpan BusinessDayLength => _end - _start;
+    /// <summary>
+    /// Length of one business day, e.g. 9 hours for 08:00-17:00. "1 business day" means this much business time.
+    /// With different hours per weekday it is the longest working day.
+    /// </summary>
+    public TimeSpan BusinessDayLength => _weekly?.LongestDay ?? _end - _start;
+
+    /// <summary>The time zone business hours are read in; also used to show times to people.</summary>
+    public TimeZoneInfo Zone => _zone;
+
+    /// <summary>
+    /// Whether people are at work at <paramref name="atUtc"/>. <paramref name="grace"/> keeps the door open a little
+    /// after closing, so something due exactly at closing time is not held until the next morning.
+    /// </summary>
+    public bool IsOpen(DateTimeOffset atUtc, TimeSpan grace = default)
+    {
+        var local = TimeZoneInfo.ConvertTime(atUtc, _zone);
+        if (!TryGetWindow(DateOnly.FromDateTime(local.DateTime), out var window)) return false;
+        return local.TimeOfDay >= window.Start && local.TimeOfDay <= window.End + grace;
+    }
+
+    private bool TryGetWindow(DateOnly date, out (TimeSpan Start, TimeSpan End) window)
+    {
+        window = (_start, _end);
+        if (_holidays.Contains(date)) return false;
+        if (_weekly is not null) return _weekly.TryGet(date.DayOfWeek, out window);
+        return !(_excludeWeekends && date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday);
+    }
 
     /// <summary>
     /// Test mode only: round the clock, every day, and 60 times faster (1 hour of configured time = 1 minute,
@@ -64,7 +91,8 @@ public sealed class BusinessCalendar
         var start = policy.RestrictToBusinessHours ? policy.BusinessHoursStart : TimeSpan.Zero;
         var end = policy.RestrictToBusinessHours ? policy.BusinessHoursEnd : TimeSpan.FromHours(24);
         return new BusinessCalendar(ReminderTimingCalculator.ResolveTimeZone(policy.TimeZoneId), start, end, policy.ExcludeWeekends,
-            policy.Holidays.Select(h => h.Date).Concat(settingHolidays));
+            policy.Holidays.Select(h => h.Date).Concat(settingHolidays),
+            policy.RestrictToBusinessHours ? WeeklySchedule.ParseOrNull(policy.WeeklyHours) : null);
     }
 
     /// <summary>
@@ -90,8 +118,7 @@ public sealed class BusinessCalendar
         return (dates, invalid);
     }
 
-    public bool IsBusinessDay(DateOnly localDate) =>
-        !(_excludeWeekends && localDate.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) && !_holidays.Contains(localDate);
+    public bool IsBusinessDay(DateOnly localDate) => TryGetWindow(localDate, out _);
 
     /// <summary>The instant <paramref name="amount"/> of business time after <paramref name="fromUtc"/>. Time outside business hours does not count.</summary>
     public DateTimeOffset AddBusinessTime(DateTimeOffset fromUtc, TimeSpan amount)
@@ -106,12 +133,12 @@ public sealed class BusinessCalendar
 
         for (var i = 0; i < MaxDays; i++)
         {
-            if (IsBusinessDay(date))
+            if (TryGetWindow(date, out var window))
             {
-                var windowStart = timeOfDay < _start ? _start : timeOfDay;
-                if (windowStart < _end)
+                var windowStart = timeOfDay < window.Start ? window.Start : timeOfDay;
+                if (windowStart < window.End)
                 {
-                    var available = _end - windowStart;
+                    var available = window.End - windowStart;
                     if (remaining <= available)
                     {
                         return ToUtc(date, windowStart + remaining);
@@ -158,10 +185,15 @@ public sealed record SupervisionSettings(
     bool AiResolutionEnabled,
     int AiResolutionMinConfidencePercent,
     int AgentReplyRetentionDays,
-    bool TestClockMinutes = false)
+    bool TestClockMinutes = false,
+    int StalledBusinessDays = 3,
+    bool AlertsInWorkingHoursOnly = true)
 {
-    /// <summary>The product owner's Q1/Q2 defaults - also what an empty settings table yields.</summary>
-    public static readonly SupervisionSettings Defaults = new(true, 4, 2, 2, 1, 3, 1, 5, 1, true, 75, 365);
+    /// <summary>
+    /// What an empty settings table yields. A first reply is due within 8 working hours, two reminders follow
+    /// 4 working hours apart, and management is told 4 working hours after the last one - about two working days.
+    /// </summary>
+    public static readonly SupervisionSettings Defaults = new(true, 8, 4, 2, 1, 5, 2, 10, 2, true, 75, 365);
 
     public static async Task<SupervisionSettings> LoadAsync(IAppDbContext db, CancellationToken cancellationToken)
     {
@@ -179,6 +211,8 @@ public sealed record SupervisionSettings(
             await SystemSettingsService.GetBoolAsync(db, SystemSettingKeys.AiResolutionEnabled, cancellationToken),
             await Int(SystemSettingKeys.AiResolutionMinConfidence),
             await Int(SystemSettingKeys.AgentReplyRetentionDays),
-            await SystemSettingsService.GetBoolAsync(db, SystemSettingKeys.TestClockMinutes, cancellationToken));
+            await SystemSettingsService.GetBoolAsync(db, SystemSettingKeys.TestClockMinutes, cancellationToken),
+            await Int(SystemSettingKeys.StalledBusinessDays),
+            await SystemSettingsService.GetBoolAsync(db, SystemSettingKeys.AlertsInWorkingHoursOnly, cancellationToken));
     }
 }

@@ -63,6 +63,7 @@ public class ReminderPolicyService
             BusinessHoursStart = request.BusinessHoursStart,
             BusinessHoursEnd = request.BusinessHoursEnd,
             ExcludeWeekends = request.ExcludeWeekends,
+            WeeklyHours = NormalizeWeeklyHours(request.WeeklyHours),
             TimeZoneId = request.TimeZoneId,
             ExpirationWindow = request.ExpirationWindow,
             EscalationThresholdReminderCount = request.EscalationThresholdReminderCount,
@@ -126,6 +127,7 @@ public class ReminderPolicyService
         policy.BusinessHoursStart = request.BusinessHoursStart;
         policy.BusinessHoursEnd = request.BusinessHoursEnd;
         policy.ExcludeWeekends = request.ExcludeWeekends;
+        policy.WeeklyHours = NormalizeWeeklyHours(request.WeeklyHours);
         policy.TimeZoneId = request.TimeZoneId;
         policy.ExpirationWindow = request.ExpirationWindow;
         policy.EscalationThresholdReminderCount = request.EscalationThresholdReminderCount;
@@ -196,6 +198,10 @@ public class ReminderPolicyService
         if (request.InitialDelay < TimeSpan.Zero) return "Initial delay cannot be negative.";
         if (request.ReminderInterval <= TimeSpan.Zero) return "Reminder interval must be positive.";
         if (request.MinimumInterval < TimeSpan.Zero) return "Minimum interval cannot be negative.";
+        if (!string.IsNullOrWhiteSpace(request.WeeklyHours) && !WeeklySchedule.TryParse(request.WeeklyHours, out _, out var weeklyError))
+        {
+            return $"Working hours: {weeklyError}";
+        }
         if (request.RestrictToBusinessHours && request.BusinessHoursStart >= request.BusinessHoursEnd)
         {
             return "Business hours start must be before business hours end.";
@@ -216,11 +222,14 @@ public class ReminderPolicyService
         return null;
     }
 
+    private static string? NormalizeWeeklyHours(string? text) => WeeklySchedule.ParseOrNull(text)?.ToString();
+
     private static ReminderPolicyDto ToDto(ReminderPolicy p, Dictionary<Guid, string> profileNames) => new(
         p.Id, p.Name, p.Description, p.Enabled, p.IsDefault,
         p.ClassificationProfileId, p.ClassificationProfileId is Guid pid && profileNames.TryGetValue(pid, out var name) ? name : null,
         p.InitialDelay, p.ReminderInterval, p.MaxReminders, p.MinimumInterval,
         p.RestrictToBusinessHours, p.BusinessHoursStart, p.BusinessHoursEnd, p.ExcludeWeekends,
         p.TimeZoneId, p.ExpirationWindow, p.EscalationThresholdReminderCount,
-        p.Holidays.OrderBy(h => h.Date).Select(h => new ReminderPolicyHolidayDto(h.Id, h.Date, h.Label)).ToList());
+        p.Holidays.OrderBy(h => h.Date).Select(h => new ReminderPolicyHolidayDto(h.Id, h.Date, h.Label)).ToList(),
+        p.WeeklyHours);
 }

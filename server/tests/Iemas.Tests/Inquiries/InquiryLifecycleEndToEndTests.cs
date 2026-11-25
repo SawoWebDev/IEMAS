@@ -42,7 +42,7 @@ public class InquiryLifecycleEndToEndTests
         Assert.Equal(CaseWorkStatus.ActionRequired, c.WorkStatus);
         Assert.Equal("Request for quotation", c.Subject);
         Assert.Equal(Monday0900, c.FirstEmailReceivedAt);
-        Assert.Contains("New Email", h.PopUpTitlesFor(Agent1));
+        Assert.Contains("New customer inquiry", h.PopUpTitlesFor(Agent1));
         Assert.Empty(h.Ai.CallsByModel); // clear inquiry: decided by the Zettelkasten filter alone
         Assert.NotNull(c.ResolutionDueAt);
         Assert.Equal(Day(7, 9), c.ResolutionDueAt); // 5 business days later: next Monday 09:00
@@ -101,12 +101,12 @@ public class InquiryLifecycleEndToEndTests
         // 15:00 - first reminder (2 business hours after the deadline).
         await h.RunAsync(Day(0, 15, 0));
         Assert.Equal(1, await h.Db.Reminders.CountAsync(r => r.Status == ReminderStatus.Sent));
-        Assert.Equal("Reminder", h.PopUpTitlesFor(Agent1).Last());
+        Assert.Equal("Friendly reminder", h.PopUpTitlesFor(Agent1).Last());
 
         // 17:00 - second reminder, carrying the escalation warning.
         await h.RunAsync(Day(0, 17, 0));
         Assert.Equal(2, await h.Db.Reminders.CountAsync(r => r.Status == ReminderStatus.Sent));
-        Assert.Equal("Escalation Warning", h.PopUpTitlesFor(Agent1).Last());
+        Assert.Equal("Last reminder (escalation warning)", h.PopUpTitlesFor(Agent1).Last());
 
         // Overnight and early Tuesday: business time is not counting, nothing happens.
         await h.RunAsync(Day(1, 9, 59));
@@ -130,7 +130,7 @@ public class InquiryLifecycleEndToEndTests
         Assert.Equal(CaseWorkStatus.Escalated, c.WorkStatus);
         Assert.Equal(InquiryStage.AwaitingInitialResponse, c.Stage);
         Assert.Equal(h.Agents[Agent1].Id, c.OwnerEmployeeId); // escalation never transfers ownership
-        Assert.Contains("Escalated", h.PopUpTitlesFor(Agent1));
+        Assert.Contains("Escalated to your supervisor", h.PopUpTitlesFor(Agent1));
 
         // Still neglected one business day later: the next level (the director) is told.
         await h.RunAsync(Day(2, 10, 0));
@@ -224,7 +224,7 @@ public class InquiryLifecycleEndToEndTests
         Assert.Equal(CaseReplyStatus.AwaitingReply, c.ReplyStatus);
         Assert.Equal(3, await h.Db.CaseEmails.CountAsync(ce => ce.CaseId == c.Id)); // inbound, outbound, inbound
         Assert.Equal(aiCallsBefore, h.Ai.CallsByModel.Count);                       // linked by thread, not re-screened
-        Assert.Equal(2, h.PopUpTitlesFor(Agent1).Count(t => t == "New Email"));      // new inquiry + follow-up
+        Assert.Equal(2, h.PopUpTitlesFor(Agent1).Count(t => t == "New customer inquiry"));      // new inquiry + follow-up
         Assert.DoesNotContain(WroteAgainTitle, h.PopUpTitlesFor(Agent1));           // the agent had replied: a normal follow-up
 
         // The follow-up gets its own timer: 1 business day, then reminders.
@@ -249,7 +249,7 @@ public class InquiryLifecycleEndToEndTests
 
         Assert.Equal(1, await h.Db.Cases.CountAsync());                       // still one inquiry: nothing split or lost
         var titles = h.PopUpTitlesFor(Agent1);
-        Assert.Equal(1, titles.Count(t => t == "New Email"));                 // only the original inquiry was "new"
+        Assert.Equal(1, titles.Count(t => t == "New customer inquiry"));                 // only the original inquiry was "new"
         Assert.Equal(1, titles.Count(t => t == WroteAgainTitle));             // the second email: needs a response, not a new email
 
         var alert = await h.Db.Notifications.SingleAsync(n => n.Type == Iemas.Domain.Notifications.NotificationType.CustomerWroteAgain);
@@ -289,7 +289,7 @@ public class InquiryLifecycleEndToEndTests
         Assert.Equal(new[] { "Quote please", "Spare parts" }, cases.Select(c => c.Subject));
         Assert.Equal(InquiryStage.InitialResponseReceived, cases[0].Stage);        // the answered one is left alone
         Assert.Equal(InquiryStage.AwaitingInitialResponse, cases[1].Stage);
-        Assert.Equal(2, h.PopUpTitlesFor(Agent1).Count(t => t == "New Email"));    // the new inquiry is announced as new
+        Assert.Equal(2, h.PopUpTitlesFor(Agent1).Count(t => t == "New customer inquiry"));    // the new inquiry is announced as new
         Assert.DoesNotContain(WroteAgainTitle, h.PopUpTitlesFor(Agent1));
     }
 
@@ -315,7 +315,7 @@ public class InquiryLifecycleEndToEndTests
         Assert.Equal(CaseWorkStatus.Completed, cases[0].WorkStatus);               // history untouched
         Assert.Equal(0, cases[0].ReopenCount);
         Assert.Equal(CaseWorkStatus.ActionRequired, cases[1].WorkStatus);
-        Assert.Equal(2, h.PopUpTitlesFor(Agent1).Count(t => t == "New Email"));
+        Assert.Equal(2, h.PopUpTitlesFor(Agent1).Count(t => t == "New customer inquiry"));
     }
 
     [Fact]
@@ -566,8 +566,8 @@ public class InquiryLifecycleEndToEndTests
         // Reminders reach only the agents who still owe a reply.
         await h.RunAsync(Day(0, 13, 0));
         await h.RunAsync(Day(0, 15, 0));
-        Assert.Contains("Reminder", h.PopUpTitlesFor(Agent1));
-        Assert.Contains("Reminder", h.PopUpTitlesFor(Agent3));
+        Assert.Contains("Friendly reminder", h.PopUpTitlesFor(Agent1));
+        Assert.Contains("Friendly reminder", h.PopUpTitlesFor(Agent3));
         Assert.DoesNotContain("Reminder", h.PopUpTitlesFor(Agent2));
 
         // Escalations name the right agent.
@@ -611,7 +611,7 @@ public class InquiryLifecycleEndToEndTests
         // The deadline still applies - internal activity did not answer the customer.
         await h.RunAsync(Day(0, 13, 0));
         await h.RunAsync(Day(0, 15, 0));
-        Assert.Contains("Reminder", h.PopUpTitlesFor(Agent1));
+        Assert.Contains("Friendly reminder", h.PopUpTitlesFor(Agent1));
     }
 
     [Fact]

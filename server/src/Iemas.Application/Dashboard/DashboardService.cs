@@ -55,11 +55,12 @@ public class DashboardService
             CaseWorkStatus.Overdue, CaseWorkStatus.Escalated, CaseWorkStatus.ReviewRequired,
         };
 
-        var openCases = await _db.Cases.CountAsync(c => openWorkStatuses.Contains(c.WorkStatus), cancellationToken);
-        var awaitingReply = await _db.Cases.CountAsync(c => c.ReplyStatus == CaseReplyStatus.AwaitingReply, cancellationToken);
-        var overdue = await _db.Cases.CountAsync(c => c.WorkStatus == CaseWorkStatus.Overdue, cancellationToken);
-        var escalated = await _db.Cases.CountAsync(c => c.WorkStatus == CaseWorkStatus.Escalated, cancellationToken);
-        var completedToday = await _db.Cases.CountAsync(c => c.WorkStatus == CaseWorkStatus.Completed && c.CompletedAt >= todayStartUtc, cancellationToken);
+        var realCases = _db.Cases.Where(c => !c.IsPractice);
+        var openCases = await realCases.CountAsync(c => openWorkStatuses.Contains(c.WorkStatus), cancellationToken);
+        var awaitingReply = await realCases.CountAsync(c => c.ReplyStatus == CaseReplyStatus.AwaitingReply, cancellationToken);
+        var overdue = await realCases.CountAsync(c => c.WorkStatus == CaseWorkStatus.Overdue, cancellationToken);
+        var escalated = await realCases.CountAsync(c => c.WorkStatus == CaseWorkStatus.Escalated, cancellationToken);
+        var completedToday = await realCases.CountAsync(c => c.WorkStatus == CaseWorkStatus.Completed && c.CompletedAt >= todayStartUtc, cancellationToken);
 
         // §87 "Online Employees"/"Offline Employees" — an Employee counts as online if at least
         // one of their Approved Agents currently reports Connected (§13 multiple-Agent policy).
@@ -73,7 +74,7 @@ public class DashboardService
         var offlineEmployees = activeEmployeeIds.Count - onlineEmployees;
 
         // §87 "Open Cases by Employee" — top 10 by open Case count, matches CMS table conventions elsewhere.
-        var openCasesByEmployee = await _db.Cases
+        var openCasesByEmployee = await realCases
             .Where(c => openWorkStatuses.Contains(c.WorkStatus) && c.OwnerEmployeeId != null)
             .GroupBy(c => c.OwnerEmployeeId!.Value)
             .Select(g => new { EmployeeId = g.Key, Count = g.Count() })

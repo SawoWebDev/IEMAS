@@ -45,6 +45,57 @@ public class AgentSessionManager : IAsyncDisposable
     public string? AutoRegistrationError { get; private set; }
     public event Action<AgentPushMessage>? PushReceived;
 
+    public string ServerUrl => _settings.ServerUrl;
+
+    /// <summary>True until the first-time walkthrough has been shown on this PC.</summary>
+    public bool TourDue => !_settings.TourSeen;
+
+    public void MarkTourSeen()
+    {
+        if (_settings.TourSeen) return;
+        _settings.TourSeen = true;
+        try { _settings.Save(); } catch (System.IO.IOException) { /* shown once more next time */ }
+    }
+
+    /// <summary>Checks a mailbox email and password against the company mail server; nothing is saved.</summary>
+    public Task<ApiResult<MailboxTestResponse>> TestMailboxAsync(string email, string password) =>
+        _api.TestMailboxAsync(new MailboxLoginRequest(email, password), CancellationToken.None);
+
+    /// <summary>Registers the mailbox and this PC with the email and password, then collects the PC's key.</summary>
+    public async Task<ApiResult<EnrollMailboxResponse>> EnrollMailboxAsync(string email, string password)
+    {
+        var result = await _api.EnrollMailboxAsync(
+            new EnrollMailboxRequest(email, password, Environment.MachineName, _settings.ServerUrl, AgentVersion, Environment.MachineName),
+            CancellationToken.None);
+        if (!result.Succeeded || result.Value is null) return result;
+
+        AutoRegistrationError = null;
+        await AwaitApprovalAsync(result.Value.AgentId, result.Value.RegistrationRequestToken, result.Value.Status);
+        return result;
+    }
+
+    public async Task<AgentGuideDto?> GetGuideAsync() => (await _api.GetGuideAsync(CancellationToken.None)).Value;
+
+    public async Task<ApiResult<PracticeStateDto>> StartPracticeAsync()
+    {
+        var result = await _api.StartPracticeAsync(CancellationToken.None);
+        if (result.Succeeded) await RefreshSyncAsync();
+        return result;
+    }
+
+    public async Task<ApiResult<PracticeStateDto>> AdvancePracticeAsync(Guid caseId)
+    {
+        var result = await _api.AdvancePracticeAsync(caseId, CancellationToken.None);
+        if (result.Succeeded) await RefreshSyncAsync();
+        return result;
+    }
+
+    public async Task EndPracticeAsync(Guid caseId)
+    {
+        await _api.EndPracticeAsync(caseId, CancellationToken.None);
+        await RefreshSyncAsync();
+    }
+
     public AgentSessionManager()
     {
         _settings = AgentSettings.Load();
@@ -160,17 +211,22 @@ public class AgentSessionManager : IAsyncDisposable
 
         AutoRegistrationError = null;
 
-        _agentId = result.Value.AgentId;
-        _registrationRequestToken = result.Value.RegistrationRequestToken;
+        await AwaitApprovalAsync(result.Value.AgentId, result.Value.RegistrationRequestToken, result.Value.Status);
+        return (true, null);
+    }
+
+    private async Task AwaitApprovalAsync(Guid agentId, string requestToken, int status)
+    {
+        _agentId = agentId;
+        _registrationRequestToken = requestToken;
         State = SessionState.PendingApproval;
         StateUpdated?.Invoke();
         _reauthWatchTimer.Start();
-        if (result.Value.Status == 1)
+        if (status == 1)
         {
-            // Approved on the spot by the installer key: collect the credential now instead of on the next poll.
+            // Approved on the spot (installer key or mailbox password): collect the credential now instead of on the next poll.
             await PollRegistrationIfPendingAsync();
         }
-        return (true, null);
     }
 
     private async Task PollRegistrationIfPendingAsync()

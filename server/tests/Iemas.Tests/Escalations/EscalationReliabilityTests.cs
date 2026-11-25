@@ -70,6 +70,7 @@ public class EscalationReliabilityTests : IDisposable
         };
         _db.Cases.Add(_case);
         _db.SaveChanges();
+        ShortTimings.Apply(_db);
     }
 
     public void Dispose() => _db.Dispose();

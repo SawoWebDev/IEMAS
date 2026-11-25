@@ -16,7 +16,9 @@ public record ClassificationRequest(
     /// <summary>Admin-defined rules (System Configuration) for what counts as a legitimate business email.</summary>
     string? LegitimacyRules = null,
     /// <summary>Admin-defined rules (System Configuration) for when the sender expects a reply.</summary>
-    string? ResponseRules = null);
+    string? ResponseRules = null,
+    /// <summary>What this system already knows about the sender (from staff decisions, never from the email).</summary>
+    string? SenderHistory = null);
 
 public static class AiUsagePurpose
 {

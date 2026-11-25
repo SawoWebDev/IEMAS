@@ -92,8 +92,8 @@ public static class SupervisionRules
                 ReminderTrigger.ResponseOverdue, escalate: true, firstReminderType: NotificationType.Reminder, laterType: NotificationType.Reminder),
 
             InquiryStage.Inactive => AgentLadder(c, s, cal, now,
-                cal.AddBusinessDays(c.StageChangedAt, s.IdleBusinessDays),
-                $"The conversation has made no progress for {s.IdleBusinessDays} business day(s)",
+                cal.AddBusinessDays(c.StageChangedAt, s.StalledBusinessDays),
+                $"The conversation has made no progress for {s.StalledBusinessDays} business day(s)",
                 ReminderTrigger.ConversationIdle, escalate: true, firstReminderType: NotificationType.UpdateRequested, laterType: NotificationType.UpdateRequested),
 
             InquiryStage.InitialResponseReceived or InquiryStage.AgentFollowUpSent or InquiryStage.AwaitingCustomer =>
@@ -130,6 +130,34 @@ public static class SupervisionRules
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// When the reply is due and when management would be told if nothing happens, for an inquiry on which the
+    /// agent owes a reply. Used to put real dates in the pop-ups. Null for stages with no such deadline.
+    /// </summary>
+    public static (DateTimeOffset? ReplyDueAt, DateTimeOffset? EscalatesAt) Forecast(Case c, SupervisionSettings s, BusinessCalendar cal)
+    {
+        DateTimeOffset? deadline = c.Stage switch
+        {
+            InquiryStage.AwaitingInitialResponse => cal.AddBusinessHours(c.StageChangedAt, s.FirstResponseBusinessHours),
+            InquiryStage.CustomerFollowUpReceived => cal.AddBusinessDays(c.StageChangedAt, s.IdleBusinessDays),
+            InquiryStage.Inactive => cal.AddBusinessDays(c.StageChangedAt, s.StalledBusinessDays),
+            _ => null,
+        };
+        if (deadline is not DateTimeOffset due) return (null, null);
+        if (c.EpisodeEscalations > 0) return (due, null);
+
+        var interval = s.ReminderIntervalBusinessHours;
+        var escalates = cal.AddBusinessHours(due, interval * (s.RemindersBeforeEscalation + 1));
+        // A reminder that went out late pushes the rest of the ladder back with it.
+        if (c.EpisodeRemindersSent > 0 && c.EpisodeLastReminderAt is DateTimeOffset last)
+        {
+            var remaining = Math.Max(0, s.RemindersBeforeEscalation - c.EpisodeRemindersSent) + 1;
+            var afterLast = cal.AddBusinessHours(last, interval * remaining);
+            if (afterLast > escalates) escalates = afterLast;
+        }
+        return (due, escalates);
     }
 
     private static SupervisionAction? AgentLadder(
@@ -195,7 +223,7 @@ public static class SupervisionRules
                 : null;
         }
 
-        return AgentLadder(c, s, cal, now, cal.AddBusinessDays(c.EpisodeWaitNoticeAt.Value, s.IdleBusinessDays),
+        return AgentLadder(c, s, cal, now, cal.AddBusinessDays(c.EpisodeWaitNoticeAt.Value, s.StalledBusinessDays),
             "The inquiry still awaits the agent's resolution confirmation",
             ReminderTrigger.ConfirmResolution, escalate: false, NotificationType.ConfirmResolution, NotificationType.ConfirmResolution);
     }

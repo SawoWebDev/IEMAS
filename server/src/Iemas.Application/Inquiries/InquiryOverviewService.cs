@@ -120,7 +120,7 @@ public class InquiryOverviewService
     public async Task<InquiryOverviewDto> GetOverviewAsync(CancellationToken cancellationToken)
     {
         var since = DateTimeOffset.UtcNow.AddDays(-30);
-        var rows = await _db.Cases.AsNoTracking()
+        var rows = await _db.Cases.AsNoTracking().Where(c => !c.IsPractice)
             .Where(c => (c.Stage != InquiryStage.Resolved && c.Stage != InquiryStage.Closed) || (c.Stage == InquiryStage.Resolved && c.StageChangedAt >= since))
             .Select(c => new
             {
@@ -137,7 +137,7 @@ public class InquiryOverviewService
             .Select(g => Count(g.Key.OwnerEmployeeId, g.Key.Name ?? "(unassigned)", g.ToList()))
             .OrderByDescending(a => a.Overdue + a.Escalated).ThenByDescending(a => a.OpenTotal).ThenBy(a => a.AgentName)
             .ToList();
-        return new InquiryOverviewDto(Count(null, "All agents", typed), agents, DateTimeOffset.UtcNow, await _db.Cases.CountAsync(cancellationToken));
+        return new InquiryOverviewDto(Count(null, "All agents", typed), agents, DateTimeOffset.UtcNow, await _db.Cases.CountAsync(c => !c.IsPractice, cancellationToken));
     }
 
     private sealed record CountRow(Guid? OwnerEmployeeId, string? Name, InquiryStage Stage, bool Overdue, bool Escalated);
@@ -163,7 +163,7 @@ public class InquiryOverviewService
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
-        var q = _db.Cases.AsNoTracking();
+        var q = _db.Cases.AsNoTracking().Where(c => !c.IsPractice);
         if (employeeId is not null) q = q.Where(c => c.OwnerEmployeeId == employeeId);
         if (!string.IsNullOrWhiteSpace(search))
         {

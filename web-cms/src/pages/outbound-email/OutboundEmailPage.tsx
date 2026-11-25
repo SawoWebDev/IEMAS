@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiClient } from "../../api/client";
-import type { EmailAccountDto, TestConnectionResult } from "../../api/types";
+import type { EmailAccountDto, MailboxDefaultsDto, TestConnectionResult } from "../../api/types";
 import { InfoTip, TipLabel } from "../../components/help/Tooltip";
 
 /// Requirements §18 (Outbound Email Configuration — internal IEMAS notification emails only,
@@ -25,6 +25,16 @@ export default function OutboundEmailPage() {
   const [encryption, setEncryption] = useState("STARTTLS");
   const [username, setUsername] = useState("");
   const [secret, setSecret] = useState("");
+  const [defaults, setDefaults] = useState<MailboxDefaultsDto | null>(null);
+
+  useEffect(() => {
+    apiClient.get<MailboxDefaultsDto>("/email-accounts/defaults").then((res) => {
+      setDefaults(res.data);
+      setHost(res.data.imapHost);
+      setPort(res.data.smtpPort);
+      setEncryption("SSL/TLS");
+    }).catch(() => { /* the form still works with the values typed in */ });
+  }, []);
 
   async function load() {
     setLoading(true);
@@ -55,7 +65,7 @@ export default function OutboundEmailPage() {
         host,
         port,
         encryption,
-        username,
+        username: username || null,
         authMethod: 0,
         secret,
         ownerEmployeeId: null, // §18 — no personal owner for the outbound notification account
@@ -63,7 +73,7 @@ export default function OutboundEmailPage() {
         monitoringEnabled: false, // §18/§19 — never monitor the outbound mailbox as a customer mailbox
       });
       setEmailAddress("");
-      setHost("");
+      setHost(defaults?.imapHost ?? "");
       setUsername("");
       setSecret("");
       setShowForm(false);
@@ -112,9 +122,9 @@ export default function OutboundEmailPage() {
     <div>
       <h1>Outbound Email</h1>
       <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
-        An SMTP mailbox set aside for IEMAS's own outgoing email. For now it is only stored and connection-tested —
-        IEMAS does not send any email yet; employees are alerted by pop-ups on their PC. It is never checked for
-        customer email. Passwords are encrypted and never displayed after saving.
+        The SMTP mailbox IEMAS sends from: escalation emails to supervisors, practice samples and the "your PC is connected"
+        confirmation. IEMAS never emails customers and never checks this mailbox for customer email. The mail server is
+        pre-filled for company addresses. Passwords are encrypted and never displayed after saving.
       </p>
 
       {error && <div className="form-error">{error}</div>}
@@ -155,7 +165,7 @@ export default function OutboundEmailPage() {
           </div>
           <div>
             <label><TipLabel tip="The login for the sending mailbox, usually its full email address.">Username</TipLabel></label><br />
-            <input value={username} onChange={(e) => setUsername(e.target.value)} required />
+            <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder={emailAddress || "the email address"} />
           </div>
           <div>
             <label><TipLabel tip="The mailbox password or app password. Stored encrypted and never shown again.">Password</TipLabel></label><br />

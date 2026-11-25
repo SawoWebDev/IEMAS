@@ -357,12 +357,12 @@ cd IEMAS</pre>
   <ol class="steps">
     <li><h3>Add the employees</h3>
       <div class="step-body">
-        <p><b>People &amp; Devices → Employees.</b> One row per person, with the company email address they will register the Agent with.</p>
+        <p><b>People &amp; Devices → Employees.</b> You can skip this for people whose email address names them: IEMAS adds the employee by itself when their mailbox is added. Add managers here, and set each person's <b>Supervisor</b>.</p>
         <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;People &amp; Devices → Employees</div><img src="img/cms-employees.png" alt="Employees page" loading="lazy"></figure>
       </div></li>
     <li><h3>Add each mailbox and choose its owner</h3>
       <div class="step-body">
-        <p><b>Email → Email Accounts → Add.</b> Enter the mailbox address, the IMAP server and its password, and choose the <b>owner</b>: the employee whose PC gets the alerts for this mailbox. Press <b>Test connection</b> and make sure the <b>Sent folder</b> is found; IEMAS needs it to see the replies.</p>
+        <p><b>Email → Email Accounts → Add.</b> For a company address, enter only the <b>email address</b> and <b>password</b>; the company mail server is already filled in. Press <b>Test connection</b>, then <b>Add account</b>. The <b>owner</b> (the employee whose PC gets the alerts) is chosen automatically by email address. Employees can also add their own mailbox from their PC (Part 3), so you do not have to collect passwords.</p>
         <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Email → Email Accounts</div><img src="img/cms-email-accounts.png" alt="Email accounts page" loading="lazy"></figure>
       </div></li>
     <li><h3>Set the outgoing mail account</h3>
@@ -377,8 +377,8 @@ cd IEMAS</pre>
       </div></li>
     <li><h3>Set working hours and holidays</h3>
       <div class="step-body">
-        <p><b>Alerts &amp; Escalation → Reminder Policies → Default.</b> Set the office hours, time zone, whether weekends count, and the public holidays. Every deadline (first reply within 4 working hours, reminders, escalation, the 5-day resolution target) counts only these hours.</p>
-        <div class="note warn"><b>Do this before go-live.</b> Out of the box the default policy counts around the clock, so an email on Friday evening would escalate during the weekend.</div>
+        <p><b>Alerts &amp; Escalation → Reminder Policies → Default.</b> The office hours are pre-set to <b>Monday to Thursday 07:00-18:00 and Friday 07:00-16:00</b>, Asia/Manila time. Add the public holidays. Every deadline counts only these hours, and reminders and escalations are only sent during them. Friday is set to 16:00 on purpose: on days people stay until 18:00 they still get pop-ups and their replies count, but nobody is escalated for leaving on time.</p>
+        <div class="note warn"><b>Add the holidays before go-live,</b> otherwise a holiday counts as a normal working day.</div>
         <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Alerts &amp; Escalation → Reminder Policies</div><img src="img/cms-reminder-policies.png" alt="Reminder policies page" loading="lazy"></figure>
       </div></li>
     <li><h3>Check the system is healthy</h3>
@@ -394,7 +394,7 @@ cd IEMAS</pre>
   <div class="part-head">
     <div class="eyebrow">Part 3 · on every employee PC</div>
     <h2>Install the IEMAS Agent</h2>
-    <p class="who">Who: an <b>administrator</b> downloads the installer once; the <b>employee</b> (or IT) runs it on the PC. About 2 minutes per PC, and no approval step.</p>
+    <p class="who">Who: an <b>administrator</b> downloads the installer once; the <b>employee</b> runs it and, if asked, signs in with their work email and password. About 2 minutes per PC.</p>
   </div>
   <ol class="steps">
     <li><h3>Download the installer from the CMS</h3>
@@ -421,7 +421,8 @@ cd IEMAS</pre>
       </div></li>
     <li><h3>Check the light is green</h3>
       <div class="step-body">
-        <p>With a one-person installer, the Agent shows <b>● Connected</b> and the employee's name within a few seconds. With an "Everyone" installer, the person types their company email address once and clicks <b>Register</b>; it connects straight away.</p>
+        <p>With a one-person installer, the Agent shows <b>● Connected</b> and the employee's name within a few seconds. Otherwise the person types their <b>work email and password</b>, clicks <b>Test connection</b>, then <b>Connect</b>. IEMAS signs in to the company mail server to check them, adds the mailbox to the CMS, approves the PC and sends a confirmation email to their inbox.</p>
+        <div class="note warn"><b>Use the https address (port 8443).</b> The password travels from the PC to the server; the Agent asks before sending it over plain http.</div>
         <div class="shots-2">
           <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;"Everyone" installer · first start</div><img src="img/agent-connect.png" alt="Agent asking for the email address after an Everyone installer" loading="lazy"></figure>
           <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Connected</div><img src="img/agent-main.png" alt="Agent connected and listing inquiries" loading="lazy"></figure>
@@ -429,6 +430,7 @@ cd IEMAS</pre>
       </div></li>
   </ol>
   <details class="faq"><summary>Setting up a PC by hand instead (no installer)</summary>
+    <p>With "Employees can register their own mailbox" on (System Settings → Mailbox defaults), a PC set up by hand needs only the server address and the work email and password. The approval steps below are for when it is off.</p>
     <p>Install the runtime with <code>winget install Microsoft.DotNet.DesktopRuntime.8</code>, copy <code>IemasAgent.exe</code> from the server's <code>windows-clientgent-release</code> folder and start it. In <b>Settings</b> enter the server address, tick <b>Allow self-signed certificates</b>, and Save. Register with the company email address; the PC then appears as <b>Pending</b> under Windows Agents until an administrator chooses the employee and presses <b>Approve</b>. An installer that has expired falls back to this same Pending request.</p>
   </details>
   <div class="note"><b>Updating the Agent later:</b> download a new installer and run it the same way. The registration is kept.</div>
@@ -439,6 +441,7 @@ cd IEMAS</pre>
   <div class="part-head">
     <div class="eyebrow">Part 4 · for every employee</div>
     <h2>Using the Agent the first time</h2>
+    <p>The first time it connects, the Agent opens <b>Show me around</b>: what appears on the PC, the real reply and escalation times for that person, and a <b>practice inquiry</b> that goes from new email to escalation while they watch. Only that employee receives its pop-ups and emails, and it is deleted afterwards. It can be opened again from the Help tab, and an administrator can start it from <b>Windows Agents → Practice run</b>.</p>
     <p>The Agent shows the inquiries that need you. You still answer customers in Outlook. When the customer's request is fully handled, you confirm it in the Agent.</p>
   </div>
   <div class="shots-2">
@@ -530,34 +533,34 @@ cd IEMAS</pre>
 
 <script>
 const ALERTS = [
-  { key: "new", label: "New email", badge: "NEW EMAIL", accent: "#2563EB", tint: "#DBEAFE", text: "#1E40AF",
-    title: "New Email", msg: 'Hey Maria, you have a new email received from henrik.berg@example.com: "Quote for 3 sauna heaters for our spa". Please check.' },
-  { key: "rem", label: "Reminder", badge: "REMINDER", accent: "#D97706", tint: "#FEF3C7", text: "#92400E",
-    title: "Reminder", msg: 'Hey Maria, you haven\'t replied to the email "Quote for 3 sauna heaters for our spa" from henrik.berg@example.com. Please reply.' },
+  { key: "new", label: "New inquiry", badge: "NEW EMAIL", accent: "#2563EB", tint: "#DBEAFE", text: "#1E40AF",
+    title: "New customer inquiry", msg: 'Hi Maria, Henrik Berg sent an inquiry: "Quote for 3 sauna heaters for our spa". Please reply by Mon 23 Nov, 5:12 PM. Just answer from your own mailbox as usual; IEMAS sees your reply by itself.' },
+  { key: "rem", label: "Friendly reminder", badge: "REMINDER", accent: "#D97706", tint: "#FEF3C7", text: "#92400E",
+    title: "Friendly reminder", msg: 'Hi Maria, "Quote for 3 sauna heaters for our spa" from Henrik Berg is still waiting for a reply. It was due Mon 23 Nov, 5:12 PM. If you already answered by phone or from another mailbox, open it and mark it resolved.' },
   { key: "again", label: "Customer wrote again", badge: "NEEDS RESPONSE", accent: "#E11D48", tint: "#FFE4E6", text: "#9F1239", count: 2,
-    title: "Customer follow-up: still needs your response", msg: 'Hey Maria, Henrik Berg wrote again on CASE-000052 and is still waiting for your reply (2 unanswered email(s), first one 3h 10m ago). Latest: "Re: Quote for 3 sauna heaters".' },
-  { key: "warn", label: "Escalation warning", badge: "ESCALATION WARNING", accent: "#EA580C", tint: "#FFEDD5", text: "#9A3412",
-    title: "Escalation Warning", msg: 'Hey Maria, "Quote for 3 sauna heaters for our spa" (CASE-000052) is still unresolved after 2 reminder(s). It will be escalated if it remains unresolved.' },
+    title: "Customer follow-up: still needs your response", msg: 'Hi Maria, Henrik Berg wrote again on CASE-000052 and is still waiting for your reply (2 unanswered email(s), the first 23h 18m ago). Latest: "Re: Quote for 3 sauna heaters". Please reply by Mon 23 Nov, 5:12 PM.' },
+  { key: "warn", label: "Last reminder", badge: "ESCALATION WARNING", accent: "#EA580C", tint: "#FFEDD5", text: "#9A3412",
+    title: "Last reminder (escalation warning)", msg: 'Maria, this is the last reminder for "Quote for 3 sauna heaters for our spa" (CASE-000052). If there is no reply by Wed 25 Nov, 7:12 AM, your supervisor will be told so they can help. A short reply to the customer is enough to stop this.' },
   { key: "esc", label: "Escalated", badge: "ESCALATED", accent: "#DC2626", tint: "#FEE2E2", text: "#991B1B",
-    title: "Escalated", msg: '"Quote for 3 sauna heaters for our spa" (CASE-000052) from henrik.berg@example.com has been escalated to management because it still needs your attention.' },
+    title: "Escalated to your supervisor", msg: '"Quote for 3 sauna heaters for our spa" (CASE-000052) from Henrik Berg has been waiting 1d 22h, so your supervisor was asked to help. Please reply to the customer when you can, or add a note if you are already handling it.' },
   { key: "over", label: "Overdue", badge: "OVERDUE", accent: "#DC2626", tint: "#FEE2E2", text: "#991B1B",
-    title: "Overdue", msg: 'Overdue: "Quote for 3 sauna heaters for our spa" from Henrik Berg (henrik.berg@example.com), received 2026-11-18 09:12, outstanding for 5 working days. Summary: Spa owner asks for a price on three 9 kW heaters.' },
+    title: "Overdue", msg: 'Hi Maria, "Quote for 3 sauna heaters for our spa" from Henrik Berg has been open for 14d 0h, longer than the target. Please send the customer an update, or mark it resolved if it is finished.' },
   { key: "update", label: "Update needed", badge: "FOLLOW UP", accent: "#7C3AED", tint: "#EDE9FE", text: "#5B21B6",
-    title: "Update needed", msg: 'Hey Maria, "Quote for 3 sauna heaters for our spa" (CASE-000052) from henrik.berg@example.com has had no progress for 1 working day. Please reply to the customer or update the inquiry.' },
+    title: "Update needed", msg: 'Hi Maria, "Quote for 3 sauna heaters for our spa" (CASE-000052) from Henrik Berg has been quiet for a while. Please reply to the customer, add a note on where it stands, or mark it resolved.' },
   { key: "follow", label: "Customer gone quiet", badge: "FOLLOW UP", accent: "#7C3AED", tint: "#EDE9FE", text: "#5B21B6",
-    title: "Follow-up may be needed", msg: 'Hey Maria, henrik.berg@example.com has not replied to you about "Quote for 3 sauna heaters for our spa" (CASE-000052) for 3 days. Please follow up, or close the inquiry if it is settled.' },
+    title: "Follow-up may be needed", msg: 'Hi Maria, Henrik Berg has not answered about "Quote for 3 sauna heaters for our spa" (CASE-000052) for a few days. A short follow-up may help. If the matter is settled, mark it resolved.' },
   { key: "conf", label: "Looks resolved", badge: "PLEASE CONFIRM", accent: "#059669", tint: "#D1FAE5", text: "#065F46",
-    title: "Please confirm: resolved?", msg: 'Hey Maria, "Quote for 3 sauna heaters for our spa" (CASE-000052) from henrik.berg@example.com looks resolved. Please confirm it is resolved, or reject so monitoring continues.' },
+    title: "Please confirm: resolved?", msg: 'Hi Maria, "Quote for 3 sauna heaters for our spa" (CASE-000052) from Henrik Berg looks finished. Please confirm it is resolved, or choose Not resolved yet to keep following it.' },
 ];
 const MEANING = {
-  new: "A customer email needs a reply. Arrives within about a minute of the email.",
-  rem: "No reply found yet after the first deadline (default 4 working hours), then every 2 hours.",
+  new: "A customer sent an inquiry. Arrives within about a minute of the email.",
+  rem: "No reply 4 working hours after the 8-hour reply time.",
   again: "The customer chased an inquiry you still haven't answered. The pill counts their unanswered emails.",
-  warn: "Last call: the next missed deadline sends it to your manager.",
-  esc: "Your manager has been emailed. Reply as soon as you can; nothing more is sent once you do.",
-  over: "Past the resolution target (default 5 working days).",
-  update: "You replied, but nothing has moved for a working day.",
-  follow: "You're waiting on the customer and they have gone quiet for 3 days.",
+  warn: "4 working hours after the first reminder. The date shown is when your supervisor would be told.",
+  esc: "4 working hours after the last reminder, about two working days after the email. Your supervisor has been emailed.",
+  over: "Past the resolution target (default 10 working days).",
+  update: "You replied, but nothing has moved for a while.",
+  follow: "You're waiting on the customer and they have gone quiet for 5 days.",
   conf: "The AI thinks the conversation is finished. You confirm or reject; it never closes by itself.",
 };
 const stack = document.getElementById("stack");
@@ -605,14 +608,15 @@ ALERTS.forEach(a => {
 
 // One inquiry, start to finish, using the default timings.
 const STEPS = [
-  { when: "Mon 09:12", clock: "09:12", t: "Henrik emails Maria's mailbox", d: "IEMAS reads it within a minute. The filter recognises a price request; no AI needed.", alert: "new" },
-  { when: "Mon 13:12", clock: "13:12", t: "No reply after 4 working hours", d: "First reminder pop-up.", alert: "rem" },
-  { when: "Mon 14:05", clock: "14:05", t: "Henrik writes again", d: "Joined to the same inquiry; Maria is told the customer is still waiting.", alert: "again" },
-  { when: "Mon 15:12", clock: "15:12", t: "Still no reply after 2 reminders", d: "Escalation warning pop-up.", alert: "warn" },
-  { when: "Mon 17:12", clock: "17:12", t: "Escalated", d: "Maria's supervisor gets the email shown below. Maria gets a red pop-up.", alert: "esc" },
-  { when: "Tue 08:40", clock: "08:40", t: "Maria replies in Outlook", d: "IEMAS sees the reply in the Sent folder within 2 minutes. Reminders stop, no further escalation.", alert: null },
-  { when: "Tue 10:02", clock: "10:02", t: "Henrik: \"Thanks, ordered!\"", d: "The AI reads the conversation and thinks it is finished, so it asks Maria to confirm.", alert: "conf" },
-  { when: "Tue 10:05", clock: "10:05", t: "Maria clicks \"Yes, it's resolved\"", d: "The inquiry is closed and counted in the reports. Only Maria (or a supervisor) can close it.", alert: null },
+  { when: "Mon 09:12", clock: "09:12", t: "Henrik emails Maria's mailbox", d: "IEMAS reads it within a minute. The filter and the AI agree it is a customer inquiry.", alert: "new" },
+  { when: "Mon 17:12", clock: "17:12", t: "Reply time passes (8 working hours)", d: "Noted on the inquiry. Nothing pops up yet.", alert: null },
+  { when: "Tue 08:30", clock: "08:30", t: "Henrik writes again", d: "Joined to the same inquiry; Maria is told the customer is still waiting.", alert: "again" },
+  { when: "Tue 10:12", clock: "10:12", t: "First reminder", d: "4 working hours after the reply time.", alert: "rem" },
+  { when: "Tue 14:12", clock: "14:12", t: "Last reminder", d: "Says exactly when the supervisor would be told.", alert: "warn" },
+  { when: "Wed 07:12", clock: "07:12", t: "Escalated", d: "Maria's supervisor gets the email shown below. Maria gets a red pop-up.", alert: "esc" },
+  { when: "Wed 08:40", clock: "08:40", t: "Maria replies in Outlook", d: "IEMAS sees the reply in the Sent folder within 2 minutes. Reminders stop, no further escalation.", alert: null },
+  { when: "Thu 10:02", clock: "10:02", t: "Henrik: \"Thanks, ordered!\"", d: "The AI reads the conversation and thinks it is finished, so it asks Maria to confirm.", alert: "conf" },
+  { when: "Thu 10:05", clock: "10:05", t: "Maria clicks \"Yes, it's resolved\"", d: "The inquiry is closed and counted in the reports. Only Maria (or a supervisor) can close it.", alert: null },
 ];
 const tl = document.getElementById("timeline");
 STEPS.forEach((s, i) => {

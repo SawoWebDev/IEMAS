@@ -32,6 +32,30 @@ public record AgentRegistrationStatusResponse(
     DateTimeOffset? RegistrationKeyExpiresAt,
     string? RejectionReason);
 
+/// <summary>A company mailbox login, checked against the configured mail server.</summary>
+public record MailboxLoginRequest(string EmailAddress, string Password);
+
+/// <summary>An employee connecting their own PC with their mailbox email and password.</summary>
+public record EnrollMailboxRequest(
+    string EmailAddress,
+    string Password,
+    string? ClientName,
+    string? ServerAddress,
+    string? AgentVersion,
+    string? DeviceMetadata);
+
+public record MailboxTestResponse(bool Succeeded, string Message);
+
+/// <summary>Like <see cref="RegisterAgentResponse"/>, with what happened to the mailbox.</summary>
+public record EnrollMailboxResponse(
+    Guid AgentId,
+    string RegistrationRequestToken,
+    AgentRegistrationStatus Status,
+    string EmployeeName,
+    bool MailboxCreated,
+    bool ConfirmationEmailSent,
+    string Message);
+
 public record ApproveAgentRequest(Guid EmployeeId);
 public record RejectAgentRequest(string Reason);
 public record RevokeAgentRequest(string Reason);

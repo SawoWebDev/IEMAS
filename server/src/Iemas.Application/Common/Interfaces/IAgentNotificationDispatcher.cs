@@ -28,6 +28,8 @@ public enum AgentPushCommandType
     CancelNotification = 3,
     SyncRequired = 4,
     Ping = 5,
+    /// <summary>An administrator started the first-time walkthrough with a practice inquiry on this PC.</summary>
+    StartPractice = 6,
 }
 
 public record AgentPushCommand(

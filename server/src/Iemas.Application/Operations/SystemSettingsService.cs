@@ -84,6 +84,17 @@ public static class SystemSettingKeys
     public const string ResolutionTargetBusinessDays = "inquiry.resolution_target_business_days";
     public const string EscalationRepeatBusinessDays = "inquiry.escalation_repeat_business_days";
     public const string SupervisionHolidays = "inquiry.holidays";
+    public const string StalledBusinessDays = "inquiry.stalled_business_days";
+    public const string AlertsInWorkingHoursOnly = "inquiry.alerts_in_working_hours_only";
+    public const string AiConfirmsInquiries = "inquiry.ai_confirms_inquiries";
+
+    // Mailbox defaults: with these, adding a company mailbox needs only its address and password.
+    public const string DefaultImapHost = "mailbox.default_imap_host";
+    public const string DefaultImapPort = "mailbox.default_imap_port";
+    public const string DefaultImapEncryption = "mailbox.default_imap_encryption";
+    public const string DefaultSmtpPort = "mailbox.default_smtp_port";
+    public const string CompanyMailDomains = "mailbox.company_domains";
+    public const string AllowSelfEnrollment = "mailbox.allow_self_enrollment";
 
     // AI resolution assessment - Q2 decisions.
     public const string AiResolutionEnabled = "inquiry.ai_resolution_enabled";
@@ -196,7 +207,10 @@ public static class SystemSettingDefaults
         "our packages", "packages for individuals", "contact us today", "book now", "book your", "we look forward to serving you",
         "look forward to serving", "exclusive deal", "promo code",
         // Logistics / accounting notices about orders already placed.
-        "tracking number:", "has been dispatched", "proof of delivery", "remittance advice", "statement of account");
+        "tracking number:", "has been dispatched", "proof of delivery", "remittance advice", "statement of account",
+        // Job seekers and calendar mail: real people writing to us, but not customers.
+        "curriculum vitae", "job application", "application for the position", "applying for the position", "my resume is attached",
+        "meeting invitation", "calendar invitation", "invitation: ", "accepted: ", "declined: ");
 
     public static readonly string AutomatedSenderPatterns = string.Join('\n',
         "noreply", "no-reply", "donotreply", "do-not-reply", "mailer-daemon", "postmaster", "bounce",
@@ -243,7 +257,7 @@ public class SystemSettingsService
         new(SystemSettingKeys.OrganizationName, "General", "Organization name",
             "Shown in the CMS header.", SettingValueType.Text, "IEMAS", 1, 100),
         new(SystemSettingKeys.DefaultTimeZone, "General", "Default time zone",
-            "IANA time zone (e.g. Asia/Manila) used to display dates in notification messages.", SettingValueType.TimeZone, "UTC"),
+            "IANA time zone (e.g. Asia/Manila) used to display dates in notification messages.", SettingValueType.TimeZone, "Asia/Manila"),
         new(SystemSettingKeys.CmsBaseUrl, "General", "CMS web address",
             "The address people use to open this CMS, e.g. http://172.16.2.68:8191. Escalation emails link to the Case with it. Leave blank for no link.",
             SettingValueType.Text, "", 0, 200),
@@ -283,29 +297,55 @@ public class SystemSettingsService
         new(SystemSettingKeys.RequestCues, "Inquiry detection", "Request cues",
             "Weak signs of a request (need, looking for, please, möchte ...). Each distinct match adds 1 point (max 2).",
             SettingValueType.RuleList, SystemSettingDefaults.RequestCues, 0, 9000),
+        new(SystemSettingKeys.AiConfirmsInquiries, "Inquiry detection", "AI double-checks every inquiry",
+            "On (recommended): the AI also reads email the keyword filter is already sure about, so an employee is only alerted for a real inquiry. "
+            + "If the AI cannot be reached, the filter's decision is used. Off: clear inquiries skip the AI (lower cost, more false alerts).",
+            SettingValueType.Boolean, "true"),
         new(SystemSettingKeys.InquiryScoreThreshold, "Inquiry detection", "Score to accept as an inquiry without AI",
-            "At or above this score, with no negative signal, the email is treated as an inquiry without calling the AI.", SettingValueType.Integer, "5", 1, 50, Unit: "points"),
+            "At or above this score, with no negative signal, the keyword filter calls the email an inquiry.", SettingValueType.Integer, "5", 1, 50, Unit: "points"),
         new(SystemSettingKeys.NotInquiryScoreThreshold, "Inquiry detection", "Score to reject without AI",
             "At or below minus this score the email is treated as not an inquiry without calling the AI. Anything in between goes to the AI.", SettingValueType.Integer, "3", 1, 50, Unit: "points"),
+        new(SystemSettingKeys.DefaultImapHost, "Mailbox defaults", "Company mail server",
+            "The IMAP (incoming) server of company mailboxes. With this set, adding a mailbox needs only the email address and password.",
+            SettingValueType.Text, "mail.sawo.com", 1, 200),
+        new(SystemSettingKeys.DefaultImapPort, "Mailbox defaults", "Incoming (IMAP) port",
+            "Usually 993 for SSL/TLS.", SettingValueType.Integer, "993", 1, 65535, Unit: "port"),
+        new(SystemSettingKeys.DefaultImapEncryption, "Mailbox defaults", "Encryption",
+            "SSL/TLS, STARTTLS or NONE.", SettingValueType.Text, "SSL/TLS", 3, 10),
+        new(SystemSettingKeys.DefaultSmtpPort, "Mailbox defaults", "Outgoing (SMTP) port",
+            "Pre-filled when adding the outbound notification account. Usually 465 for SSL/TLS.", SettingValueType.Integer, "465", 1, 65535, Unit: "port"),
+        new(SystemSettingKeys.CompanyMailDomains, "Mailbox defaults", "Company email domains",
+            "One per line (sawo.com). Only these addresses can use the company mail server defaults and register themselves from their PC.",
+            SettingValueType.SenderList, "sawo.com", 0, 4000),
+        new(SystemSettingKeys.AllowSelfEnrollment, "Mailbox defaults", "Employees can register their own mailbox",
+            "On: an employee enters their company email and password in the Agent; IEMAS signs in to the mail server to check them, "
+            + "adds the mailbox and connects the PC. Off: only an administrator can add mailboxes.", SettingValueType.Boolean, "true"),
         new(SystemSettingKeys.SupervisionEnabled, "Inquiry supervision", "Supervise inquiries until resolved",
             "On: inquiries are followed through every stage until the agent confirms they are resolved, with reminders and management escalation. "
             + "Off: the older reminder and escalation engines are used, which stop at the first reply.", SettingValueType.Boolean, "true"),
         new(SystemSettingKeys.FirstResponseBusinessHours, "Inquiry supervision", "Time allowed for the first reply",
-            "From the moment a customer's email arrives, how long the agent has to send the first reply before the reminders start.", SettingValueType.Integer, "4", 1, 240, Unit: "business hours"),
+            "From the moment a customer's email arrives, how long the agent has to send the first reply before the reminders start.", SettingValueType.Integer, "8", 1, 240, Unit: "business hours"),
         new(SystemSettingKeys.ReminderIntervalBusinessHours, "Inquiry supervision", "Time between reminders",
-            "The gap between the missed deadline and reminder 1, between each reminder, and between the last reminder and the management escalation.", SettingValueType.Integer, "2", 1, 240, Unit: "business hours"),
+            "The gap between the missed deadline and reminder 1, between each reminder, and between the last reminder and the management escalation.", SettingValueType.Integer, "4", 1, 240, Unit: "business hours"),
         new(SystemSettingKeys.RemindersBeforeEscalation, "Inquiry supervision", "Reminders before management is told",
             "How many reminders the agent gets first. 0 means no reminders: management is told one reminder interval after the deadline.", SettingValueType.Integer, "2", 0, 10, Unit: "reminders"),
         new(SystemSettingKeys.IdleBusinessDays, "Inquiry supervision", "Time allowed to answer a customer follow-up",
-            "When the customer writes again, or a conversation stalls while the agent owes the next step, and nothing happens for this long, the same reminder and escalation steps start.", SettingValueType.Integer, "1", 1, 30, Unit: "business days"),
+            "When the customer writes again and nobody answers for this long, the same reminder and escalation steps start.", SettingValueType.Integer, "1", 1, 30, Unit: "business days"),
+        new(SystemSettingKeys.StalledBusinessDays, "Inquiry supervision", "Time allowed to pick up a quiet conversation",
+            "When a conversation went quiet and the agent was asked to follow up (or to confirm it is resolved), how long before the reminders start. "
+            + "Longer than the follow-up time, because nobody is waiting for an answer.", SettingValueType.Integer, "3", 1, 30, Unit: "business days"),
         new(SystemSettingKeys.CustomerWaitCalendarDays, "Inquiry supervision", "Wait for the customer's reply",
-            "After the agent has replied, how long without an answer from the customer before the agent is told a follow-up may be needed. This never closes the inquiry.", SettingValueType.Integer, "3", 1, 60, Unit: "calendar days"),
+            "After the agent has replied, how long without an answer from the customer before the agent is told a follow-up may be needed. This never closes the inquiry.", SettingValueType.Integer, "5", 1, 60, Unit: "calendar days"),
         new(SystemSettingKeys.InternalWaitBusinessDays, "Inquiry supervision", "Wait for another department",
-            "When the agent is waiting on a colleague or department and nothing happens for this long, the agent is asked for an update.", SettingValueType.Integer, "1", 1, 60, Unit: "business days"),
+            "When the agent is waiting on a colleague or department and nothing happens for this long, the agent is asked for an update.", SettingValueType.Integer, "2", 1, 60, Unit: "business days"),
         new(SystemSettingKeys.ResolutionTargetBusinessDays, "Inquiry supervision", "Resolution target",
-            "An inquiry still unresolved after this long is marked overdue. It is only a target: it never closes the inquiry.", SettingValueType.Integer, "5", 1, 120, Unit: "business days"),
+            "An inquiry still unresolved after this long is marked overdue. It is only a target: it never closes the inquiry.", SettingValueType.Integer, "10", 1, 120, Unit: "business days"),
         new(SystemSettingKeys.EscalationRepeatBusinessDays, "Inquiry supervision", "Move to the next escalation level after",
-            "If management has been told and the inquiry is still neglected after this long, the next escalation level is notified.", SettingValueType.Integer, "1", 1, 60, Unit: "business days"),
+            "If management has been told and the inquiry is still neglected after this long, the next escalation level is notified.", SettingValueType.Integer, "2", 1, 60, Unit: "business days"),
+        new(SystemSettingKeys.AlertsInWorkingHoursOnly, "Inquiry supervision", "Send reminders and escalations only during working hours",
+            "On: reminders, follow-up notices and management escalations that fall due at night, on a weekend or holiday are sent when the next "
+            + "working day starts. New-email pop-ups are always shown straight away. Working hours come from the default Reminder Policy.",
+            SettingValueType.Boolean, "true"),
         new(SystemSettingKeys.SupervisionHolidays, "Inquiry supervision", "Company holidays",
             "Dates that do not count as business days for reminder and escalation timing, as ISO dates (2026-12-25) separated by commas or new lines. "
             + "Added to any holidays on the default Reminder Policy. The business time zone comes from that policy, or from the default time zone above.",

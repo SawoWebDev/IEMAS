@@ -19,6 +19,9 @@ public class AgentSettings
     public bool StartupDefaultApplied { get; set; }
     public bool AllowInsecureTls { get; set; } = false;
 
+    /// <summary>Set once the first-time walkthrough has been shown, so it does not open by itself again.</summary>
+    public bool TourSeen { get; set; }
+
     /// <summary>
     /// Left by the CMS installer package (Install-IEMAS-Agent.bat): registering with it approves this PC straight
     /// away. Deleted as soon as the PC is registered, so it never stays on disk longer than needed.

@@ -55,6 +55,12 @@ public class Case : Entity
 
     public ICollection<CaseEmail> Emails { get; set; } = new List<CaseEmail>();
 
+    /// <summary>
+    /// A made-up inquiry used to show an employee what happens on their PC (first-time setup). It is never
+    /// supervised by the timers, never emails management, is left out of reports and is deleted afterwards.
+    /// </summary>
+    public bool IsPractice { get; set; }
+
     // ---- Inquiry supervision (inquiry-supervision/PROGRESS.md Phases 2-5) ----
 
     /// <summary>Where the inquiry is in its lifecycle. Only Resolved/Closed end supervision.</summary>

@@ -38,6 +38,13 @@ public class ReminderPolicy : Entity
     /// <summary>§54 "Weekends" — Saturday/Sunday excluded when true.</summary>
     public bool ExcludeWeekends { get; set; } = true;
 
+    /// <summary>
+    /// Different hours per weekday, e.g. "Mon-Thu 07:00-18:00, Fri 07:00-16:00". When set (and business hours are
+    /// restricted) it replaces <see cref="BusinessHoursStart"/>, <see cref="BusinessHoursEnd"/> and
+    /// <see cref="ExcludeWeekends"/>: a day that is not listed is not a working day.
+    /// </summary>
+    public string? WeeklyHours { get; set; }
+
     /// <summary>§54 "Holidays" — dates (UTC, date-only) on which no reminder may fire; deferred like an out-of-business-hours moment.</summary>
     public ICollection<ReminderPolicyHoliday> Holidays { get; set; } = new List<ReminderPolicyHoliday>();
 

@@ -15,10 +15,22 @@ public class AgentsController : ControllerBase
     private readonly AgentManagementService _managementService;
     private readonly AgentRegistrationService _registrationService;
 
-    public AgentsController(AgentManagementService managementService, AgentRegistrationService registrationService)
+    private readonly Iemas.Application.Inquiries.PracticeInquiryService _practice;
+
+    public AgentsController(AgentManagementService managementService, AgentRegistrationService registrationService,
+        Iemas.Application.Inquiries.PracticeInquiryService practice)
     {
         _managementService = managementService;
         _registrationService = registrationService;
+        _practice = practice;
+    }
+
+    /// <summary>Opens the practice run on a connected PC.</summary>
+    [HttpPost("{id:guid}/practice")]
+    public async Task<IActionResult> StartPractice(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _practice.InviteAsync(id, cancellationToken);
+        return result.Succeeded ? NoContent() : BadRequest(new { message = result.Error });
     }
 
     [HttpGet]

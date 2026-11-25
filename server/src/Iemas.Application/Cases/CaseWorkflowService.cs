@@ -157,12 +157,12 @@ public class CaseWorkflowService
         var notWork = await _db.EmailClassifications.CountAsync(c => c.Decision == ImportanceDecision.NotImportant && c.ClassifiedAt >= dayAgo, cancellationToken);
         var waitingForCase = await CandidateMessageIds().CountAsync(cancellationToken);
 
-        var byStatus = await _db.Cases.AsNoTracking()
+        var byStatus = await _db.Cases.AsNoTracking().Where(c => !c.IsPractice)
             .GroupBy(c => c.WorkStatus)
             .Select(g => new { Status = g.Key, Count = g.Count() })
             .ToListAsync(cancellationToken);
         int Count(params CaseWorkStatus[] statuses) => byStatus.Where(s => statuses.Contains(s.Status)).Sum(s => s.Count);
-        var completed = await _db.Cases.CountAsync(c => c.WorkStatus == CaseWorkStatus.Completed && c.CompletedAt >= weekAgo, cancellationToken);
+        var completed = await _db.Cases.CountAsync(c => !c.IsPractice && c.WorkStatus == CaseWorkStatus.Completed && c.CompletedAt >= weekAgo, cancellationToken);
 
         return new CaseWorkflowOverviewDto(
             received, awaitingAi, needsReview + Count(CaseWorkStatus.ReviewRequired), notWork, waitingForCase,
@@ -603,10 +603,10 @@ public class CaseWorkflowService
     {
         // Highest existing number + 1, not "count + 1": a skipped or removed number would otherwise make
         // every new Case ask for one that already exists. Length first, so CASE-1000000 sorts above CASE-999999.
-        var highestSaved = await _db.Cases.AsNoTracking()
+        var highestSaved = await _db.Cases.AsNoTracking().Where(c => !c.IsPractice)
             .OrderByDescending(c => c.CaseNumber.Length).ThenByDescending(c => c.CaseNumber)
             .Select(c => c.CaseNumber).FirstOrDefaultAsync(cancellationToken);
-        var highestPending = _db.Cases.Local.Select(c => c.CaseNumber)
+        var highestPending = _db.Cases.Local.Where(c => !c.IsPractice).Select(c => c.CaseNumber)
             .OrderByDescending(n => n.Length).ThenByDescending(n => n).FirstOrDefault();
 
         var highest = new[] { highestSaved, highestPending }.Where(n => n is not null)

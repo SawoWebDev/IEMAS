@@ -80,7 +80,7 @@ public class NotificationTests
         await new NotificationService(db, dispatcher).SendForCaseAsync(
             NotificationType.NewEmail, targetCase, AgentPushCommandType.ShowCase, null, CancellationToken.None);
 
-        Assert.StartsWith("Hey John, you have a new email received", Assert.Single(dispatcher.Sent).Command.Message);
+        Assert.StartsWith("Hi John, Maria Santos sent an inquiry", Assert.Single(dispatcher.Sent).Command.Message);
     }
 
     [Fact]
@@ -223,7 +223,7 @@ public class NotificationTests
 
         var notification = await db.Notifications.SingleAsync();
         Assert.Equal(NotificationType.EscalationWarning, notification.Type);
-        Assert.Contains("after 2 reminder(s)", notification.Message);
+        Assert.Contains("this is the last reminder", notification.Message);
         Assert.Equal(AgentPushCommandType.ShowReminder, Assert.Single(dispatcher.Sent).Command.Type);
     }
 

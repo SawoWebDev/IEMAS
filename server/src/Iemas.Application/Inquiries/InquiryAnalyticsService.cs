@@ -57,7 +57,7 @@ public class InquiryAnalyticsService
         if (from > to) (from, to) = (to, from);
         var weekly = string.Equals(filter.Granularity, "week", StringComparison.OrdinalIgnoreCase);
 
-        var q = _db.Cases.AsNoTracking().Where(c => c.FirstEmailReceivedAt >= from && c.FirstEmailReceivedAt <= to);
+        var q = _db.Cases.AsNoTracking().Where(c => !c.IsPractice && c.FirstEmailReceivedAt >= from && c.FirstEmailReceivedAt <= to);
         if (filter.EmployeeId is Guid emp) q = q.Where(c => c.OwnerEmployeeId == emp);
         if (filter.DepartmentId is Guid dep) q = q.Where(c => c.OwnerEmployee != null && c.OwnerEmployee.DepartmentId == dep);
 

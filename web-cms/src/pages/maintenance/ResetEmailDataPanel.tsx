@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiClient } from "../../api/client";
 import { TipLabel } from "../../components/help/Tooltip";
+import KeepOnlySelector from "./KeepOnlySelector";
 
 interface Counts {
   emails: number;
@@ -66,6 +67,9 @@ export default function ResetEmailDataPanel() {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<ResetResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** null = keep all mailboxes; otherwise the ids of the only ones to keep. */
+  const [keepOnly, setKeepOnly] = useState<string[] | null>(null);
+  const [version, setVersion] = useState(0);
 
   async function load() {
     try {
@@ -89,7 +93,10 @@ export default function ResetEmailDataPanel() {
   }
 
   async function reset() {
-    if (!window.confirm("Permanently delete all email data? This cannot be undone.")) return;
+    const question = keepOnly === null
+      ? "Permanently delete all email data? This cannot be undone."
+      : "Permanently delete all email data AND every mailbox, employee, department and PC listed under \"Will be removed\"? This cannot be undone.";
+    if (!window.confirm(question)) return;
     setRunning(true);
     setError(null);
     setResult(null);
@@ -97,9 +104,12 @@ export default function ResetEmailDataPanel() {
       const res = await apiClient.post<ResetResult>("/maintenance/reset-email-data", {
         confirmation,
         removeTestRecordIds: Array.from(selected),
+        keepEmailAccountIds: keepOnly,
       });
       setResult(res.data);
       setConfirmation("");
+      setKeepOnly(null);
+      setVersion((v) => v + 1);
       await load();
     } catch (err: any) {
       setError(err.response?.data?.message ?? "The reset failed. It can safely be run again.");
@@ -120,7 +130,7 @@ export default function ResetEmailDataPanel() {
       {result && (
         <div style={successStyle}>
           Reset complete: {result.removed.total} records removed
-          {result.removedTestRecords.length > 0 && `, plus ${result.removedTestRecords.length} test record${result.removedTestRecords.length === 1 ? "" : "s"}`}.
+          {result.removedTestRecords.length > 0 && `, plus ${result.removedTestRecords.length} mailbox, people, PC or test record${result.removedTestRecords.length === 1 ? "" : "s"}`}.
           New email is processed from {new Date(result.newCutoff).toLocaleString()}.
         </div>
       )}
@@ -179,13 +189,16 @@ export default function ResetEmailDataPanel() {
         </>
       )}
 
+      <KeepOnlySelector key={version} value={keepOnly} onChange={setKeepOnly} />
+
       <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", marginTop: 16 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <label htmlFor="reset-confirm"><TipLabel tip="A safety check: this deletes every email and Case and cannot be undone.">Type RESET to confirm</TipLabel></label>
           <input id="reset-confirm" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} autoComplete="off" style={{ width: 200 }} />
         </div>
-        <button className="btn-danger" disabled={running || confirmation.trim() !== "RESET"} onClick={reset} data-tip="Permanently delete all emails, Cases and their history. Employees, mailboxes, users and settings are kept.">
-          {running ? "Resetting..." : "Reset email data"}
+        <button className="btn-danger" disabled={running || confirmation.trim() !== "RESET" || keepOnly?.length === 0} onClick={reset}
+          data-tip="Permanently delete all emails, Cases and their history. Users and settings are always kept.">
+          {running ? "Resetting..." : keepOnly === null ? "Reset email data" : "Reset and keep only the ticked mailboxes"}
         </button>
       </div>
     </section>

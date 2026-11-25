@@ -58,6 +58,7 @@ public class AgentNotificationDispatcher : IAgentNotificationDispatcher
                 "CANCELNOTIFICATION" => "CANCEL_NOTIFICATION",
                 "SYNCREQUIRED" => "SYNC_REQUIRED",
                 "PING" => "PING",
+                "STARTPRACTICE" => "START_PRACTICE",
                 _ => command.Type.ToString(),
             },
             caseId = command.CaseId,

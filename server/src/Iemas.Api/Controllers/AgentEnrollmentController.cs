@@ -18,10 +18,30 @@ namespace Iemas.Api.Controllers;
 public class AgentEnrollmentController : ControllerBase
 {
     private readonly AgentRegistrationService _service;
+    private readonly MailboxEnrollmentService _mailbox;
 
-    public AgentEnrollmentController(AgentRegistrationService service)
+    public AgentEnrollmentController(AgentRegistrationService service, MailboxEnrollmentService mailbox)
     {
         _service = service;
+        _mailbox = mailbox;
+    }
+
+    /// <summary>"Test connection" on the PC: signs in to the company mail server with the typed login; saves nothing.</summary>
+    [HttpPost("mailbox/test")]
+    [EnableRateLimiting("AuthRateLimit")]
+    public async Task<ActionResult<MailboxTestResponse>> TestMailbox([FromBody] MailboxLoginRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _mailbox.TestAsync(request, cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : BadRequest(new { message = result.Error });
+    }
+
+    /// <summary>Connects a PC with a mailbox email and password: registers the mailbox and approves the PC.</summary>
+    [HttpPost("mailbox")]
+    [EnableRateLimiting("AuthRateLimit")]
+    public async Task<ActionResult<EnrollMailboxResponse>> EnrollMailbox([FromBody] EnrollMailboxRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _mailbox.EnrollAsync(request, HttpContext.Connection.RemoteIpAddress?.ToString(), cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : BadRequest(new { message = result.Error });
     }
 
     [HttpPost("register")]

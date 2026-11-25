@@ -158,8 +158,8 @@ export default function CaseDetailView({ caseId, compact = false, onChanged }: C
             </p>
             <p style={{ margin: "8px 0 0", lineHeight: 1.5 }}>
               <strong>Zettelkasten</strong> in the "Why" line is IEMAS's own built-in keyword filter. It decides most emails by itself, at no AI cost,
-              and the score shows how strongly the wording looked like an inquiry. <strong>AI</strong> with a model name means the filter was unsure
-              and an AI model was asked.
+              and the score shows how strongly the wording looked like an inquiry. <strong>AI</strong> with a model name means an AI model was asked:
+              the filter was unsure, or it found an inquiry, which the AI double-checks.
             </p>
           </div>
           {analysed.map((e) => <EmailCard key={e.emailMessageId} email={e} defaultOpen={false} showAnalysis />)}

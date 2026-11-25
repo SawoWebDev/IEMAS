@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Iemas.Application.Common.Interfaces;
+using Iemas.Application.Inquiries;
 using Iemas.Application.Operations;
 using Iemas.Domain.Cases;
 using Iemas.Domain.Notifications;
@@ -27,35 +28,69 @@ public static class NotificationTemplateDefaults
     {
         "employee_name", "email_subject", "sender_name", "sender_email", "received_at",
         "ai_summary", "elapsed_time", "reminder_count", "case_id", "latest_subject", "unanswered_count",
+        "reply_due", "escalates_at",
     };
 
-    /// <summary>Requirements §52 example wording.</summary>
+    /// <summary>
+    /// The wording of each pop-up. The tone is a helpful colleague, not a warning system: say what is waiting,
+    /// by when, and what stops the reminders. Titles carry the words the Agent colour-codes on
+    /// ("remind", "warning", "escalat", "overdue", "confirm", "follow"/"update", "needs your response").
+    /// </summary>
     public static NotificationTemplate For(NotificationType type) => type switch
     {
-        NotificationType.NewEmail => Create(type, "New Email",
-            "Hey {{employee_name}}, you have a new email received from {{sender_email}}: \"{{email_subject}}\". Please check."),
-        NotificationType.FirstReminder => Create(type, "Reminder",
-            "Hey {{employee_name}}, have you replied already to the email you received last time? (\"{{email_subject}}\" from {{sender_email}})"),
+        NotificationType.NewEmail => Create(type, "New customer inquiry",
+            "Hi {{employee_name}}, {{sender_name}} sent an inquiry: \"{{email_subject}}\". Please reply by {{reply_due}}. "
+            + "Just answer from your own mailbox as usual; IEMAS sees your reply by itself."),
+        NotificationType.FirstReminder => Create(type, "Friendly reminder",
+            "Hi {{employee_name}}, \"{{email_subject}}\" from {{sender_name}} is still waiting for a reply. It was due {{reply_due}}. "
+            + "If you already answered by phone or from another mailbox, open it and mark it resolved."),
         NotificationType.Reminder => Create(type, "Reminder",
-            "Hey {{employee_name}}, you haven't replied to the email \"{{email_subject}}\" from {{sender_email}}. Please reply."),
+            "Hi {{employee_name}}, there is still no reply on \"{{email_subject}}\" from {{sender_name}} (received {{received_at}}). "
+            + "If it stays unanswered, your supervisor will be asked to help on {{escalates_at}}."),
         NotificationType.Overdue => Create(type, "Overdue",
-            "Overdue: \"{{email_subject}}\" from {{sender_name}} ({{sender_email}}), received {{received_at}}, outstanding for {{elapsed_time}}. Summary: {{ai_summary}}"),
-        NotificationType.EscalationWarning => Create(type, "Escalation Warning",
-            "Hey {{employee_name}}, \"{{email_subject}}\" ({{case_id}}) is still unresolved after {{reminder_count}} reminder(s). It will be escalated if it remains unresolved."),
-        NotificationType.Escalation => Create(type, "Escalated",
-            "\"{{email_subject}}\" ({{case_id}}) from {{sender_email}} has been escalated to management because it still needs your attention."),
+            "Hi {{employee_name}}, \"{{email_subject}}\" from {{sender_name}} has been open for {{elapsed_time}}, longer than the target. "
+            + "Please send the customer an update, or mark it resolved if it is finished."),
+        NotificationType.EscalationWarning => Create(type, "Last reminder (escalation warning)",
+            "{{employee_name}}, this is the last reminder for \"{{email_subject}}\" ({{case_id}}). If there is no reply by {{escalates_at}}, "
+            + "your supervisor will be told so they can help. A short reply to the customer is enough to stop this."),
+        NotificationType.Escalation => Create(type, "Escalated to your supervisor",
+            "\"{{email_subject}}\" ({{case_id}}) from {{sender_name}} has been waiting {{elapsed_time}}, so your supervisor was asked to help. "
+            + "Please reply to the customer when you can, or add a note if you are already handling it."),
         NotificationType.CustomerFollowUpDue => Create(type, "Follow-up may be needed",
-            "Hey {{employee_name}}, {{sender_email}} has not replied to you about \"{{email_subject}}\" ({{case_id}}) for {{elapsed_time}}. Please follow up, or close the inquiry if it is settled."),
+            "Hi {{employee_name}}, {{sender_name}} has not answered about \"{{email_subject}}\" ({{case_id}}) for a few days. "
+            + "A short follow-up may help. If the matter is settled, mark it resolved."),
         NotificationType.ConfirmResolution => Create(type, "Please confirm: resolved?",
-            "Hey {{employee_name}}, \"{{email_subject}}\" ({{case_id}}) from {{sender_email}} looks resolved. Please confirm it is resolved, or reject so monitoring continues."),
+            "Hi {{employee_name}}, \"{{email_subject}}\" ({{case_id}}) from {{sender_name}} looks finished. "
+            + "Please confirm it is resolved, or choose Not resolved yet to keep following it."),
         NotificationType.UpdateRequested => Create(type, "Update needed",
-            "Hey {{employee_name}}, \"{{email_subject}}\" ({{case_id}}) from {{sender_email}} has had no progress for {{elapsed_time}}. Please reply to the customer or update the inquiry."),
+            "Hi {{employee_name}}, \"{{email_subject}}\" ({{case_id}}) from {{sender_name}} has been quiet for a while. "
+            + "Please reply to the customer, add a note on where it stands, or mark it resolved."),
         // Title keeps the word "follow-up" so Agents on an older build still show a distinct FOLLOW UP badge
         // instead of NEW EMAIL; current Agents match "needs your response" and show NEEDS RESPONSE.
         NotificationType.CustomerWroteAgain => Create(type, "Customer follow-up: still needs your response",
-            "Hey {{employee_name}}, {{sender_name}} wrote again on {{case_id}} and is still waiting for your reply "
-            + "({{unanswered_count}} unanswered email(s), first one {{elapsed_time}} ago). Latest: \"{{latest_subject}}\"."),
+            "Hi {{employee_name}}, {{sender_name}} wrote again on {{case_id}} and is still waiting for your reply "
+            + "({{unanswered_count}} unanswered email(s), the first {{elapsed_time}} ago). Latest: \"{{latest_subject}}\". "
+            + "Please reply by {{reply_due}}."),
         _ => throw new ArgumentOutOfRangeException(nameof(type)),
+    };
+
+    /// <summary>
+    /// The wording earlier versions shipped with. A stored template still equal to one of these was never
+    /// edited by an administrator, so an upgrade may replace it with the current wording.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<NotificationType, string> PreviousDefaultMessages = new Dictionary<NotificationType, string>
+    {
+        [NotificationType.NewEmail] = "Hey {{employee_name}}, you have a new email received from {{sender_email}}: \"{{email_subject}}\". Please check.",
+        [NotificationType.FirstReminder] = "Hey {{employee_name}}, have you replied already to the email you received last time? (\"{{email_subject}}\" from {{sender_email}})",
+        [NotificationType.Reminder] = "Hey {{employee_name}}, you haven't replied to the email \"{{email_subject}}\" from {{sender_email}}. Please reply.",
+        [NotificationType.Overdue] = "Overdue: \"{{email_subject}}\" from {{sender_name}} ({{sender_email}}), received {{received_at}}, outstanding for {{elapsed_time}}. Summary: {{ai_summary}}",
+        [NotificationType.EscalationWarning] = "Hey {{employee_name}}, \"{{email_subject}}\" ({{case_id}}) is still unresolved after {{reminder_count}} reminder(s). It will be escalated if it remains unresolved.",
+        [NotificationType.Escalation] = "\"{{email_subject}}\" ({{case_id}}) from {{sender_email}} has been escalated to management because it still needs your attention.",
+        [NotificationType.CustomerFollowUpDue] = "Hey {{employee_name}}, {{sender_email}} has not replied to you about \"{{email_subject}}\" ({{case_id}}) for {{elapsed_time}}. Please follow up, or close the inquiry if it is settled.",
+        [NotificationType.ConfirmResolution] = "Hey {{employee_name}}, \"{{email_subject}}\" ({{case_id}}) from {{sender_email}} looks resolved. Please confirm it is resolved, or reject so monitoring continues.",
+        [NotificationType.UpdateRequested] = "Hey {{employee_name}}, \"{{email_subject}}\" ({{case_id}}) from {{sender_email}} has had no progress for {{elapsed_time}}. Please reply to the customer or update the inquiry.",
+        [NotificationType.CustomerWroteAgain] = "Hey {{employee_name}}, {{sender_name}} wrote again on {{case_id}} and is still waiting for your reply "
+            + "({{unanswered_count}} unanswered email(s), first one {{elapsed_time}} ago). Latest: \"{{latest_subject}}\".",
     };
 
     private static NotificationTemplate Create(NotificationType type, string title, string message) =>
@@ -296,9 +331,12 @@ public class NotificationService
 
         var zone = await SystemSettingsService.GetDefaultTimeZoneAsync(_db, cancellationToken);
         var receivedLocal = TimeZoneInfo.ConvertTime(targetCase.FirstEmailReceivedAt, zone);
+        var (replyDue, escalatesAt) = await ForecastAsync(targetCase, cancellationToken);
 
         return new Dictionary<string, string>
         {
+            ["reply_due"] = replyDue,
+            ["escalates_at"] = escalatesAt,
             ["employee_name"] = employeeName ?? "there",
             ["email_subject"] = targetCase.Subject,
             ["sender_name"] = string.IsNullOrWhiteSpace(targetCase.CustomerDisplayName) ? targetCase.CustomerEmailAddress : targetCase.CustomerDisplayName,
@@ -312,4 +350,22 @@ public class NotificationService
             ["unanswered_count"] = unanswered.ToString(),
         };
     }
+
+    /// <summary>"Reply by" and "supervisor is told" moments in the business time zone, worded for a pop-up.</summary>
+    private async Task<(string ReplyDue, string EscalatesAt)> ForecastAsync(Case targetCase, CancellationToken cancellationToken)
+    {
+        // A practice inquiry moves in seconds, so a date would be wrong.
+        if (targetCase.IsPractice) return ("in a few moments (practice)", "the next step (practice)");
+
+        var settings = await SupervisionSettings.LoadAsync(_db, cancellationToken);
+        var calendar = settings.TestClockMinutes ? BusinessCalendar.FastTestClock() : await BusinessCalendar.LoadAsync(_db, cancellationToken);
+        var (due, escalates) = SupervisionRules.Forecast(targetCase, settings, calendar);
+        var zone = settings.TestClockMinutes ? await SystemSettingsService.GetDefaultTimeZoneAsync(_db, cancellationToken) : calendar.Zone;
+        return (FormatMoment(due, zone), FormatMoment(escalates, zone));
+    }
+
+    /// <summary>E.g. "Thu 26 Nov, 10:00 AM"; "soon" when there is no fixed moment.</summary>
+    public static string FormatMoment(DateTimeOffset? moment, TimeZoneInfo zone) => moment is DateTimeOffset value
+        ? TimeZoneInfo.ConvertTime(value, zone).ToString("ddd d MMM, h:mm tt", System.Globalization.CultureInfo.InvariantCulture)
+        : "soon";
 }

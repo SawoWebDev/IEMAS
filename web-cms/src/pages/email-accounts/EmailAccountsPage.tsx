@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiClient } from "../../api/client";
-import type { EmailAccountDto, EmployeeDto, TestConnectionResult } from "../../api/types";
+import type { EmailAccountDto, EmployeeDto, MailboxDefaultsDto, TestConnectionResult } from "../../api/types";
+import { isCompanyAddress } from "./mailboxDefaults";
 import { InfoTip, TipLabel } from "../../components/help/Tooltip";
 
 const PROTOCOL_LABELS = ["IMAP", "Microsoft Graph", "SMTP"];
@@ -52,6 +53,10 @@ export default function EmailAccountsPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, TestConnectionResult>>({});
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [defaults, setDefaults] = useState<MailboxDefaultsDto | null>(null);
+  const [showServer, setShowServer] = useState(false);
+  const [formTest, setFormTest] = useState<TestConnectionResult | null>(null);
+  const [busy, setBusy] = useState<"testing" | "saving" | null>(null);
 
   /** null = form closed, "new" = adding, otherwise the account being edited. */
   const [editing, setEditing] = useState<EmailAccountDto | "new" | null>(null);
@@ -59,12 +64,14 @@ export default function EmailAccountsPage() {
 
   async function load() {
     try {
-      const [accRes, empRes] = await Promise.all([
+      const [accRes, empRes, defRes] = await Promise.all([
         apiClient.get<EmailAccountDto[]>("/email-accounts?purpose=0"),
         apiClient.get<EmployeeDto[]>("/employees"),
+        apiClient.get<MailboxDefaultsDto>("/email-accounts/defaults"),
       ]);
       setAccounts(accRes.data);
       setEmployees(empRes.data);
+      setDefaults(defRes.data);
     } catch {
       setError("Failed to load email accounts.");
     } finally {
@@ -78,9 +85,46 @@ export default function EmailAccountsPage() {
 
   function startAdd() {
     setEditing("new");
-    setForm(EMPTY_FORM);
+    setForm({
+      ...EMPTY_FORM,
+      host: defaults?.imapHost ?? "",
+      port: defaults?.imapPort ?? 993,
+      encryption: defaults?.encryption ?? "SSL/TLS",
+    });
+    setShowServer(false);
+    setFormTest(null);
     setError(null);
     setNotice(null);
+  }
+
+  /** A changed login makes an earlier test result meaningless. */
+  function change(patch: Partial<AccountForm>) {
+    setForm((f) => ({ ...f, ...patch }));
+    setFormTest(null);
+  }
+
+  async function testForm(): Promise<TestConnectionResult | null> {
+    setBusy("testing");
+    setError(null);
+    try {
+      const res = await apiClient.post<TestConnectionResult>("/email-accounts/test-settings", {
+        emailAddress: form.emailAddress,
+        purpose: 0,
+        host: form.host || null,
+        port: form.port || 0,
+        encryption: form.encryption || null,
+        username: form.username || null,
+        secret: form.secret || null,
+        existingAccountId: editing && editing !== "new" ? editing.id : null,
+      });
+      setFormTest(res.data);
+      return res.data;
+    } catch (err: any) {
+      setError(err.response?.data?.message ?? "Failed to test the connection.");
+      return null;
+    } finally {
+      setBusy(null);
+    }
   }
 
   function startEdit(acc: EmailAccountDto) {
@@ -99,6 +143,8 @@ export default function EmailAccountsPage() {
       cutoffLocal: toLocalInput(acc.processEmailsReceivedAfter),
       processAllHistory: acc.processEmailsReceivedAfter === null,
     });
+    setShowServer(true);
+    setFormTest(null);
     setError(null);
     setNotice(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -112,6 +158,13 @@ export default function EmailAccountsPage() {
       setError("Pick a date for 'Create Cases only for email received after', or tick 'Process the whole mailbox history'.");
       return;
     }
+    // A new mailbox is signed in to before it is saved, so a typo in the password is found now, not later.
+    if (editing === "new" && !formTest?.succeeded) {
+      const test = await testForm();
+      if (!test) return;
+      if (!test.succeeded && !window.confirm(`The mailbox could not be signed in to:\n\n${test.errorMessage}\n\nSave it anyway?`)) return;
+    }
+    setBusy("saving");
     try {
       if (editing === "new") {
         await apiClient.post("/email-accounts", {
@@ -120,13 +173,14 @@ export default function EmailAccountsPage() {
           purpose: 0, // Inbound — outbound accounts are configured on the Outbound Email page (§18)
           kind: 0,
           protocol: 0,
-          host: form.host,
-          port: form.port,
-          encryption: form.encryption,
-          username: form.username,
+          host: form.host || null,
+          port: form.port || 0,
+          encryption: form.encryption || null,
+          username: form.username || null,
           authMethod: 0,
           secret: form.secret,
           ownerEmployeeId: form.ownerEmployeeId || null,
+          autoAssignOwner: !form.ownerEmployeeId,
           classificationProfileName: form.classificationProfileName || null,
           monitoringEnabled: form.monitoringEnabled,
           processEmailsReceivedAfter: form.processAllHistory ? "1900-01-01T00:00:00Z" : cutoff,
@@ -154,6 +208,8 @@ export default function EmailAccountsPage() {
       await load();
     } catch (err: any) {
       setError(err.response?.data?.message ?? "Failed to save email account.");
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -193,6 +249,8 @@ export default function EmailAccountsPage() {
   if (loading) return <p>Loading...</p>;
 
   const isNew = editing === "new";
+  const otherDomain = isNew && form.emailAddress.includes("@") && !isCompanyAddress(form.emailAddress, defaults);
+  const serverOpen = showServer || otherDomain;
 
   return (
     <div>
@@ -213,42 +271,57 @@ export default function EmailAccountsPage() {
       {editing !== null && (
         <form onSubmit={handleSubmit} style={panelStyle}>
           <h2 style={{ fontSize: 18, marginTop: 0 }}>{isNew ? "Add email account" : `Edit ${form.emailAddress}`}</h2>
+          {isNew && (
+            <p style={{ ...hintStyle, marginTop: 0 }}>
+              For a company address ({defaults?.companyDomains.join(", ")}) only the email address and password are needed.
+            </p>
+          )}
           <div style={gridStyle}>
             <Field label="Email address" tip="The mailbox address customers write to, e.g. sales@sawo.com. It cannot be changed after the account is added.">
               <input type="email" value={form.emailAddress} disabled={!isNew} required
-                onChange={(e) => setForm({ ...form, emailAddress: e.target.value })} style={fullWidth} />
+                onChange={(e) => change({ emailAddress: e.target.value })} style={fullWidth} />
             </Field>
-            <Field label="Display name" tip="A friendly name shown in lists, e.g. Sales inbox.">
-              <input value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} style={fullWidth} />
+            <Field label="Password" tip="The mailbox password, the same one used in Outlook. It is stored encrypted and never shown again.">
+              <input type="password" value={form.secret} required={isNew} autoComplete="new-password"
+                placeholder={isNew ? "" : "Leave blank to keep the current password"}
+                onChange={(e) => change({ secret: e.target.value })} style={fullWidth} />
             </Field>
             <Field label="Owner employee" tip="The person responsible for this mailbox. They get the pop-ups, own its Cases and receive the reminders.">
               <select value={form.ownerEmployeeId} onChange={(e) => setForm({ ...form, ownerEmployeeId: e.target.value })} style={fullWidth}>
-                <option value="">— none —</option>
+                <option value="">{isNew ? "Automatic (employee with this email, added if needed)" : "— none —"}</option>
                 {employees.filter((emp) => emp.isActive || emp.id === form.ownerEmployeeId).map((emp) => (
                   <option key={emp.id} value={emp.id}>{emp.fullName} ({emp.email})</option>
                 ))}
               </select>
             </Field>
-            <Field label="IMAP host" tip="The incoming mail server address from your email provider, e.g. imap.gmail.com or outlook.office365.com.">
-              <input value={form.host} required placeholder="imap.example.com" onChange={(e) => setForm({ ...form, host: e.target.value })} style={fullWidth} />
+          </div>
+
+          <button type="button" onClick={() => setShowServer(!serverOpen)} disabled={otherDomain} aria-expanded={serverOpen} style={{ marginTop: 12 }}
+            data-tip="Server, port and other options. Company addresses already have the right values.">
+            {serverOpen ? "Hide server settings" : `Server settings (${form.host}:${form.port}, ${form.encryption})`}
+          </button>
+          {otherDomain && <div style={hintStyle}>This is not a company address: check the mail server settings below.</div>}
+
+          {serverOpen && (<>
+          <div style={{ ...gridStyle, marginTop: 12 }}>
+            <Field label="Display name" tip="A friendly name shown in lists, e.g. Sales inbox.">
+              <input value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} style={fullWidth} />
+            </Field>
+            <Field label="IMAP host" tip="The incoming mail server address from your email provider.">
+              <input value={form.host} placeholder={defaults?.imapHost} onChange={(e) => change({ host: e.target.value })} style={fullWidth} />
             </Field>
             <Field label="Port" tip="Usually 993 for SSL/TLS. Your email provider lists it next to the IMAP server.">
-              <input type="number" min={1} max={65535} value={form.port} required onChange={(e) => setForm({ ...form, port: Number(e.target.value) })} style={fullWidth} />
+              <input type="number" min={1} max={65535} value={form.port} required onChange={(e) => change({ port: Number(e.target.value) })} style={fullWidth} />
             </Field>
             <Field label="Encryption" tip="How the connection is secured. Choose SSL/TLS unless your provider says otherwise.">
-              <select value={form.encryption} onChange={(e) => setForm({ ...form, encryption: e.target.value })} style={fullWidth}>
+              <select value={form.encryption} onChange={(e) => change({ encryption: e.target.value })} style={fullWidth}>
                 <option value="SSL/TLS">SSL/TLS</option>
                 <option value="STARTTLS">STARTTLS</option>
                 <option value="NONE">None</option>
               </select>
             </Field>
-            <Field label="Username" tip="The login for the mailbox, usually the full email address.">
-              <input value={form.username} required onChange={(e) => setForm({ ...form, username: e.target.value })} style={fullWidth} />
-            </Field>
-            <Field label="Password / App password" tip="The mailbox password. Microsoft 365 and Gmail usually need an app password instead of the normal one. It is stored encrypted and never shown again.">
-              <input type="password" value={form.secret} required={isNew} autoComplete="new-password"
-                placeholder={isNew ? "" : "Leave blank to keep the current password"}
-                onChange={(e) => setForm({ ...form, secret: e.target.value })} style={fullWidth} />
+            <Field label="Username" tip="The login for the mailbox. Leave blank to use the email address.">
+              <input value={form.username} placeholder={form.emailAddress || "the email address"} onChange={(e) => change({ username: e.target.value })} style={fullWidth} />
             </Field>
             <Field label="Classification profile" tip="Which classification profile the AI uses for this mailbox, e.g. Sales. It tells the AI what counts as important here.">
               <input value={form.classificationProfileName} placeholder="Sales"
@@ -279,8 +352,21 @@ export default function EmailAccountsPage() {
             Monitoring enabled (poll this mailbox for new email)
             <InfoTip text="When on, IEMAS checks this mailbox for new email every minute. Turn it off to pause just this mailbox." />
           </label>
+          </>)}
+
+          {formTest && (
+            <div role="status" style={{ marginTop: 12, fontSize: 13, color: formTest.succeeded ? "var(--color-success)" : "var(--color-danger)" }}>
+              {formTest.succeeded ? "✓ Signed in successfully. The settings work." : `✗ ${formTest.errorMessage}`}
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-            <button type="submit" className="btn-primary">{isNew ? "Add account" : "Save changes"}</button>
+            <button type="submit" className="btn-primary" disabled={busy !== null}>
+              {busy === "saving" ? "Saving..." : isNew ? "Add account" : "Save changes"}
+            </button>
+            <button type="button" onClick={() => testForm()} disabled={busy !== null || !form.emailAddress || (isNew && !form.secret)}
+              data-tip="Sign in to the mailbox with what is typed above. Nothing is saved or read.">
+              {busy === "testing" ? "Testing..." : "Test connection"}
+            </button>
             <button type="button" onClick={() => setEditing(null)} data-tip="Close the form without saving.">Cancel</button>
           </div>
         </form>

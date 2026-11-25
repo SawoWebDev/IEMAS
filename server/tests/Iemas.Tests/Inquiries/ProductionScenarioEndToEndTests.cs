@@ -73,7 +73,7 @@ public class ProductionScenarioEndToEndTests
         var c = await h.CaseAsync(Agent1, Customer);
         Assert.Equal(InquiryStage.CustomerFollowUpReceived, c.Stage);
         Assert.Equal(3, await h.Db.CaseEmails.CountAsync(ce => ce.CaseId == c.Id));
-        Assert.Equal(2, h.PopUpTitlesFor(Agent1).Count(t => t == "New Email"));
+        Assert.Equal(2, h.PopUpTitlesFor(Agent1).Count(t => t == "New customer inquiry"));
         Assert.All(h.PopUps.Sent, p => Assert.Equal(h.Agents[Agent1].Id, p.EmployeeId));
     }
 
@@ -194,7 +194,7 @@ public class ProductionScenarioEndToEndTests
         Assert.True(result.Succeeded);
         var c = await h.CaseAsync(Agent1, "lee@prospect.example");
         Assert.Equal(h.Agents[Agent1].Id, c.OwnerEmployeeId);
-        Assert.Contains("New Email", h.PopUpTitlesFor(Agent1));
+        Assert.Contains("New customer inquiry", h.PopUpTitlesFor(Agent1));
     }
 
     [Fact]

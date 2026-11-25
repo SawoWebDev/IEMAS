@@ -35,17 +35,37 @@ public record CreateEmailAccountRequest(
     EmailAccountPurpose Purpose,
     EmailAccountKind Kind,
     EmailProtocol Protocol,
-    string Host,
+    /// <summary>Blank for a company address = the company mail server from "Mailbox defaults".</summary>
+    string? Host,
+    /// <summary>0 = the default port.</summary>
     int Port,
-    string Encryption,
-    string Username,
+    string? Encryption,
+    /// <summary>Blank = the email address.</summary>
+    string? Username,
     EmailAuthMethod AuthMethod,
     string Secret,
     Guid? OwnerEmployeeId,
     string? ClassificationProfileName,
     bool MonitoringEnabled,
     /// <summary>Null = from now on (mailbox history is kept but not turned into Cases).</summary>
-    DateTimeOffset? ProcessEmailsReceivedAfter = null);
+    DateTimeOffset? ProcessEmailsReceivedAfter = null,
+    /// <summary>With no owner chosen: give an inbound mailbox to the employee with the same address, adding that employee if needed.</summary>
+    bool AutoAssignOwner = false);
+
+/// <summary>Connection settings to try before anything is saved.</summary>
+public record TestMailboxSettingsRequest(
+    string EmailAddress,
+    EmailAccountPurpose Purpose,
+    string? Host,
+    int Port,
+    string? Encryption,
+    string? Username,
+    string? Secret,
+    /// <summary>When editing: with no new password typed, the stored one of this account is used.</summary>
+    Guid? ExistingAccountId = null);
+
+public record MailboxDefaultsDto(
+    string ImapHost, int ImapPort, string Encryption, int SmtpPort, IReadOnlyList<string> CompanyDomains, bool AllowSelfEnrollment);
 
 public record UpdateEmailAccountRequest(
     string? DisplayName,

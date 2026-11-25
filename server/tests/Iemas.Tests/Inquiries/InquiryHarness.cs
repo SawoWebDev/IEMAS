@@ -120,6 +120,7 @@ public sealed class InquiryHarness : IDisposable
         policy.Levels.Add(new EscalationLevel { EscalationPolicyId = policy.Id, Level = 2, RecipientType = EscalationRecipientType.SpecificEmployee, SpecificEmployeeId = Director.Id });
         Db.EscalationPolicies.Add(policy);
         Db.SaveChanges();
+        ShortTimings.Apply(Db);
 
         // AI classification for whatever the Zettelkasten filter leaves Uncertain: someone asking us
         // something (a question, or interest in a project) is an inquiry; anything else is not.

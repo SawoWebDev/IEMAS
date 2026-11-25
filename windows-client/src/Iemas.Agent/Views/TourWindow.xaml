@@ -1,0 +1,48 @@
+<Window x:Class="Iemas.Agent.Views.TourWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Show me around - IEMAS" Icon="pack://application:,,,/IemasAgent;component/Assets/iemas.ico"
+        Width="560" Height="640" MinWidth="460" MinHeight="480"
+        WindowStartupLocation="CenterScreen" Background="#F3F4F6" FontFamily="Segoe UI" FontSize="13">
+    <Window.Resources>
+        <Style x:Key="PrimaryBtn" TargetType="Button">
+            <Setter Property="Background" Value="#2563EB"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style x:Key="PlainBtn" TargetType="Button" BasedOn="{StaticResource PrimaryBtn}">
+            <Setter Property="Background" Value="#E5E7EB"/>
+            <Setter Property="Foreground" Value="#111827"/>
+        </Style>
+    </Window.Resources>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#111827" Padding="20,14">
+            <StackPanel>
+                <TextBlock x:Name="StepText" Foreground="#93C5FD" FontSize="11" FontWeight="Bold"/>
+                <TextBlock x:Name="HeadingText" Foreground="White" FontSize="18" FontWeight="Bold" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer x:Name="Scroller" Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="PageHost" Margin="20,16,20,16"/>
+        </ScrollViewer>
+
+        <Border Grid.Row="2" Background="White" BorderBrush="#E5E7EB" BorderThickness="0,1,0,0" Padding="20,12">
+            <DockPanel LastChildFill="False">
+                <Button x:Name="SkipButton" DockPanel.Dock="Left" Content="Skip" Style="{StaticResource PlainBtn}" Click="Skip_Click"
+                        ToolTip="Close the walkthrough. You can open it again from the Help tab."/>
+                <Button x:Name="NextButton" DockPanel.Dock="Right" Content="Next" Style="{StaticResource PrimaryBtn}" Click="Next_Click" IsDefault="True"/>
+                <Button x:Name="BackButton" DockPanel.Dock="Right" Content="Back" Style="{StaticResource PlainBtn}" Margin="0,0,8,0" Click="Back_Click"/>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

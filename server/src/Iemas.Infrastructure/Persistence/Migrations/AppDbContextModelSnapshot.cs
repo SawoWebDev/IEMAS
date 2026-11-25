@@ -860,6 +860,9 @@ namespace Iemas.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("FirstEmailReceivedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("IsPractice")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTimeOffset>("LastActivityAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2187,6 +2190,10 @@ namespace Iemas.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("WeeklyHours")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
 
                     b.HasKey("Id");
 

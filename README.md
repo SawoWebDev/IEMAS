@@ -9,25 +9,50 @@ IEMAS watches the company mailboxes, recognises customer inquiries, alerts the e
 ## How it works
 
 1. **Email arrives.** Every minute IEMAS reads each monitored mailbox (IMAP).
-2. **Is it an inquiry?** A rule-based filter decides clear cases (price requests, orders, support questions vs. newsletters, auto-replies, internal mail). Only unclear emails go to the AI (OpenRouter). Emails the AI is unsure about wait in a review queue for a supervisor.
-3. **Inquiry opened.** It belongs to the employee who owns the mailbox. Their PC shows a pop-up within about a minute. Follow-up emails join the same inquiry.
+2. **Is it an inquiry?** A rule-based filter scores each email and decides the clear cases (price requests, orders, support questions vs. newsletters, auto-replies, internal mail). An email the filter calls an inquiry is double-checked by the AI (OpenRouter). If the AI cannot be reached, the filter decides. If the AI disagrees and is less than 75% sure, the email waits in a review queue for a supervisor. Job applications and calendar invitations are not inquiries. Quoted reply history is not scored.
+3. **Inquiry opened.** It belongs to the employee who owns the mailbox. Their PC shows a pop-up within about a minute. New-email pop-ups are shown at any time of day. Follow-up emails join the same inquiry.
 4. **Reply found.** Every 2 minutes IEMAS reads the mailbox's Sent folder. Employees reply from Outlook as usual; nothing to click.
-5. **Supervision.** Deadlines count working hours: first reply within 4 hours, reminders every 2 hours, an escalation warning, then an escalation email to the employee's supervisor (or an escalation group). Idle inquiries and customers who went quiet get follow-up alerts.
+5. **Supervision.** Deadlines count working hours only: Mon–Thu 07:00–18:00, Fri 07:00–16:00, Asia/Manila, with public holidays from the CMS. Reminders, wait notices and escalations are sent only during working hours (10 minutes' grace after closing). After the first reply deadline come two reminders, then an escalation email to the employee's supervisor (or an escalation group). Idle inquiries and customers who went quiet get follow-up alerts.
 6. **Resolved.** A first reply does not end an inquiry. When the AI thinks the conversation is finished it asks the employee to confirm; only the employee (or a supervisor) closes it.
+
+**Default timings** (all editable in the CMS; a setting an administrator has changed keeps its value):
+
+| Timer | Default |
+|---|---|
+| First reply | 8 working hours after the email |
+| Reminders | 2, 4 working hours apart |
+| Supervisor emailed | 4 working hours after the last reminder (about 2 working days after the email) |
+| Customer follow-up | 1 business day |
+| Quiet conversation | 3 business days |
+| Customer silent | 5 calendar days |
+| Waiting on a colleague | 2 business days |
+| Resolution target | 10 business days |
+| Next escalation level | 2 business days later |
+
+Examples: an email on Mon 09:00 is due by Mon 17:00 and the supervisor is emailed on Tue 18:00. An email on Thu 08:00 is due by Thu 16:00 and the supervisor is emailed on Mon 08:00. An email on Fri 15:00 is due by Mon 14:00 and the supervisor is emailed on Tue 15:00.
+
+Friday closes at 16:00 on purpose. People who stay later still get pop-ups and their replies count, but nobody is chased or escalated for leaving at 16:00.
 
 ## What's new in this version
 
 - **Inquiry supervision** from first email to confirmed resolution, with business hours and holidays.
+- **Working hours per weekday** on the default Reminder Policy (CMS editor): Mon–Thu 07:00–18:00, Fri 07:00–16:00, Asia/Manila. The database migration applies these hours to the existing default policy. A UTC time zone is changed to Asia/Manila; another zone chosen by an administrator is kept.
+- **New default timings** (see How it works). A new "quiet conversation" setting. Settings an administrator had already overridden keep their values.
+- **Friendlier pop-ups** that state the reply-by date and when the supervisor would be told. Templates an administrator has edited are kept.
+- **AI double-check of inquiries** for emails the keyword filter calls inquiries. Staff who mark a sender "not an inquiry" are not auto-accepted, and the AI is told.
+- **Email setup with only an address and password** for company domains (Mailbox defaults in the CMS), with Test connection before saving.
+- **Practice run:** a first-run "Show me around" walkthrough with a practice inquiry. Administrators can start one from CMS Windows Agents → Practice run.
+- **Clean start** for email data (Maintenance → Reset email data): keeps only the ticked mailboxes. Users, policies, settings, AI setup and the audit log are kept.
 - **AI "looks resolved?" check** with a rule-based guard (never resolved on a bare "thanks", an open question, or a pending quote) and a review queue for uncertain classifications.
 - **Escalation emails** with retry (5/15/60 min), delivery to the remaining recipients when one address is refused, and one escalation per inquiry and level.
 - **Reliability:** OpenRouter retries, fallback models and circuit breaker; duplicate-email protection; scheduled-job monitoring on the System Health page.
 - **Reporting:** Inquiry Analytics (volumes, response and resolution times, AI accuracy) and an audit of every AI call and its cost.
 - **Security:** login lockout after 5 failed attempts, secret length checks at start-up, encrypted stored replies.
 - **One-click Agent installer:** download a zip from the CMS, run one .bat on the PC, and it installs, configures and connects itself with no approval step.
-- **Windows Agent 1.2.0:** installer keys, confirm or reject "looks resolved", colour-coded always-on-top pop-ups, help text matching the 2-minute reply check.
+- **Windows Agent 1.3.0:** sign in with work email and password, with brute-force protection (5 wrong passwords per address per 15 minutes, plus an IP rate limit). It also keeps the 1.2.0 features: installer keys, confirm or reject "looks resolved", colour-coded always-on-top pop-ups, and help text matching the 2-minute reply check.
 - **Rollout Tutorial** inside the CMS.
 
-Verified end to end on 2026-11-18 with a live simulation (real mailboxes on a test mail server, the real AI models, the Agent protocol): 42 of 42 checks passed. 867 automated tests pass. Details and remaining gaps: [`inquiry-supervision/PROGRESS.md`](inquiry-supervision/PROGRESS.md).
+Live simulation on 2026-11-18, before the changes above (real mailboxes on a test mail server, the real AI models, the Agent protocol): 42 of 42 checks passed. 929 automated tests pass. Not yet verified: AI accuracy with the new prompt, sign-in and sending on the real company mail server, and the Agent clicked through on an employee PC. Details and remaining gaps: [`inquiry-supervision/PROGRESS.md`](inquiry-supervision/PROGRESS.md).
 
 ## Parts
 
@@ -50,18 +75,24 @@ Full steps with screenshots are in the Rollout Tutorial.
 2. Copy `.env.example` to `.env` and fill in new random secrets, the admin login, the OpenRouter key, `DOMAIN` (the server's IP or DNS name) and `CORS_ORIGIN` (`https://<server>:8443`).
 3. Double-click **`Build-IEMAS.bat`**. It builds and starts the database, API, CMS and HTTPS proxy, checks each one and writes a log to `logs/`.
 4. Allow inbound TCP 8443 in the Windows firewall.
-5. Open `https://<server>:8443`, sign in, and work through **System → Setup Checklist**: employees, mailboxes and owners, outbound email, supervisors, business hours and holidays, and the **CMS web address** setting.
+5. Open `https://<server>:8443`, sign in, and work through **System → Setup Checklist**: employees, mailboxes and owners, outbound email, supervisors, working hours and holidays, and the **CMS web address** setting. The default Reminder Policy already has working hours (Mon–Thu 07:00–18:00, Fri 07:00–16:00, Asia/Manila) from the database migration. Check them and add public holidays.
+6. For company mailboxes, the **Mailbox defaults** settings hold the mail server (mail.sawo.com, IMAP 993, SMTP 465, SSL/TLS) and the domain (sawo.com), so only an address and password are needed. Use **Test connection** before saving.
 
 **Each employee PC** (no approval step)
 
 1. In the CMS: **People & Devices → Windows Agents → Download installer**. Pick one person's mailbox (nothing to type on the PC) or "Everyone" (each person types their email once), check the server address, download the zip.
 2. On the PC: extract the zip and double-click **`Install-IEMAS-Agent.bat`**. It installs the .NET 8 Desktop Runtime if missing, installs the Agent for that Windows user, turns on Start with Windows, starts it, and the Agent registers and is approved automatically.
+3. The first time the Agent starts, it offers a short "Show me around" walkthrough with a practice inquiry. Administrators can start one for a PC from CMS Windows Agents → **Practice run**.
 
-Each installer carries a one-time installer key with an expiry date and a maximum number of PCs; it can be withdrawn in the CMS, and only its hash is stored. An expired installer still installs the Agent, but the PC then waits for approval as before. Manual setup (copy `windows-client/agent-release/IemasAgent.exe`, enter the server address, register, approve under Windows Agents) still works.
+Each installer carries an installer key. Keys have no expiry date and no PC limit. A key can be withdrawn in the CMS, and only its hash is stored. Manual setup (copy `windows-client/agent-release/IemasAgent.exe`, enter the server address, register, approve under Windows Agents) still works.
+
+**Signing in with email (Windows Agent 1.3.0)**
+
+The Agent can also connect by sign-in: the employee enters their work email and password, chooses **Test connection**, then **Connect**. The server checks the password with the company mail server, adds or updates the mailbox, creates the employee if needed, approves the PC, and sends a confirmation email. If the mailbox owner already has other mailboxes under a different email, the PC waits for admin approval. Passwords travel from the PC to the server, so use the `https` address. The Agent asks before sending a password over plain `http`.
 
 **Updating**
 
-- Server: `git pull`, then `Build-IEMAS.bat` again. Database changes are applied automatically at start-up.
+- Server: back up the database first (`scripts/backup-database.sh`), then `git pull` and `Build-IEMAS.bat` again. Database changes are applied automatically at start-up.
 - Agent: rebuild `windows-client/agent-release/IemasAgent.exe` (command below), then give PCs a new installer from the CMS. Running it over an existing install keeps the registration.
 
 **Backups:** schedule `scripts/backup-database.sh` daily and copy the files off the server. Keep a copy of `CREDENTIAL_ENCRYPTION_KEY`: without it the stored mailbox passwords cannot be read.
@@ -79,7 +110,7 @@ Each installer carries a one-time installer key with an expiry date and a maximu
 ## Development
 
 ```bash
-# API and tests
+# API and tests (tests run on .NET 8; on a PC with only .NET 10, set DOTNET_ROLL_FORWARD=Major first)
 dotnet test server/tests/Iemas.Tests/Iemas.Tests.csproj
 
 # CMS

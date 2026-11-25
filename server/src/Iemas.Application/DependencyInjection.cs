@@ -45,6 +45,10 @@ public static class DependencyInjection
         services.AddScoped<AgentAuthService>();
         services.AddScoped<AgentCaseActionService>();
         services.AddScoped<AgentSyncService>();
+        services.AddScoped<MailboxEnrollmentService>();
+        services.AddScoped<AgentGuideService>();
+        services.AddSingleton<EnrollmentThrottle>();
+        services.AddScoped<Iemas.Application.Inquiries.PracticeInquiryService>();
         services.AddScoped<AgentManagementService>();
         services.AddScoped<ReminderSchedulingService>();
         services.AddScoped<ReminderExecutionService>();

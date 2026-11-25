@@ -194,7 +194,7 @@ export default function InquirySupervisionPage() {
               <th style={{ textAlign: "left" }}>Agent</th>
               <th style={{ textAlign: "left" }}>Stage<InfoTip text="Where the conversation stands. Orange means the agent owes the next step; blue means the AI thinks it is resolved and the agent should confirm." /></th>
               <th style={{ textAlign: "left" }}>Since<InfoTip text="When the inquiry entered its current stage. Reminder and idle timers count from this moment." /></th>
-              <th style={{ textAlign: "left" }}>Resolution target<InfoTip text="The deadline to have the inquiry fully resolved (5 business days by default). Missing it marks the inquiry Overdue; it is never closed automatically." /></th>
+              <th style={{ textAlign: "left" }}>Resolution target<InfoTip text="The deadline to have the inquiry fully resolved (10 business days by default). Missing it marks the inquiry Overdue; it is never closed automatically." /></th>
             </tr>
           </thead>
           <tbody>
@@ -234,7 +234,7 @@ function SummaryCards({ overview, bucket, employeeId, onPick }: { overview: Inqu
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 12, marginBottom: 20 }}>
       <StatCard label="Detected (all time)" help="Every customer inquiry IEMAS has ever recorded, open or closed." value={overview.totalDetected} hint="Every inquiry ever recorded" onClick={() => onPick("all")} active={on("all")} />
-      <StatCard label="New" help="Inquiries no one has answered yet. The agent gets a reminder when the first-reply deadline (4 business hours by default) passes." value={t.awaitingInitialResponse} hint="No first reply yet" tone={t.awaitingInitialResponse ? "warn" : "neutral"} onClick={() => onPick("awaiting-initial")} active={on("awaiting-initial")} />
+      <StatCard label="New" help="Inquiries no one has answered yet. The agent gets a reminder when the first-reply deadline (8 business hours by default) passes." value={t.awaitingInitialResponse} hint="No first reply yet" tone={t.awaitingInitialResponse ? "warn" : "neutral"} onClick={() => onPick("awaiting-initial")} active={on("awaiting-initial")} />
       <StatCard label="Awaiting agent" help="Inquiries where the ball is in the agent's court: new, the customer wrote again, or the conversation went quiet on our side." value={awaitingAgent} hint="The agent owes a reply" tone={awaitingAgent ? "warn" : "neutral"} onClick={() => onPick("awaiting-agent")} active={on("awaiting-agent")} />
       <StatCard label="Active conversations" help="The agent has replied and is now waiting on the customer or on another department. Nothing is owed by the agent right now." value={active} hint="Waiting on customer or internal" tone="info" onClick={() => onPick("active")} active={on("active")} />
       <StatCard label="Potentially resolved" help="The AI read the conversation and thinks the issue is solved. The agent must confirm it, or say it is not resolved yet." value={t.potentiallyResolved} hint="Waiting for the agent to confirm" tone="info" onClick={() => onPick("potentially-resolved")} active={on("potentially-resolved")} />

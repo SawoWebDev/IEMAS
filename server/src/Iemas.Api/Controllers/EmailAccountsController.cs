@@ -24,6 +24,18 @@ public class EmailAccountsController : ControllerBase
         return Ok(await _emailAccountService.GetAllAsync(purpose, cancellationToken));
     }
 
+    /// <summary>The company mail server settings the forms start from.</summary>
+    [HttpGet("defaults")]
+    public async Task<ActionResult<MailboxDefaultsDto>> GetDefaults(CancellationToken cancellationToken) =>
+        Ok(await _emailAccountService.GetDefaultsAsync(cancellationToken));
+
+    [HttpPost("test-settings")]
+    public async Task<ActionResult<TestConnectionResult>> TestSettings([FromBody] TestMailboxSettingsRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _emailAccountService.TestSettingsAsync(request, cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : BadRequest(new { message = result.Error });
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<EmailAccountDto>> GetById(Guid id, CancellationToken cancellationToken)
     {

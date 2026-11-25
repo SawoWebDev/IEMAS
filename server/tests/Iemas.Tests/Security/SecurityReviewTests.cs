@@ -52,6 +52,8 @@ public class SecurityReviewTests
         {
             "AuthController.Login", "AuthController.Refresh", "AgentAuthController.Authenticate",
             "AgentEnrollmentController.Register", "AgentEnrollmentController.GetStatus",
+            // PC setup with a mailbox password: the password, checked against the company mail server, is the credential.
+            "AgentEnrollmentController.TestMailbox", "AgentEnrollmentController.EnrollMailbox",
         };
         var anonymous = Actions().Where(a => Anonymous(a.Controller, a.Action)).ToList();
         Assert.NotEmpty(anonymous);

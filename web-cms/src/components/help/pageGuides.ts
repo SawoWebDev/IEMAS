@@ -105,7 +105,7 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
   "/email-accounts": {
     intro: "The mailboxes IEMAS watches for customer email. Each mailbox has an owner, the employee who gets its alerts and Cases.",
     steps: [
-      "Press + Add email account and fill in the IMAP server, username and password.",
+      "Press + Add email account. For a company address, fill in only the email address and password; the server settings are filled in for you.",
       "Press Test to check the login works.",
       "Use Edit to change the owner or the cut-off date. Older email never becomes Cases.",
       "To remove a mailbox, Deactivate it first, then Delete.",
@@ -170,13 +170,13 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
   "/employees": {
     intro: "The people who own mailboxes and Cases, with their department and supervisor. The supervisor is used for escalation.",
     steps: [
-      "Add an employee, then give them a mailbox (Email Accounts) and approve their PC (Windows Agents).",
+      "Add an employee, then give them a mailbox (Email Accounts) and approve their PC (Windows Agents) if it is still Pending.",
       "Set the supervisor correctly: they are told when this person's Cases are escalated.",
       "Deactivate someone who leaves. Delete works only when nothing refers to them.",
     ],
   },
   "/agents": {
-    intro: "The IEMAS Agent program on each employee's PC, which shows the pop-ups. A new PC appears here as Pending.",
+    intro: "The IEMAS Agent program on each employee's PC, which shows the pop-ups. A PC set up another way appears here as Pending.",
     steps: [
       "For a Pending PC, choose the employee who uses it and press Approve.",
       "Revoke a lost or replaced PC to cut it off immediately.",
@@ -226,7 +226,7 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     steps: [
       "Type a reason and press Pause on the part you want to stop; press Resume when done.",
       "Generate sample data adds fake [Sample] emails so you can try the system safely.",
-      "Reset email data deletes all emails and Cases. Type RESET to confirm; people and settings are kept.",
+      "Reset email data deletes all emails and Cases. Type RESET to confirm; users and settings are kept. Clean start can also remove every mailbox you do not tick.",
     ],
   },
   "/help": {

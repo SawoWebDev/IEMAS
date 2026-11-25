@@ -100,6 +100,24 @@
                 <StackPanel>
                     <TextBlock x:Name="OnboardingTitle" FontSize="16" FontWeight="Bold" Margin="0,0,0,8"/>
                     <TextBlock x:Name="OnboardingMessage" TextWrapping="Wrap" Foreground="#4B5563" Margin="0,0,0,16"/>
+                    <!-- Sign in with the work email and password: tests them, adds the mailbox and connects this PC. -->
+                    <StackPanel x:Name="MailboxForm">
+                        <TextBlock Text="Work email address" FontSize="12" Foreground="#4B5563"/>
+                        <TextBox x:Name="MailboxEmailTextBox" Margin="0,4,0,10" Padding="6"
+                                 ToolTip="Your company email address, for example name@sawo.com."/>
+                        <TextBlock Text="Email password (the one you use in Outlook)" FontSize="12" Foreground="#4B5563"/>
+                        <PasswordBox x:Name="MailboxPasswordBox" Margin="0,4,0,10" Padding="6"/>
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="TestMailboxButton" Content="Test connection" Style="{StaticResource SecondaryButton}" Click="TestMailbox_Click"
+                                    ToolTip="Checks your email and password with the mail server. Nothing is saved."/>
+                            <Button x:Name="ConnectMailboxButton" Content="Connect" Style="{StaticResource ActionButton}" Click="ConnectMailbox_Click" IsDefault="True"
+                                    ToolTip="Adds your mailbox to IEMAS and connects this PC."/>
+                        </StackPanel>
+                        <TextBlock x:Name="MailboxStatus" TextWrapping="Wrap" Margin="0,10,0,0"/>
+                        <TextBlock x:Name="ServerHint" FontSize="11" Foreground="#6B7280" TextWrapping="Wrap" Margin="0,10,0,0"/>
+                        <Button Content="Ask an administrator to approve this PC instead" Style="{StaticResource TabButton}" Foreground="#2563EB"
+                                HorizontalAlignment="Left" Padding="0,8" Click="UseApproval_Click"/>
+                    </StackPanel>
                     <StackPanel x:Name="RegistrationForm">
                         <TextBlock Text="Email Address (must be an enrolled IEMAS mailbox)" FontSize="12" Foreground="#4B5563"/>
                         <TextBox x:Name="EmailTextBox" Margin="0,4,0,10" Padding="6"/>
@@ -107,6 +125,8 @@
                         <TextBox x:Name="ClientNameTextBox" Margin="0,4,0,10" Padding="6"/>
                         <Button Content="Register" Style="{StaticResource ActionButton}" HorizontalAlignment="Left" Click="RegisterButton_Click"/>
                         <TextBlock x:Name="RegistrationError" Foreground="#DC2626" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                        <Button Content="Sign in with my email password instead" Style="{StaticResource TabButton}" Foreground="#2563EB"
+                                HorizontalAlignment="Left" Padding="0,8" Click="UsePassword_Click"/>
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -153,6 +173,9 @@
             <ScrollViewer x:Name="HelpPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="16,12,16,16">
                     <TextBlock Text="HELP" FontWeight="Bold" FontSize="13" Foreground="#374151" Margin="0,0,0,8"/>
+                    <Button Content="Show me around (with a practice inquiry)" Style="{StaticResource ActionButton}" HorizontalAlignment="Left"
+                            Margin="0,0,0,10" Click="ShowTour_Click"
+                            ToolTip="A short walkthrough of what appears on this PC, then a practice inquiry from new email to escalation. Available while connected."/>
 
                     <Border Style="{StaticResource HelpCard}">
                         <StackPanel>
@@ -166,10 +189,10 @@
                         <StackPanel>
                             <TextBlock Style="{StaticResource HelpHeading}" Text="How a customer email reaches you"/>
                             <TextBlock Style="{StaticResource HelpText}" Text="1. IEMAS checks your mailbox for new email every minute."/>
-                            <TextBlock Style="{StaticResource HelpText}" Text="2. The AI reads it straight away: is it a real business email, and does it need a reply? Newsletters, auto-replies and similar do not become Cases."/>
+                            <TextBlock Style="{StaticResource HelpText}" Text="2. A filter and the AI read it: is it a customer or dealer inquiry that needs a reply? Newsletters, receipts, sales pitches, internal mail and similar do not become Cases. When the AI is not sure, a person checks first."/>
                             <TextBlock Style="{StaticResource HelpText}" Text="3. If it needs a reply, a Case is created and you get a pop-up. Follow-up emails from the same customer about the same topic are added to the same Case. This usually happens within about a minute of the email arriving (a little longer if the AI service is slow)."/>
                             <TextBlock Style="{StaticResource HelpText}" Text="4. Every 2 minutes IEMAS looks in the mailbox's Sent folder for your reply. Once it is found, the Case is marked replied and reminders stop."/>
-                            <TextBlock Style="{StaticResource HelpText}" Text="5. No reply yet? You get reminder pop-ups (how often is set by your administrator). After enough reminders the Case becomes Escalated and your supervisor's details are recorded for it."/>
+                            <TextBlock Style="{StaticResource HelpText}" Text="5. No reply by the time shown in the pop-up? You get reminders during working hours. Only if it is still unanswered after the last one is your supervisor emailed. Show me around lists the exact times."/>
                         </StackPanel>
                     </Border>
 
@@ -190,10 +213,10 @@
                     <Border Style="{StaticResource HelpCard}">
                         <StackPanel>
                             <TextBlock Style="{StaticResource HelpHeading}" Text="First-time setup"/>
-                            <TextBlock Style="{StaticResource HelpText}" Text="1. Open Settings and check the Server URL your administrator gave you (for example https://server:8443). Tick &quot;Allow self-signed certificates&quot; only if your administrator tells you to. Save."/>
-                            <TextBlock Style="{StaticResource HelpText}" Text="2. On the Register screen enter the company email address IEMAS watches for you, and a name for this PC (your computer name is filled in). Click Register."/>
-                            <TextBlock Style="{StaticResource HelpText}" Text="3. The status shows Awaiting Approval. An administrator approves the PC in the IEMAS CMS (Windows Agents). The app notices within a few seconds and connects by itself - no codes or keys to copy."/>
-                            <TextBlock Style="{StaticResource HelpText}" Text="4. Tick &quot;Start with Windows&quot; in Settings so you never miss an alert."/>
+                            <TextBlock Style="{StaticResource HelpText}" Text="1. The installer fills in the server address. Setting up by hand: open Settings, enter the Server URL your administrator gave you (for example https://server:8443), tick &quot;Allow self-signed certificates&quot; only if told to, and Save."/>
+                            <TextBlock Style="{StaticResource HelpText}" Text="2. Enter your work email address and its password. Click Test connection, then Connect. The password is checked with the company mail server and kept only on the IEMAS server, encrypted; it is not saved on this PC."/>
+                            <TextBlock Style="{StaticResource HelpText}" Text="3. The light turns green and Show me around opens. If your PC needs approval, the status shows Awaiting Approval until an administrator approves it."/>
+                            <TextBlock Style="{StaticResource HelpText}" Text="4. Keep &quot;Start with Windows&quot; ticked in Settings so you never miss an alert."/>
                         </StackPanel>
                     </Border>
 

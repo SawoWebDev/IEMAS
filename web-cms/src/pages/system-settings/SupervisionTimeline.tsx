@@ -10,6 +10,7 @@ export interface SupervisionValues {
   reminders: number;
   nextLevelDays: number;
   followUpDays: number;
+  stalledDays: number;
   customerWaitDays: number;
   internalWaitDays: number;
   resolutionTargetDays: number;
@@ -87,8 +88,12 @@ export default function SupervisionTimeline({ values: v, businessDayHours, testM
       <h4 style={{ fontSize: 13, margin: "16px 0 6px" }}>Other situations</h4>
       <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.6 }}>
         <li>
-          The customer writes again, or the conversation stalls, and nobody answers for <strong>{days(v.followUpDays, "business")}</strong>:
+          The customer writes again and nobody answers for <strong>{days(v.followUpDays, "business")}</strong>:
           the same reminder and escalation steps begin.
+        </li>
+        <li>
+          A conversation went quiet and the agent does nothing for <strong>{days(v.stalledDays, "business")}</strong> after being asked:
+          the same steps begin.
         </li>
         <li>
           The agent has replied and the customer stays silent for <strong>{days(v.customerWaitDays, "calendar")}</strong>:

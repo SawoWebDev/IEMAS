@@ -102,10 +102,13 @@ public class EmailAccountService
             return Result<EmailAccountDto>.Failure("A credential secret is required when creating an account.");
         }
 
-        if (request.Port is <= 0 or > 65535)
+        var resolved = await ResolveSettingsAsync(
+            emailAddress, request.Purpose, request.Host, request.Port, request.Encryption, request.Username, cancellationToken);
+        if (!resolved.Succeeded)
         {
-            return Result<EmailAccountDto>.Failure("Port must be between 1 and 65535.");
+            return Result<EmailAccountDto>.Failure(resolved.Error!);
         }
+        var server = resolved.Value!;
 
         if (await _db.EmailAccounts.AnyAsync(a => a.EmailAddress == emailAddress && a.Purpose == request.Purpose, cancellationToken))
         {
@@ -136,6 +139,14 @@ public class EmailAccountService
             return Result<EmailAccountDto>.Failure(displayNameError);
         }
 
+        var ownerId = request.OwnerEmployeeId;
+        if (ownerId is null && request.AutoAssignOwner && request.Purpose == EmailAccountPurpose.Inbound)
+        {
+            var (employee, _) = await MailboxDefaults.FindOrAddEmployeeAsync(_db, emailAddress, cancellationToken);
+            ownerId = employee.Id;
+            if (string.IsNullOrEmpty(displayName)) displayName = employee.FullName;
+        }
+
         var account = new EmailAccount
         {
             EmailAddress = emailAddress,
@@ -143,12 +154,12 @@ public class EmailAccountService
             Purpose = request.Purpose,
             Kind = request.Kind,
             Protocol = request.Protocol,
-            Host = request.Host.Trim(),
-            Port = request.Port,
-            Encryption = request.Encryption.Trim(),
-            Username = request.Username.Trim(),
+            Host = server.Host,
+            Port = server.Port,
+            Encryption = server.Encryption,
+            Username = server.Username,
             AuthMethod = request.AuthMethod,
-            OwnerEmployeeId = request.OwnerEmployeeId,
+            OwnerEmployeeId = ownerId,
             ClassificationProfileName = request.Purpose == EmailAccountPurpose.Inbound ? request.ClassificationProfileName?.Trim() : null,
             MonitoringEnabled = request.MonitoringEnabled,
             ProcessEmailsReceivedAfter = request.Purpose == EmailAccountPurpose.Inbound
@@ -172,6 +183,74 @@ public class EmailAccountService
         await _auditService.LogAsync("EMAIL_ACCOUNT_CREATED", "EmailAccount", account.Id.ToString(), $"{account.EmailAddress} ({account.Purpose})", cancellationToken);
 
         return Result<EmailAccountDto>.Success(await GetByIdAsync(account.Id, cancellationToken) ?? throw new InvalidOperationException());
+    }
+
+    private sealed record ServerSettings(string Host, int Port, string Encryption, string Username);
+
+    /// <summary>Fills blank server fields of a company address from "Mailbox defaults".</summary>
+    private async Task<Result<ServerSettings>> ResolveSettingsAsync(
+        string email, EmailAccountPurpose purpose, string? host, int port, string? encryption, string? username, CancellationToken cancellationToken)
+    {
+        var defaults = await MailboxDefaults.LoadAsync(_db, cancellationToken);
+        var company = defaults.IsCompanyAddress(email);
+        var resolvedHost = host?.Trim() ?? string.Empty;
+        if (resolvedHost.Length == 0)
+        {
+            if (!company) return Result<ServerSettings>.Failure("Enter the mail server: only company addresses use the default one.");
+            resolvedHost = defaults.ImapHost;
+        }
+        var resolvedPort = port != 0 || !company ? port : purpose == EmailAccountPurpose.Outbound ? defaults.SmtpPort : defaults.ImapPort;
+        if (resolvedPort is <= 0 or > 65535) return Result<ServerSettings>.Failure("Port must be between 1 and 65535.");
+        return Result<ServerSettings>.Success(new ServerSettings(
+            resolvedHost,
+            resolvedPort,
+            string.IsNullOrWhiteSpace(encryption) ? defaults.Encryption : encryption.Trim(),
+            string.IsNullOrWhiteSpace(username) ? email : username.Trim()));
+    }
+
+    public async Task<MailboxDefaultsDto> GetDefaultsAsync(CancellationToken cancellationToken)
+    {
+        var d = await MailboxDefaults.LoadAsync(_db, cancellationToken);
+        return new MailboxDefaultsDto(d.ImapHost, d.ImapPort, d.Encryption, d.SmtpPort, d.CompanyDomains, d.AllowSelfEnrollment);
+    }
+
+    /// <summary>Test Connection for settings that are not saved yet. Nothing is stored.</summary>
+    public async Task<Result<TestConnectionResult>> TestSettingsAsync(TestMailboxSettingsRequest request, CancellationToken cancellationToken)
+    {
+        var email = (request.EmailAddress ?? string.Empty).Trim().ToLowerInvariant();
+        if (!email.Contains('@')) return Result<TestConnectionResult>.Failure("A valid email address is required.");
+        var resolved = await ResolveSettingsAsync(email, request.Purpose, request.Host, request.Port, request.Encryption, request.Username, cancellationToken);
+        if (!resolved.Succeeded) return Result<TestConnectionResult>.Failure(resolved.Error!);
+        var server = resolved.Value!;
+
+        var secret = request.Secret;
+        if (string.IsNullOrEmpty(secret) && request.ExistingAccountId is Guid existingId)
+        {
+            var stored = await _db.EmailAccounts.AsNoTracking().Include(a => a.Credential).FirstOrDefaultAsync(a => a.Id == existingId, cancellationToken);
+            // The stored password only ever goes to the server it was saved for, never to one typed in just now.
+            if (stored?.Credential is not null
+                && string.Equals(stored.Host, server.Host, StringComparison.OrdinalIgnoreCase) && stored.Port == server.Port)
+            {
+                try
+                {
+                    secret = _encryptionService.Decrypt(new(
+                        stored.Credential.EncryptedSecret, stored.Credential.Nonce, stored.Credential.Tag, stored.Credential.KeyId));
+                }
+                catch (System.Security.Cryptography.CryptographicException)
+                {
+                    return Result<TestConnectionResult>.Failure("The stored password could not be read. Enter it again.");
+                }
+            }
+        }
+        if (string.IsNullOrEmpty(secret)) return Result<TestConnectionResult>.Failure("Enter the password to test these settings.");
+
+        var protocol = request.Purpose == EmailAccountPurpose.Outbound ? EmailProtocol.Smtp : EmailProtocol.Imap;
+        var result = await _adapterResolver.Resolve(protocol).TestConnectionAsync(
+            new EmailProviderConnectionSettings(protocol, server.Host, server.Port, server.Encryption, server.Username, EmailAuthMethod.Password, secret),
+            cancellationToken);
+        await _auditService.LogAsync(result.Succeeded ? "EMAIL_SETTINGS_TEST_SUCCEEDED" : "EMAIL_SETTINGS_TEST_FAILED",
+            "EmailAccount", request.ExistingAccountId?.ToString(), $"{email} on {server.Host}:{server.Port}", cancellationToken);
+        return Result<TestConnectionResult>.Success(new TestConnectionResult(result.Succeeded, result.Succeeded ? null : result.ErrorMessage, result.Duration.TotalMilliseconds));
     }
 
     public async Task<Result<EmailAccountDto>> UpdateAsync(Guid id, UpdateEmailAccountRequest request, CancellationToken cancellationToken)

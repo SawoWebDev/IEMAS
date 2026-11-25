@@ -76,7 +76,9 @@ public partial class App : Application
         }
 
         Session.StateUpdated += UpdateTrayState;
+        Session.StateUpdated += ShowTourWhenFirstConnected;
         Session.PushReceived += ShowPopup;
+        Session.PushReceived += StartPracticeWhenAsked;
 
         await Session.StartAsync();
     }
@@ -93,6 +95,7 @@ public partial class App : Application
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open IEMAS", null, (_, _) => ShowMainWindow());
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Show me around", null, (_, _) => ShowTour());
         menu.Items.Add("Settings", null, (_, _) => { ShowMainWindow(); _mainWindow?.ShowSettings(); });
         menu.Items.Add("Help", null, (_, _) => { ShowMainWindow(); _mainWindow?.ShowHelp(); });
         menu.Items.Add(new ToolStripSeparator());
@@ -125,6 +128,30 @@ public partial class App : Application
             message,
             openCase: caseId => { ShowMainWindow(); _mainWindow?.FocusCase(caseId); },
             acknowledge: caseId => _ = Session.SubmitActionAsync(caseId, Models.CaseActionType.Acknowledged, null)));
+    }
+
+    public void ShowTour(bool atPractice = false)
+    {
+        if (Session.State != SessionState.Connected)
+        {
+            ShowMainWindow();
+            return;
+        }
+        Views.TourWindow.Open(caseId => { ShowMainWindow(); _mainWindow?.FocusCase(caseId); }, atPractice);
+    }
+
+    /// <summary>The first time this PC connects, the walkthrough opens by itself.</summary>
+    private void ShowTourWhenFirstConnected()
+    {
+        if (Session.State != SessionState.Connected || !Session.TourDue) return;
+        Session.MarkTourSeen();
+        Dispatcher.BeginInvoke(() => ShowTour());
+    }
+
+    /// <summary>An administrator started a practice run for this employee from the CMS.</summary>
+    private void StartPracticeWhenAsked(Models.AgentPushMessage message)
+    {
+        if (message.Type == "START_PRACTICE") Dispatcher.BeginInvoke(() => ShowTour(atPractice: true));
     }
 
     private void SetupToastActivation()

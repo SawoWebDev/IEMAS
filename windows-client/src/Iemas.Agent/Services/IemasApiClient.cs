@@ -50,6 +50,41 @@ public class IemasApiClient : IDisposable
             return await ReadResultAsync<RegisterAgentResponse>(response, ct);
         });
 
+    public Task<ApiResult<MailboxTestResponse>> TestMailboxAsync(MailboxLoginRequest request, CancellationToken ct) =>
+        ExecuteAsync<MailboxTestResponse>(async () =>
+        {
+            using var response = await _http.PostAsJsonAsync("api/v1/agent-enrollment/mailbox/test", request, JsonOptions, ct);
+            return await ReadResultAsync<MailboxTestResponse>(response, ct);
+        });
+
+    public Task<ApiResult<EnrollMailboxResponse>> EnrollMailboxAsync(EnrollMailboxRequest request, CancellationToken ct) =>
+        ExecuteAsync<EnrollMailboxResponse>(async () =>
+        {
+            using var response = await _http.PostAsJsonAsync("api/v1/agent-enrollment/mailbox", request, JsonOptions, ct);
+            return await ReadResultAsync<EnrollMailboxResponse>(response, ct);
+        });
+
+    public Task<ApiResult<AgentGuideDto>> GetGuideAsync(CancellationToken ct) => SendAsync<AgentGuideDto>(HttpMethod.Get, "api/v1/agent/guide", ct);
+
+    public Task<ApiResult<PracticeStateDto>> StartPracticeAsync(CancellationToken ct) =>
+        SendAsync<PracticeStateDto>(HttpMethod.Post, "api/v1/agent/practice", ct);
+
+    public Task<ApiResult<PracticeStateDto>> AdvancePracticeAsync(Guid caseId, CancellationToken ct) =>
+        SendAsync<PracticeStateDto>(HttpMethod.Post, $"api/v1/agent/practice/{caseId}/advance", ct);
+
+    public Task<ApiResult<bool>> EndPracticeAsync(Guid caseId, CancellationToken ct) =>
+        SendAsync<bool>(HttpMethod.Delete, $"api/v1/agent/practice/{caseId}", ct);
+
+    /// <summary>A signed-in request without a body.</summary>
+    private Task<ApiResult<T>> SendAsync<T>(HttpMethod method, string path, CancellationToken ct) =>
+        ExecuteAsync<T>(async () =>
+        {
+            using var request = new HttpRequestMessage(method, path);
+            ApplyAuth(request);
+            using var response = await _http.SendAsync(request, ct);
+            return await ReadResultAsync<T>(response, ct);
+        });
+
     public Task<ApiResult<AgentRegistrationStatusResponse>> GetRegistrationStatusAsync(string registrationRequestToken, CancellationToken ct) =>
         ExecuteAsync<AgentRegistrationStatusResponse>(async () =>
         {
@@ -206,6 +241,11 @@ public class IemasApiClient : IDisposable
             message = error?.Message;
         }
         catch { /* body wasn't JSON — fall through to status-based message */ }
+
+        if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+        {
+            message = "Too many attempts. Wait a minute and try again.";
+        }
 
         return ApiResult<T>.Fail((int)response.StatusCode, message ?? response.ReasonPhrase ?? "Request failed.");
     }

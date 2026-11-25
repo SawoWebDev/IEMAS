@@ -135,7 +135,10 @@ public class EmailClassificationService
             return await PersistDeterministicOnlyAsync(message, profile, filterResult, stopwatch, cancellationToken);
         }
 
-        if (zettelkasten.Verdict == InquiryFilterVerdict.Inquiry)
+        // A confident keyword verdict is only a first opinion: by default the AI reads the email too, so an
+        // employee is alerted for a real inquiry and not for any email that happens to mention a price.
+        var filterSaysInquiry = zettelkasten.Verdict == InquiryFilterVerdict.Inquiry;
+        if (filterSaysInquiry && !await SystemSettingsService.GetBoolAsync(_db, SystemSettingKeys.AiConfirmsInquiries, cancellationToken))
         {
             return await PersistDeterministicInquiryAsync(message, profile, filterResult, stopwatch, cancellationToken, zettelkasten.Category);
         }
@@ -148,6 +151,12 @@ public class EmailClassificationService
 
         if (models.Count == 0)
         {
+            if (filterSaysInquiry)
+            {
+                return await PersistDeterministicInquiryAsync(message, profile,
+                    WithoutAi(filterResult, "No AI model is enabled"), stopwatch, cancellationToken, zettelkasten.Category);
+            }
+
             // §83 — no usable model configured is a provider-management problem, not a reason to
             // silently mark the email irrelevant. Goes to review, not lost.
             return await PersistFailureAsync(message, profile, filterResult, "No enabled AI model is configured for EmailClassification.", stopwatch, cancellationToken);
@@ -167,7 +176,8 @@ public class EmailClassificationService
             message.Id,
             AiUsagePurpose.EmailClassification,
             rules.Legitimacy,
-            rules.Response);
+            rules.Response,
+            (await LoadSenderHistoryAsync(message.FromAddress, cancellationToken)).Describe());
 
         ClassificationAttemptResult? lastAttempt = null;
 
@@ -246,7 +256,8 @@ public class EmailClassificationService
                     message.Id, model.Provider, model.ModelIdentifier, attemptCount,
                     model.FallbackOrder > 0 ? " (used a fallback model, not the primary)" : "");
                 return await PersistSuccessAsync(message, profile, filterResult, lastAttempt, stopwatch, cancellationToken,
-                    fallbackUsed: !string.Equals(model.ModelIdentifier, models[0].ModelIdentifier, StringComparison.Ordinal));
+                    fallbackUsed: !string.Equals(model.ModelIdentifier, models[0].ModelIdentifier, StringComparison.Ordinal),
+                    filterSaysInquiry: filterSaysInquiry);
             }
 
             _logger.LogWarning(
@@ -261,10 +272,48 @@ public class EmailClassificationService
             ? "All configured AI models are currently circuit-open (temporarily unavailable); no model was attempted."
             : lastAttempt?.ErrorMessage ?? "All configured AI models failed.";
 
+        // A customer must not be missed because the AI service is down: fall back to the filter's own verdict.
+        if (filterSaysInquiry)
+        {
+            return await PersistDeterministicInquiryAsync(message, profile,
+                WithoutAi(filterResult, $"The AI could not check it ({Truncate(failureReason, 300)})"), stopwatch, cancellationToken, zettelkasten.Category);
+        }
+
         return await PersistFailureAsync(
             message, profile, filterResult,
             failureReason,
             stopwatch, cancellationToken, lastAttempt?.ModelIdentifier);
+    }
+
+    private static DeterministicFilterResult WithoutAi(DeterministicFilterResult filter, string why) =>
+        filter with { Reason = $"{filter.Reason} {why}, so the keyword filter's decision was used." };
+
+    /// <summary>Below this confidence the AI cannot overrule a confident keyword verdict by itself; a person decides.</summary>
+    public const double OverruleFilterConfidence = 0.75;
+
+    /// <summary>What staff have already decided about earlier email from one sender.</summary>
+    private sealed record SenderHistory(int RealInquiries, int Rejected)
+    {
+        public bool OnlyRejected => Rejected > 0 && RealInquiries == 0;
+
+        public string? Describe() => (RealInquiries, Rejected) switch
+        {
+            (0, 0) => null,
+            (_, 0) => $"This sender has had {RealInquiries} earlier customer inquiry(ies) with us.",
+            (0, _) => $"Staff marked {Rejected} earlier email(s) from this sender as NOT a customer inquiry, and none was ever a real one.",
+            _ => $"This sender has had {RealInquiries} earlier customer inquiry(ies); {Rejected} other email(s) were marked not an inquiry.",
+        };
+    }
+
+    private async Task<SenderHistory> LoadSenderHistoryAsync(string fromAddress, CancellationToken cancellationToken)
+    {
+        var from = fromAddress.ToLower();
+        var reasons = await _db.Cases.AsNoTracking()
+            .Where(c => !c.IsPractice && c.CustomerEmailAddress.ToLower() == from)
+            .Select(c => c.CompletionReason)
+            .ToListAsync(cancellationToken);
+        var rejected = reasons.Count(r => r == Domain.Cases.CaseCompletionReason.IncorrectClassification);
+        return new SenderHistory(reasons.Count - rejected, rejected);
     }
 
     private async Task<ImportanceDecision> PersistDeterministicOnlyAsync(
@@ -309,12 +358,11 @@ public class EmailClassificationService
     {
         var settings = await InquiryFilterSettings.LoadAsync(_db, cancellationToken);
         var from = message.FromAddress.ToLower();
-        var knownCustomer = await _db.Cases.AnyAsync(c => c.CustomerEmailAddress.ToLower() == from
-            && (c.CompletionReason == null || c.CompletionReason != Domain.Cases.CaseCompletionReason.IncorrectClassification), cancellationToken);
+        var history = await LoadSenderHistoryAsync(message.FromAddress, cancellationToken);
         var monitoredMailbox = await _db.EmailAccounts.AnyAsync(a => a.EmailAddress.ToLower() == from, cancellationToken);
 
         return ZettelkastenFilter.Evaluate(
-            new InquiryFilterInput(message.Subject, message.BodyText, message.FromAddress, knownCustomer, monitoredMailbox),
+            new InquiryFilterInput(message.Subject, message.BodyText, message.FromAddress, history.RealInquiries > 0, monitoredMailbox, history.OnlyRejected),
             settings, profile);
     }
 
@@ -363,7 +411,8 @@ public class EmailClassificationService
 
     private async Task<ImportanceDecision> PersistSuccessAsync(
         EmailMessage message, ClassificationProfile? profile, DeterministicFilterResult filterResult,
-        ClassificationAttemptResult attempt, Stopwatch stopwatch, CancellationToken cancellationToken, bool fallbackUsed = false)
+        ClassificationAttemptResult attempt, Stopwatch stopwatch, CancellationToken cancellationToken, bool fallbackUsed = false,
+        bool filterSaysInquiry = false)
     {
         var response = attempt.Response!;
         var policyResult = ClassificationDecisionPolicy.Decide(
@@ -372,6 +421,16 @@ public class EmailClassificationService
             response.Legitimate, response.ResponseExpected,
             await SystemSettingsService.GetBoolAsync(_db, SystemSettingKeys.RequireResponseForCase, cancellationToken),
             response.Kind);
+
+        if (filterSaysInquiry && policyResult.Decision == ImportanceDecision.NotImportant && response.Confidence < OverruleFilterConfidence)
+        {
+            policyResult = policyResult with
+            {
+                Decision = ImportanceDecision.ReviewRequired,
+                Reason = $"The keyword filter saw a clear inquiry but the AI disagreed without being sure (confidence {response.Confidence:P0}); "
+                    + "needs a person to review it. " + policyResult.Reason,
+            };
+        }
 
         var classification = await GetOrCreateClassificationAsync(message.Id, cancellationToken);
         classification.ClassificationProfileId = profile?.Id;

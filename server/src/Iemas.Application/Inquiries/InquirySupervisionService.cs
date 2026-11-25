@@ -43,6 +43,9 @@ public class InquirySupervisionService
         _time = time ?? TimeProvider.System;
     }
 
+    /// <summary>Something due exactly at closing time is still sent, not held until the next morning.</summary>
+    public static readonly TimeSpan ClosingGrace = TimeSpan.FromMinutes(10);
+
     /// <summary>Process-wide gate so a manual "run now" and the scheduled Hangfire job never overlap in this process.</summary>
     private static readonly SemaphoreSlim RunGate = new(1, 1);
 
@@ -72,8 +75,14 @@ public class InquirySupervisionService
             || await _db.IsPausedAsync(PauseControl.AgentNotifications, cancellationToken);
 
         var calendar = settings.TestClockMinutes ? BusinessCalendar.FastTestClock() : await BusinessCalendar.LoadAsync(_db, cancellationToken);
+        // Reminders, wait notices and escalations are for people at work: outside working hours they wait.
+        var holdForWorkingHours = settings.AlertsInWorkingHoursOnly && !calendar.IsOpen(now, ClosingGrace);
+
+        // Practice inquiries are driven by the Agent's first-time setup, never by these timers.
+        await PracticeInquiryService.RemoveStaleAsync(_db, now, cancellationToken);
+
         var caseIds = await _db.Cases
-            .Where(c => c.Stage != InquiryStage.Resolved && c.Stage != InquiryStage.Closed
+            .Where(c => !c.IsPractice && c.Stage != InquiryStage.Resolved && c.Stage != InquiryStage.Closed
                 && c.WorkStatus != CaseWorkStatus.Completed && c.WorkStatus != CaseWorkStatus.Cancelled)
             .OrderBy(c => c.StageChangedAt)
             .Take(batchSize)
@@ -98,6 +107,7 @@ public class InquirySupervisionService
 
             // While paused, only silent bookkeeping happens; nothing that notifies or escalates.
             if (paused && action.Kind is not (SupervisionActionKind.SetResolutionDue or SupervisionActionKind.DeadlineMissed)) continue;
+            if (holdForWorkingHours && action.Kind is not (SupervisionActionKind.SetResolutionDue or SupervisionActionKind.DeadlineMissed)) continue;
 
             var applied = await ApplyAsync(c, action, now, settings, calendar, cancellationToken);
             if (applied is null) continue;

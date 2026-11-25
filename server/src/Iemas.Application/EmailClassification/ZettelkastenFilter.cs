@@ -36,7 +36,9 @@ public record InquiryFilterInput(
     /// <summary>True when the sender already had an inquiry (Case) that was not rejected as a wrong classification.</summary>
     bool SenderIsKnownCustomer,
     /// <summary>True when the sender is one of our own monitored mailboxes.</summary>
-    bool SenderIsMonitoredMailbox);
+    bool SenderIsMonitoredMailbox,
+    /// <summary>True when staff marked this sender's earlier email "not a customer inquiry" and none was ever a real one.</summary>
+    bool SenderPreviouslyRejected = false);
 
 public record InquiryFilterSettings(
     IgnoredSenderList InternalSenders,
@@ -129,6 +131,7 @@ public static class ZettelkastenFilter
     private const int ProfileIncludeCap = 2;
     private const int QuestionPoints = 1;
     private const int KnownCustomerPoints = 2;
+    private const int PreviouslyRejectedPoints = -3;
 
     /// <summary>Quoted history further down a reply often repeats old content; only the start of the body is scored.</summary>
     private const int MaxBodyCharsScored = 6000;
@@ -169,7 +172,9 @@ public static class ZettelkastenFilter
                 "The message is only a test (\"test\", \"testing\" ...); web-form and mailbox tests never become inquiries.");
         }
 
-        var body = input.Body is { Length: > MaxBodyCharsScored } long_ ? long_[..MaxBodyCharsScored] : input.Body ?? string.Empty;
+        // Only what the sender just wrote is scored; quoted history repeats old content, often our own.
+        var latest = EmailTextCleaner.Split(input.Subject, input.Body).Latest;
+        var body = latest.Length > MaxBodyCharsScored ? latest[..MaxBodyCharsScored] : latest;
         var text = $"{input.Subject}\n{body}";
         var from = input.FromAddress.ToLowerInvariant();
 
@@ -245,6 +250,12 @@ public static class ZettelkastenFilter
                 return new InquiryFilterResult(InquiryFilterVerdict.NotInquiry, ProfileExcludePoints, signals,
                     $"Matched exclude term: \"{excludeHits[0]}\" (classification profile rule).");
             }
+        }
+
+        if (input.SenderPreviouslyRejected)
+        {
+            negative += PreviouslyRejectedPoints;
+            signals.Add("staff marked this sender's earlier email as not an inquiry");
         }
 
         var notInquiryHits = Matches(text, settings.NotInquiryPhrases);

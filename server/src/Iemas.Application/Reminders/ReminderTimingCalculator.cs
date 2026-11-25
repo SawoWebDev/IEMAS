@@ -22,10 +22,27 @@ public static class ReminderTimingCalculator
     {
         var tz = ResolveTimeZone(policy.TimeZoneId);
         var current = candidateUtc;
+        var weekly = policy.RestrictToBusinessHours ? WeeklySchedule.ParseOrNull(policy.WeeklyHours) : null;
 
         for (var i = 0; i < MaxAdjustmentIterations; i++)
         {
             var local = TimeZoneInfo.ConvertTime(current, tz);
+
+            if (weekly is not null)
+            {
+                var date = DateOnly.FromDateTime(local.Date);
+                if (holidayDates.Contains(date) || !weekly.TryGet(local.DayOfWeek, out var window) || local.TimeOfDay >= window.End)
+                {
+                    current = NextMidnight(local, tz);
+                    continue;
+                }
+                if (local.TimeOfDay < window.Start)
+                {
+                    current = AtTimeOfDay(local, window.Start, tz);
+                    continue;
+                }
+                return current;
+            }
 
             if (policy.ExcludeWeekends && IsWeekend(local))
             {

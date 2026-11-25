@@ -26,6 +26,9 @@ public record TestRecordDto(string Kind, Guid Id, string Name, string Detail);
 
 public record EmailDataResetPreviewDto(EmailDataResetCountsDto Counts, List<TestRecordDto> TestRecords);
 
+/// <summary>A clean start that keeps only chosen mailboxes: what goes and what stays.</summary>
+public record CleanStartPlanDto(List<TestRecordDto> Remove, List<TestRecordDto> Keep);
+
 public record EmailDataResetResultDto(EmailDataResetCountsDto Removed, DateTimeOffset NewCutoff, List<TestRecordDto> RemovedTestRecords);
 
 /// <summary>
@@ -76,7 +79,8 @@ public class EmailDataResetService
         await _db.EmailIntakeLogs.CountAsync(cancellationToken));
 
     public async Task<EmailDataResetResultDto?> ResetAsync(
-        string? confirmation, IReadOnlyCollection<Guid>? removeTestRecordIds, CancellationToken cancellationToken)
+        string? confirmation, IReadOnlyCollection<Guid>? removeTestRecordIds, CancellationToken cancellationToken,
+        IReadOnlyCollection<Guid>? keepEmailAccountIds = null)
     {
         if (!string.Equals(confirmation?.Trim(), ConfirmationWord, StringComparison.Ordinal)) return null;
 
@@ -120,12 +124,22 @@ public class EmailDataResetService
             ? new List<TestRecordDto>()
             : await RemoveTestRecordsAsync((await DetectTestRecordsAsync(cancellationToken)).Where(r => requested.Contains(r.Id)).ToList(), cancellationToken);
 
+        // Clean start. An empty list is refused rather than read as "keep nothing".
+        if (keepEmailAccountIds is { Count: > 0 })
+        {
+            var plan = await PlanKeepOnlyAsync(keepEmailAccountIds, cancellationToken);
+            var removedAddresses = plan.Remove.Where(r => r.Kind == "Mailbox").Select(r => r.Name).ToList();
+            _db.AgentInstallKeys.RemoveRange(await _db.AgentInstallKeys
+                .Where(k => k.EmailAddress != null && removedAddresses.Contains(k.EmailAddress)).ToListAsync(cancellationToken));
+            removedTestRecords.AddRange(await RemoveTestRecordsAsync(plan.Remove, cancellationToken));
+        }
+
         await _audit.LogAsync("EMAIL_DATA_RESET", "System", null,
             $"Removed {removed.Emails} emails, {removed.Cases} Cases, {removed.CaseEvents} Case events, {removed.AiDecisions} AI decisions, " +
             $"{removed.ReplyChecks} reply checks, {removed.Reminders} reminders, {removed.Escalations} escalations, " +
             $"{removed.Notifications} notifications, {removed.EmployeeActions} employee actions, {removed.IntakeLogs} intake logs. " +
             $"Mailbox cut-off moved to {cutoff:u}; configuration kept." +
-            (removedTestRecords.Count == 0 ? "" : $" Test records removed: {string.Join(", ", removedTestRecords.Select(r => $"{r.Kind} {r.Name}"))}."),
+            (removedTestRecords.Count == 0 ? "" : $" Records removed: {string.Join(", ", removedTestRecords.Select(r => $"{r.Kind} {r.Name}"))}."),
             cancellationToken);
 
         return new EmailDataResetResultDto(removed, cutoff, removedTestRecords);
@@ -178,6 +192,67 @@ public class EmailDataResetService
         result.AddRange(departments.Select(d => new TestRecordDto("Department", d.Id, d.Name, "")));
 
         return result;
+    }
+
+    /// <summary>
+    /// What "keep only these mailboxes" means. Kept: the chosen mailboxes; the PCs registered to them; their
+    /// owners, those owners' supervisors up the chain and department managers; anyone named in an escalation
+    /// policy or group; and anyone linked to a CMS user. Every other mailbox, PC, employee and department goes.
+    /// Users, policies, settings and AI configuration are never touched.
+    /// </summary>
+    public async Task<CleanStartPlanDto> PlanKeepOnlyAsync(IReadOnlyCollection<Guid> keepEmailAccountIds, CancellationToken cancellationToken)
+    {
+        var accounts = await _db.EmailAccounts.AsNoTracking().OrderBy(a => a.EmailAddress).ToListAsync(cancellationToken);
+        var keptAccounts = accounts.Where(a => keepEmailAccountIds.Contains(a.Id)).ToList();
+        if (keptAccounts.Count == 0) return new CleanStartPlanDto(new(), new());
+        var keptInbound = keptAccounts.Where(a => a.Purpose == Domain.Email.EmailAccountPurpose.Inbound)
+            .Select(a => a.EmailAddress.ToLowerInvariant()).ToHashSet();
+
+        var agents = await _db.Agents.AsNoTracking().ToListAsync(cancellationToken);
+        var keptAgents = agents.Where(a => keptInbound.Contains(a.EnrollmentEmailAddress.ToLowerInvariant())).ToList();
+
+        var employees = await _db.Employees.AsNoTracking().ToListAsync(cancellationToken);
+        var departments = await _db.Departments.AsNoTracking().ToListAsync(cancellationToken);
+        var needed = new HashSet<Guid>();
+        needed.UnionWith(keptAccounts.Where(a => a.OwnerEmployeeId != null).Select(a => a.OwnerEmployeeId!.Value));
+        needed.UnionWith(keptAgents.Where(a => a.EmployeeId != null).Select(a => a.EmployeeId!.Value));
+        needed.UnionWith(employees.Where(e => keptInbound.Contains(e.Email.ToLowerInvariant())).Select(e => e.Id));
+        needed.UnionWith(await _db.Users.Where(u => u.EmployeeId != null).Select(u => u.EmployeeId!.Value).ToListAsync(cancellationToken));
+        needed.UnionWith(await _db.EscalationGroupMembers.Select(m => m.EmployeeId).ToListAsync(cancellationToken));
+        needed.UnionWith(await _db.EscalationLevels.Where(l => l.SpecificEmployeeId != null).Select(l => l.SpecificEmployeeId!.Value).ToListAsync(cancellationToken));
+
+        // Supervisors and managers of everyone kept, however far up: escalation needs them.
+        var pending = new Queue<Guid>(needed);
+        while (pending.Count > 0)
+        {
+            var personId = pending.Dequeue();
+            var employee = employees.FirstOrDefault(e => e.Id == personId);
+            if (employee is null) continue;
+            var manager = departments.FirstOrDefault(d => d.Id == employee.DepartmentId)?.ManagerEmployeeId;
+            foreach (var id in new[] { employee.SupervisorEmployeeId, manager })
+            {
+                if (id is Guid next && needed.Add(next)) pending.Enqueue(next);
+            }
+        }
+        var keptDepartments = employees.Where(e => needed.Contains(e.Id) && e.DepartmentId != null).Select(e => e.DepartmentId!.Value).ToHashSet();
+
+        TestRecordDto Mailbox(Domain.Email.EmailAccount a) => new("Mailbox", a.Id, a.EmailAddress, $"{a.Purpose} on {a.Host}:{a.Port}");
+        TestRecordDto Pc(Domain.Agents.Agent a) => new("Windows Agent", a.Id, a.ClientName, $"{a.EnrollmentEmailAddress}, {a.RegistrationStatus}");
+        TestRecordDto Person(Domain.Identity.Employee e) => new("Employee", e.Id, e.FullName, e.Email);
+        TestRecordDto Dept(Domain.Identity.Department d) => new("Department", d.Id, d.Name, "");
+
+        var keptAgentIds = keptAgents.Select(a => a.Id).ToHashSet();
+        var remove = accounts.Where(a => !keepEmailAccountIds.Contains(a.Id)).Select(Mailbox)
+            .Concat(agents.Where(a => !keptAgentIds.Contains(a.Id)).Select(Pc))
+            .Concat(employees.Where(e => !needed.Contains(e.Id)).OrderBy(e => e.FullName).Select(Person))
+            .Concat(departments.Where(d => !keptDepartments.Contains(d.Id)).OrderBy(d => d.Name).Select(Dept))
+            .ToList();
+        var keep = keptAccounts.Select(Mailbox)
+            .Concat(keptAgents.Select(Pc))
+            .Concat(employees.Where(e => needed.Contains(e.Id)).OrderBy(e => e.FullName).Select(Person))
+            .Concat(departments.Where(d => keptDepartments.Contains(d.Id)).OrderBy(d => d.Name).Select(Dept))
+            .ToList();
+        return new CleanStartPlanDto(remove, keep);
     }
 
     /// <summary>

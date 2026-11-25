@@ -49,7 +49,7 @@ public class ResolutionAssessmentService
     public async Task<int> AssessChangedConversationsAsync(SupervisionSettings settings, int max, CancellationToken cancellationToken, DateTimeOffset? at = null)
     {
         var candidates = await _db.Cases
-            .Where(c => c.FirstAgentResponseAt != null
+            .Where(c => !c.IsPractice && c.FirstAgentResponseAt != null
                 && c.Stage != InquiryStage.Resolved && c.Stage != InquiryStage.Closed && c.Stage != InquiryStage.AwaitingInitialResponse
                 && _db.CaseEmails.Count(ce => ce.CaseId == c.Id) != c.ResolutionAssessedMessageCount)
             .OrderBy(c => c.ResolutionAssessedAt ?? DateTimeOffset.MinValue)
