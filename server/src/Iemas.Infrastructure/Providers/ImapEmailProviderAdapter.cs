@@ -99,6 +99,24 @@ public class ImapEmailProviderAdapter : IEmailProviderAdapter
         var ordered = candidates.OrderBy(u => u.Id).ToList();
         var toFetch = ordered.Take(maxMessages).ToList();
 
+        // When the server actually received each mail (INTERNALDATE), one round trip for the whole batch. A
+        // sender's Date header can be wrong (clock set years back or ahead); see ReconcileReceivedAt.
+        var delivered = new Dictionary<uint, DateTimeOffset>();
+        if (toFetch.Count > 0)
+        {
+            try
+            {
+                foreach (var summary in await inbox.FetchAsync(toFetch, MessageSummaryItems.UniqueId | MessageSummaryItems.InternalDate, timeoutCts.Token))
+                {
+                    if (summary.InternalDate is DateTimeOffset d) delivered[summary.UniqueId.Id] = d.ToUniversalTime();
+                }
+            }
+            catch (Exception) when (!cancellationToken.IsCancellationRequested && client.IsConnected)
+            {
+                // Only an improvement over the Date header; without it the header is used as before.
+            }
+        }
+
         var messages = new List<ProviderMessage>();
         var malformed = new List<(uint Uid, string Error)>();
         uint? highestUidSeen = effectiveAfterUid;
@@ -118,7 +136,11 @@ public class ImapEmailProviderAdapter : IEmailProviderAdapter
             try
             {
                 var mime = await inbox.GetMessageAsync(uid, timeoutCts.Token);
-                messages.Add(NormalizeMessage(uid, mime));
+                var normalized = NormalizeMessage(uid, mime);
+                messages.Add(normalized with
+                {
+                    ReceivedAt = ReconcileReceivedAt(normalized.ReceivedAt, delivered.TryGetValue(uid.Id, out var at) ? at : null, deliveredAfter)
+                });
             }
             catch (Exception ex) when (IsMessageLevelFailure(ex) && client.IsConnected)
             {
@@ -158,6 +180,20 @@ public class ImapEmailProviderAdapter : IEmailProviderAdapter
         }
 
         return new FetchInboxResult(currentUidValidity, highestUidSeen, messages, malformed, stoppedEarlyReason);
+    }
+
+    /// <summary>
+    /// The Date header is whatever the sender's mail client wrote. A clock set years back would make a mail that
+    /// arrived today look like old history (skipped by the monitoring cut-off); a clock set ahead would start its
+    /// reply deadline in the future so no reminder ever fires. Either way the mail is new, so the time the server
+    /// received it is used instead. Otherwise the header stands (a genuinely delayed mail keeps its date).
+    /// </summary>
+    public static DateTimeOffset ReconcileReceivedAt(DateTimeOffset dateHeader, DateTimeOffset? deliveredAt, DateTimeOffset? monitoringCutoff)
+    {
+        if (deliveredAt is not DateTimeOffset delivered) return dateHeader;
+        if (dateHeader > delivered.AddHours(1)) return delivered;
+        if (monitoringCutoff is DateTimeOffset cutoff && dateHeader < cutoff && delivered >= cutoff) return delivered;
+        return dateHeader;
     }
 
     /// <summary>

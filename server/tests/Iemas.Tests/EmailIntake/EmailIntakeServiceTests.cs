@@ -316,4 +316,127 @@ public class EmailIntakeServiceTests
         Assert.Contains("Connection reset by peer", logLine.Message);
         Assert.DoesNotContain("password", logLine.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>PostgreSQL refuses NUL and unpaired surrogates; one such email must never block the mailbox.</summary>
+    [Theory]
+    [InlineData("a\0b", "ab")]
+    [InlineData("\0\0", "")]
+    [InlineData("ok 🔥 fine", "ok 🔥 fine")]
+    public void Clean_RemovesWhatPostgresCannotStore(string input, string expected)
+    {
+        Assert.Equal(expected, EmailIntakeService.Clean(input));
+    }
+
+    [Fact]
+    public async Task RunForAccountAsync_StoresMessageContainingNulBytes_AndStillStoresTheOnesBehindIt()
+    {
+        using var db = TestDbContext.CreateNew();
+        var account = CreateAccount();
+        db.EmailAccounts.Add(account);
+        await db.SaveChangesAsync();
+
+        var nul = Message("101", subject: "Quote\0 please") with { BodyText = "Phone 0912\0345" };
+        var adapter = new FakeEmailProviderAdapter
+        {
+            FetchBehavior = (_, _, _, _, _) => Task.FromResult(new FetchInboxResult(
+                1, 102, new[] { nul, Message("102") }, Array.Empty<(uint, string)>()))
+        };
+        var service = new EmailIntakeService(db, new PassThroughEncryptionService(), new FakeEmailProviderAdapterResolver(adapter), Microsoft.Extensions.Logging.Abstractions.NullLogger<EmailIntakeService>.Instance);
+
+        var result = await service.RunForAccountAsync(account.Id, CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(2, result.PersistedCount);
+        var stored = await db.EmailMessages.SingleAsync(m => m.ProviderMessageId == "101");
+        Assert.Equal("Quote please", stored.Subject);
+        Assert.Equal("Phone 0912345", stored.BodyText);
+    }
+
+    [Fact]
+    public void Clean_ReplacesUnpairedSurrogates()
+    {
+        var high = ((char)0xD83D).ToString();
+        var low = ((char)0xDD25).ToString();
+        Assert.Equal("lone \uFFFD end", EmailIntakeService.Clean("lone " + high + " end"));
+        Assert.Equal("lone \uFFFD end", EmailIntakeService.Clean("lone " + low + " end"));
+        Assert.Equal("tail \uFFFD", EmailIntakeService.Clean("tail " + high));
+        Assert.Equal("pair " + high + low, EmailIntakeService.Clean("pair " + high + low));
+    }
+
+    private static async Task<(TestDbContext Db, EmailIntakeService Service, Guid AccountId)> Arrange(params ProviderMessage[] messages)
+    {
+        var db = TestDbContext.CreateNew();
+        var account = CreateAccount();
+        db.EmailAccounts.Add(account);
+        await db.SaveChangesAsync();
+        var adapter = new FakeEmailProviderAdapter
+        {
+            FetchBehavior = (_, _, _, _, _) => Task.FromResult(new FetchInboxResult(1, 999, messages, Array.Empty<(uint, string)>()))
+        };
+        var service = new EmailIntakeService(db, new PassThroughEncryptionService(), new FakeEmailProviderAdapterResolver(adapter), Microsoft.Extensions.Logging.Abstractions.NullLogger<EmailIntakeService>.Instance);
+        return (db, service, account.Id);
+    }
+
+    /// <summary>A reused Message-ID must not make intake discard a different customer's inquiry.</summary>
+    [Fact]
+    public async Task ReusedMessageId_FromADifferentCustomer_IsStoredNotDropped()
+    {
+        var a = Message("1", "Quote") with { MessageId = "<same@mailer>", FromAddress = "alice@customer.example" };
+        var b = Message("2", "Quote") with { MessageId = "<same@mailer>", FromAddress = "bob@other.example" };
+        var (db, service, id) = await Arrange(a, b);
+        using var _ = db;
+
+        var result = await service.RunForAccountAsync(id, CancellationToken.None);
+
+        Assert.Equal(2, result.PersistedCount);
+        Assert.Equal(0, result.DuplicateCount);
+    }
+
+    [Fact]
+    public async Task SameMessageIdSenderAndSubject_UnderANewProviderId_IsStillADuplicate()
+    {
+        var first = Message("1", "Quote");
+        var (db, service, id) = await Arrange(first, first with { ProviderMessageId = "77" }); // e.g. UID reset after a mailbox move
+        using var _ = db;
+
+        var result = await service.RunForAccountAsync(id, CancellationToken.None);
+
+        Assert.Equal(1, result.PersistedCount);
+        Assert.Equal(1, result.DuplicateCount);
+    }
+
+    [Fact]
+    public async Task NoMessageId_SameSecondAndSubject_ButDifferentBody_AreBothStored()
+    {
+        var at = DateTimeOffset.UtcNow;
+        var a = Message("1", "Website enquiry", at) with { MessageId = null, FromAddress = "form@customer.example", BodyText = "Customer A wants 5 heaters" };
+        var b = a with { ProviderMessageId = "2", BodyText = "Customer B wants 50 stoves" };
+        var (db, service, id) = await Arrange(a, b);
+        using var _ = db;
+
+        var result = await service.RunForAccountAsync(id, CancellationToken.None);
+
+        Assert.Equal(2, result.PersistedCount);
+    }
+
+    [Theory]
+    [InlineData(-3650, 0, true, "delivered")]   // Date header ten years back, mail arrived after the cut-off: not history
+    [InlineData(400, 0, false, "delivered")]    // Date header in the future: deadline would never fire
+    [InlineData(-5, 0, false, "header")]        // ordinary
+    [InlineData(-3, 0, true, "header")]         // delayed delivery that is still after the cut-off keeps its date
+    public void ReconcileReceivedAt_CorrectsOnlyWrongSenderClocks(int headerOffsetDays, int _, bool withCutoff, string expected)
+    {
+        var delivered = new DateTimeOffset(2026, 11, 20, 10, 0, 0, TimeSpan.Zero);
+        var cutoff = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var header = delivered.AddDays(headerOffsetDays);
+        var actual = Iemas.Infrastructure.Providers.ImapEmailProviderAdapter.ReconcileReceivedAt(header, delivered, withCutoff ? cutoff : null);
+        Assert.Equal(expected == "delivered" ? delivered : header, actual);
+    }
+
+    [Fact]
+    public void ReconcileReceivedAt_WithoutDeliveryTime_KeepsTheHeader()
+    {
+        var header = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        Assert.Equal(header, Iemas.Infrastructure.Providers.ImapEmailProviderAdapter.ReconcileReceivedAt(header, null, DateTimeOffset.UtcNow));
+    }
 }

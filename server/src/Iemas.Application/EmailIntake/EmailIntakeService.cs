@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using Iemas.Application.Common.Interfaces;
 using Iemas.Application.Common.Providers;
 using Iemas.Application.EmailIntake.Dtos;
@@ -103,7 +104,18 @@ public class EmailIntakeService
         {
             syncState = new EmailSyncState { EmailAccountId = account.Id };
             _db.EmailSyncStates.Add(syncState);
-            await _db.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                // Two first runs for a brand-new account overlapped (scheduled job + Run Now): the other
+                // one created the row first. Use it instead of failing this run.
+                _db.EmailSyncStates.Entry(syncState).State = EntityState.Detached;
+                syncState = await _db.EmailSyncStates.FirstOrDefaultAsync(s => s.EmailAccountId == account.Id, cancellationToken);
+                if (syncState is null) throw;
+            }
         }
 
         syncState.LastSyncStartedAt = DateTimeOffset.UtcNow;
@@ -147,15 +159,19 @@ public class EmailIntakeService
             return await RecordAccountFailureAsync(account.Id, ex.Message, stopwatch, cancellationToken, syncState);
         }
 
-        int persisted = 0, duplicates = 0;
+        int persisted = 0, duplicates = 0, failed = 0;
         var ignoredSenders = await IgnoredSenderList.LoadAsync(_db, cancellationToken);
 
-        foreach (var message in fetchResult.Messages)
+        foreach (var rawMessage in fetchResult.Messages)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            // PostgreSQL cannot store NUL bytes or broken UTF-16 in text; one such email must not be
+            // able to stop every message behind it, so text is cleaned before it is stored.
+            var message = Sanitize(rawMessage);
             var outcome = await PersistOneMessageAsync(account.Id, account.Protocol, account.ProcessEmailsReceivedAfter, ignoredSenders, message, cancellationToken);
             if (outcome == PersistOutcome.Persisted) persisted++;
             else if (outcome == PersistOutcome.Duplicate) duplicates++;
+            else if (outcome == PersistOutcome.Failed) failed++;
         }
 
         foreach (var (uid, error) in fetchResult.MalformedMessages)
@@ -185,10 +201,58 @@ public class EmailIntakeService
         {
             _logger.LogWarning("IMAP sync for account {EmailAccountId} stopped early: {Reason}", account.Id, fetchResult.StoppedEarlyReason);
         }
+        var note = fetchResult.StoppedEarlyReason;
+        if (failed > 0)
+        {
+            var failedNote = $"{failed} message(s) could not be stored and were recorded as Failed (see the intake log).";
+            note = note is null ? failedNote : $"{note} {failedNote}";
+            _logger.LogError("IMAP sync for account {EmailAccountId}: {FailedCount} message(s) could not be stored", account.Id, failed);
+        }
         return new IntakeRunResult(
             account.Id, true, fetchResult.Messages.Count, persisted, duplicates, fetchResult.MalformedMessages.Count,
-            fetchResult.StoppedEarlyReason, stopwatch.ElapsedMilliseconds);
+            note, stopwatch.ElapsedMilliseconds);
     }
+
+    /// <summary>
+    /// Removes what PostgreSQL text columns refuse: NUL (0x00) and unpaired UTF-16 surrogates. Both occur
+    /// in real mail (binary pasted into a text part, mangled emoji) and would otherwise fail the whole run.
+    /// </summary>
+    public static string? Clean(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return value;
+        StringBuilder? sb = null;
+        for (var i = 0; i < value.Length; i++)
+        {
+            var c = value[i];
+            var bad = c == '\0'
+                || (char.IsLowSurrogate(c) && (i == 0 || !char.IsHighSurrogate(value[i - 1])))
+                || (char.IsHighSurrogate(c) && (i + 1 >= value.Length || !char.IsLowSurrogate(value[i + 1])));
+            if (bad)
+            {
+                sb ??= new StringBuilder(value, 0, i, value.Length);
+                if (c != '\0') sb.Append('�');
+            }
+            else sb?.Append(c);
+        }
+        return sb is null ? value : sb.ToString();
+    }
+
+    public static ProviderMessage Sanitize(ProviderMessage m) => m with
+    {
+        ProviderMessageId = Clean(m.ProviderMessageId)!,
+        MessageId = Clean(m.MessageId),
+        ThreadId = Clean(m.ThreadId),
+        InReplyTo = Clean(m.InReplyTo),
+        References = m.References.Select(r => Clean(r)!).ToList(),
+        FromAddress = Clean(m.FromAddress) ?? string.Empty,
+        FromDisplayName = Clean(m.FromDisplayName),
+        ToAddresses = m.ToAddresses.Select(r => Clean(r)!).ToList(),
+        CcAddresses = m.CcAddresses.Select(r => Clean(r)!).ToList(),
+        Subject = Clean(m.Subject) ?? string.Empty,
+        BodyText = Clean(m.BodyText),
+        BodyHtml = Clean(m.BodyHtml),
+        Attachments = m.Attachments.Select(a => a with { FileName = Clean(a.FileName) ?? "unnamed", ContentType = Clean(a.ContentType) }).ToList(),
+    };
 
     private enum PersistOutcome { Persisted, Duplicate, Failed }
 
@@ -211,8 +275,12 @@ public class EmailIntakeService
             var messageId = Truncate(message.MessageId, 998);
             if (!string.IsNullOrWhiteSpace(messageId))
             {
+                // A Message-ID alone is not enough: some mailers and web forms reuse one id for different mails,
+                // and dropping the second would lose a customer. The same mail has the same sender and subject too.
+                var fromForId = Truncate(message.FromAddress, 320) ?? string.Empty;
                 alreadyExists = await _db.EmailMessages.AnyAsync(m => m.EmailAccountId == emailAccountId
-                    && m.Direction == MessageDirection.Inbound && m.MessageId == messageId, cancellationToken);
+                    && m.Direction == MessageDirection.Inbound && m.MessageId == messageId
+                    && m.FromAddress == fromForId && m.Subject == message.Subject, cancellationToken);
             }
             else
             {
@@ -220,7 +288,8 @@ public class EmailIntakeService
                 var to = string.Join(';', message.ToAddresses);
                 alreadyExists = await _db.EmailMessages.AnyAsync(m => m.EmailAccountId == emailAccountId
                     && m.Direction == MessageDirection.Inbound && m.MessageId == null
-                    && m.FromAddress == from && m.Subject == message.Subject && m.ReceivedAt == message.ReceivedAt && m.ToAddresses == to, cancellationToken);
+                    && m.FromAddress == from && m.Subject == message.Subject && m.ReceivedAt == message.ReceivedAt && m.ToAddresses == to
+                    && m.BodyText == message.BodyText, cancellationToken);
             }
         }
 
@@ -292,13 +361,22 @@ public class EmailIntakeService
             // the race and this is a genuine duplicate, not a real failure. If it still doesn't
             // exist, the save failed for some other reason and must be surfaced, not swallowed.
             _db.EmailMessages.Entry(entity).State = EntityState.Detached;
+            foreach (var attachment in entity.Attachments)
+            {
+                _db.EmailAttachmentMetadata.Entry(attachment).State = EntityState.Detached;
+            }
 
+            // If this query itself fails the database is unreachable: that is not the message's fault, the
+            // exception propagates, the watermark stays put and the whole batch is retried next run.
             var existsNow = await _db.EmailMessages
                 .AnyAsync(m => m.EmailAccountId == emailAccountId && m.ProviderMessageId == message.ProviderMessageId, cancellationToken);
 
             if (!existsNow)
             {
-                throw;
+                // The database answers but refuses this one message (a value it cannot store). Stopping
+                // here would block every email behind it forever, so record it as Failed - visible, with
+                // sender and subject - and carry on with the rest.
+                return await RecordUnstorableMessageAsync(emailAccountId, protocol, message, saveEx, cancellationToken);
             }
 
             _db.EmailIntakeLogs.Add(new EmailIntakeLog
@@ -321,6 +399,46 @@ public class EmailIntakeService
         await _db.SaveChangesAsync(cancellationToken);
 
         return PersistOutcome.Persisted;
+    }
+
+    private async Task<PersistOutcome> RecordUnstorableMessageAsync(
+        Guid emailAccountId, Iemas.Domain.Email.EmailProtocol protocol, ProviderMessage message, DbUpdateException cause, CancellationToken cancellationToken)
+    {
+        var error = Truncate(cause.InnerException?.Message ?? cause.Message, 1000);
+        _logger.LogError(cause, "Message {ProviderMessageId} of account {EmailAccountId} could not be stored", message.ProviderMessageId, emailAccountId);
+
+        // A minimal stand-in so the email still shows up as Failed for a person to open on the mail server.
+        var placeholder = new EmailMessage
+        {
+            EmailAccountId = emailAccountId,
+            Provider = protocol,
+            ProviderMessageId = Truncate(message.ProviderMessageId, 512) ?? string.Empty,
+            FromAddress = Truncate(message.FromAddress, 320) ?? string.Empty,
+            ToAddresses = Truncate(string.Join(';', message.ToAddresses), 2000) ?? string.Empty,
+            Subject = Truncate(message.Subject, 500) ?? string.Empty,
+            ReceivedAt = message.ReceivedAt,
+            ProcessingStatus = EmailProcessingStatus.Failed,
+            ProcessingError = $"Could not be stored: {error}",
+        };
+        _db.EmailMessages.Add(placeholder);
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            _db.EmailMessages.Entry(placeholder).State = EntityState.Detached;
+        }
+
+        _db.EmailIntakeLogs.Add(new EmailIntakeLog
+        {
+            EmailAccountId = emailAccountId,
+            ProviderMessageId = message.ProviderMessageId,
+            Outcome = EmailIntakeOutcome.Failed,
+            Detail = $"Could not be stored (from {Truncate(message.FromAddress, 200)}): {error}",
+        });
+        await _db.SaveChangesAsync(cancellationToken);
+        return PersistOutcome.Failed;
     }
 
     private async Task<IntakeRunResult> RecordAccountFailureAsync(
