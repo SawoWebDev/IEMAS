@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { apiClient } from "../../api/client";
 import type { PauseControlDto } from "../../api/types";
 import { useAuthStore } from "../../store/authStore";
-import { getThemePreference, setThemePreference, type ThemePreference } from "../../theme";
+import { setThemePreference } from "../../theme";
 import { MENU, findMenuLocation, helpAnchor } from "./navigation";
 import NavIcon from "./NavIcon";
 import PageIntro from "../help/PageIntro";
@@ -16,7 +16,8 @@ export default function AppShell() {
   const location = useLocation();
   const [organizationName, setOrganizationName] = useState("IEMAS");
   const [pausedLabels, setPausedLabels] = useState<string[]>([]);
-  const [theme, setTheme] = useState<ThemePreference>(getThemePreference());
+  // The theme in force right now (light or dark), also when it follows the Windows setting.
+  const [theme, setTheme] = useState<"light" | "dark">(() => (document.documentElement.dataset.theme === "light" ? "light" : "dark"));
 
   const here = findMenuLocation(location.pathname, location.search);
   // The page the user is on: the open tab when the menu entry has tabs. Its old address keys the help text and the page guide.
@@ -44,7 +45,8 @@ export default function AppShell() {
     else setGuideOpenFor(guidePath);
   }
 
-  function chooseTheme(next: ThemePreference) {
+  function toggleTheme() {
+    const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
     setThemePreference(next);
   }
@@ -109,14 +111,15 @@ export default function AppShell() {
               Page guide
             </button>
           )}
-          <div className="theme-switch" role="group" aria-label="Colour theme">
-            {(["system", "light", "dark"] as ThemePreference[]).map((option) => (
-              <button key={option} aria-pressed={theme === option} onClick={() => chooseTheme(option)}
-                title={option === "system" ? "Follow the Windows / browser setting" : `${option[0].toUpperCase()}${option.slice(1)} theme`}>
-                {option === "system" ? "System" : option === "light" ? "Light" : "Dark"}
-              </button>
-            ))}
-          </div>
+          <button type="button" className="theme-toggle" onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Switch to the light theme" : "Switch to the dark theme"}
+            title={theme === "dark" ? "Switch to the light theme" : "Switch to the dark theme"}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {theme === "dark"
+                ? <path d="M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+                : <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />}
+            </svg>
+          </button>
         </header>
         <main className="app-content">
           {pausedLabels.length > 0 && (

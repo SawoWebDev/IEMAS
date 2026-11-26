@@ -1054,3 +1054,23 @@ button.btn-primary:hover:not(:disabled) {
   padding-left: 10px;
   padding-right: 10px;
 }
+
+/* One icon button in the header: sun in the dark theme, moon in the light one. */
+.theme-toggle {
+  width: 34px;
+  height: 34px;
+  min-height: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+
+.theme-toggle:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.24);
+  border-color: rgba(255, 255, 255, 0.45);
+}
