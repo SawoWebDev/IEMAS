@@ -266,3 +266,119 @@ export const NAV_SECTIONS: NavSection[] = [
 
 /** Anchor used on the Help page for a menu item. */
 export const helpAnchor = (path: string) => `help-${path === "/" ? "dashboard" : path.slice(1)}`;
+
+/** One tab inside a menu item. `legacyPath` is where the page used to live: old links redirect to it, and its help text and page guide stay keyed by it. */
+export interface MenuTab {
+  id: string;
+  label: string;
+  legacyPath: string;
+}
+
+export interface MenuItem {
+  id: string;
+  label: string;
+  /** The page this menu entry opens. For an item with tabs it is the hub (the first tab's own path when that tab never moved). */
+  path: string;
+  icon: NavIcon;
+  /** Small heading shown above this entry (e.g. "Settings"). */
+  heading?: string;
+  tabs?: MenuTab[];
+}
+
+/**
+ * The sidebar: ten entries. Every page that used to have its own menu entry is now a tab inside one of them,
+ * so nothing was removed, only regrouped. NAV_SECTIONS above stays the source of the Help page's text.
+ */
+export const MENU: MenuItem[] = [
+  { id: "dashboard", label: "Dashboard", path: "/", icon: "dashboard" },
+  {
+    id: "inquiries", label: "Inquiry Supervision", path: "/inquiry-supervision", icon: "inbox",
+    tabs: [
+      { id: "inquiries", label: "Inquiries", legacyPath: "/inquiry-supervision" },
+      { id: "analytics", label: "Analytics", legacyPath: "/inquiry-analytics" },
+    ],
+  },
+  {
+    id: "cases", label: "Cases", path: "/cases", icon: "cases",
+    tabs: [
+      { id: "cases", label: "Cases", legacyPath: "/cases" },
+      { id: "history", label: "History", legacyPath: "/case-history" },
+    ],
+  },
+  {
+    id: "monitoring", label: "Monitoring", path: "/monitoring", icon: "monitor",
+    tabs: [
+      { id: "workflow", label: "Workflow", legacyPath: "/case-workflow" },
+      { id: "replies", label: "Reply checks", legacyPath: "/reply-verification" },
+      { id: "mailboxes", label: "Mailbox checks", legacyPath: "/email-monitoring" },
+      { id: "escalations", label: "Escalations", legacyPath: "/escalation-history" },
+      { id: "activity", label: "Employee activity", legacyPath: "/employee-activity" },
+    ],
+  },
+  {
+    id: "reports", label: "Reports", path: "/reports", icon: "history",
+    tabs: [
+      { id: "ai-usage", label: "AI usage & cost", legacyPath: "/ai-usage" },
+      { id: "audit", label: "Audit log", legacyPath: "/audit-log" },
+    ],
+  },
+  {
+    id: "employees", label: "Employees", path: "/employees", icon: "people", heading: "Settings",
+    tabs: [
+      { id: "people", label: "Employees", legacyPath: "/employees" },
+      { id: "mailboxes", label: "Mailboxes", legacyPath: "/email-accounts" },
+      { id: "outbound", label: "Outbound email", legacyPath: "/outbound-email" },
+      { id: "pcs", label: "PCs", legacyPath: "/agents" },
+    ],
+  },
+  {
+    id: "email-ai", label: "Email & AI", path: "/email-ai", icon: "ai",
+    tabs: [
+      { id: "rules", label: "Email rules", legacyPath: "/system-configuration" },
+      { id: "classification", label: "Classification", legacyPath: "/email-classification" },
+      { id: "models", label: "AI models", legacyPath: "/ai-models" },
+    ],
+  },
+  {
+    id: "alerts", label: "Alerts & Escalation", path: "/alerts", icon: "bell",
+    tabs: [
+      { id: "popups", label: "Pop-up messages", legacyPath: "/notifications" },
+      { id: "reminders", label: "Reminders", legacyPath: "/reminder-policies" },
+      { id: "policies", label: "Escalation policies", legacyPath: "/escalation-policies" },
+      { id: "groups", label: "Escalation groups", legacyPath: "/escalation-groups" },
+    ],
+  },
+  {
+    id: "system", label: "System", path: "/system", icon: "system",
+    tabs: [
+      { id: "setup", label: "Setup checklist", legacyPath: "/setup" },
+      { id: "settings", label: "Settings", legacyPath: "/system-settings" },
+      { id: "users", label: "Users & permissions", legacyPath: "/users" },
+      { id: "health", label: "Health", legacyPath: "/system-health" },
+      { id: "pause", label: "Emergency pause", legacyPath: "/maintenance" },
+    ],
+  },
+  {
+    id: "help", label: "Help", path: "/help", icon: "help",
+    tabs: [
+      { id: "help", label: "Help", legacyPath: "/help" },
+      { id: "tutorial", label: "Rollout tutorial", legacyPath: "/tutorial" },
+    ],
+  },
+];
+
+/** Old page addresses that now live in a tab: opening one lands on the right tab with its filters kept. */
+export const LEGACY_REDIRECTS = MENU.flatMap((item) =>
+  (item.tabs ?? []).filter((tab) => tab.legacyPath !== item.path).map((tab) => ({ from: tab.legacyPath, to: item.path, tab: tab.id })),
+);
+
+/** Which menu entry and tab a browser address belongs to (for highlighting, the page guide and "Help for this page"). */
+export function findMenuLocation(pathname: string, search: string): { item: MenuItem; tab?: MenuTab } | undefined {
+  const matches = (p: string) => (p === "/" ? pathname === "/" : pathname === p || pathname.startsWith(p + "/"));
+  const item = MENU.find((m) => matches(m.path)) ?? MENU.find((m) => m.tabs?.some((t) => matches(t.legacyPath)));
+  if (!item) return undefined;
+  if (!item.tabs) return { item };
+  const wanted = new URLSearchParams(search).get("tab");
+  const tab = item.tabs.find((t) => t.id === wanted) ?? item.tabs.find((t) => matches(t.legacyPath) && t.legacyPath !== item.path) ?? item.tabs[0];
+  return { item, tab };
+}

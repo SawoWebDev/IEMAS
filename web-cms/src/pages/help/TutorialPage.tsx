@@ -22,7 +22,7 @@ export default function TutorialPage() {
   const src = `${GUIDE_PATH}?theme=${theme}`;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "calc(100vh - 120px)", minHeight: 520 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "calc(100vh - 175px)", minHeight: 520 }}>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
         <div>
           <h1 style={{ margin: 0 }}>Rollout Tutorial</h1>

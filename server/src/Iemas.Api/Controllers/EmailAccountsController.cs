@@ -31,6 +31,21 @@ public class EmailAccountsController : ControllerBase
         return account is null ? NotFound() : Ok(account);
     }
 
+    /// <summary>Finds the IMAP server for an address by logging in with the typed password (nothing is saved).</summary>
+    [HttpPost("detect-settings")]
+    public async Task<IActionResult> DetectSettings([FromBody] DetectMailSettingsRequest request, [FromServices] Iemas.Application.Agents.MailServerDiscovery discovery, CancellationToken cancellationToken)
+    {
+        var email = (request.EmailAddress ?? "").Trim().ToLowerInvariant();
+        if (email.IndexOf('@') < 1 || string.IsNullOrEmpty(request.Password))
+            return BadRequest(new { message = "Enter the email address and its password." });
+        var found = await discovery.DiscoverAsync(email, request.Password, cancellationToken);
+        if (found.Succeeded)
+            return Ok(new { host = found.Server!.Host, port = found.Server.Port, encryption = found.Server.Encryption, username = found.Username });
+        return BadRequest(new { message = found.WrongPassword
+            ? "The mail server refused that password. For Gmail or Microsoft 365 use an app password."
+            : "Could not find the mail server for this address. Enter the server settings by hand on the Mailboxes tab." });
+    }
+
     [HttpPost]
     public async Task<ActionResult<EmailAccountDto>> Create([FromBody] CreateEmailAccountRequest request, CancellationToken cancellationToken)
     {
@@ -93,3 +108,5 @@ public class EmailAccountsController : ControllerBase
         return NoContent();
     }
 }
+
+public record DetectMailSettingsRequest(string? EmailAddress, string? Password);

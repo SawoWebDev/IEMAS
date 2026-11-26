@@ -1,16 +1,20 @@
 import { useEffect, useState } from "react";
 import { apiClient } from "../../api/client";
-import type { DepartmentDto, EmployeeDto } from "../../api/types";
+import type { AgentDto, DepartmentDto, EmailAccountDto, EmployeeDto } from "../../api/types";
 import { InfoTip, TipLabel } from "../../components/help/Tooltip";
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<EmployeeDto[]>([]);
   const [departments, setDepartments] = useState<DepartmentDto[]>([]);
+  const [mailboxes, setMailboxes] = useState<EmailAccountDto[]>([]);
+  const [agents, setAgents] = useState<AgentDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [mailboxPassword, setMailboxPassword] = useState("");
+  const [adding, setAdding] = useState(false);
   const [departmentId, setDepartmentId] = useState("");
   const [supervisorEmployeeId, setSupervisorEmployeeId] = useState("");
 
@@ -22,12 +26,16 @@ export default function EmployeesPage() {
   async function load() {
     setLoading(true);
     try {
-      const [empRes, deptRes] = await Promise.all([
+      const [empRes, deptRes, mailRes, agentRes] = await Promise.all([
         apiClient.get<EmployeeDto[]>("/employees"),
         apiClient.get<DepartmentDto[]>("/departments"),
+        apiClient.get<EmailAccountDto[]>("/email-accounts?purpose=0"),
+        apiClient.get<AgentDto[]>("/agents"),
       ]);
       setEmployees(empRes.data);
       setDepartments(deptRes.data);
+      setMailboxes(mailRes.data);
+      setAgents(agentRes.data);
     } catch {
       setError("Failed to load employees or departments.");
     } finally {
@@ -42,20 +50,45 @@ export default function EmployeesPage() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setNotice(null);
+    setAdding(true);
     try {
-      await apiClient.post("/employees", {
+      const created = await apiClient.post<EmployeeDto>("/employees", {
         fullName,
         email,
         departmentId: departmentId || null,
         supervisorEmployeeId: supervisorEmployeeId || null,
       });
+      let result = `Added ${fullName}.`;
+
+      // With a password the mailbox is set up too: IEMAS finds the mail server by logging in, then saves the mailbox.
+      if (mailboxPassword) {
+        try {
+          const found = await apiClient.post<{ host: string; port: number; encryption: string; username: string }>(
+            "/email-accounts/detect-settings", { emailAddress: email, password: mailboxPassword });
+          await apiClient.post("/email-accounts", {
+            emailAddress: email, displayName: fullName, purpose: 0, kind: 0, protocol: 0,
+            host: found.data.host, port: found.data.port, encryption: found.data.encryption, username: found.data.username,
+            authMethod: 0, secret: mailboxPassword, ownerEmployeeId: created.data.id, classificationProfileName: null, monitoringEnabled: true,
+          });
+          result += " Their mailbox is connected and being watched.";
+        } catch (err: any) {
+          setError(`${fullName} was added, but the mailbox was not: ${err.response?.data?.message ?? "it could not be set up."} Add it on the Mailboxes tab.`);
+        }
+      } else {
+        result += " Add a mailbox on the Mailboxes tab, or let them set up their own PC with the company installer.";
+      }
+      setNotice(result);
       setFullName("");
       setEmail("");
+      setMailboxPassword("");
       setDepartmentId("");
       setSupervisorEmployeeId("");
       await load();
     } catch (err: any) {
       setError(err.response?.data?.message ?? "Failed to create employee.");
+    } finally {
+      setAdding(false);
     }
   }
 
@@ -151,13 +184,34 @@ export default function EmployeesPage() {
     }
   }
 
+  function mailboxCell(emp: EmployeeDto) {
+    const own = mailboxes.filter((m) => m.ownerEmployeeId === emp.id);
+    if (own.length === 0) return <span style={{ color: "var(--color-text-muted)" }}>None</span>;
+    return own.map((m) => (
+      <div key={m.id} title={m.lastTestError ?? undefined}>
+        {m.emailAddress}{" "}
+        <span style={{ color: !m.isActive || m.lastTestSucceeded === false ? "var(--color-danger)" : m.lastTestSucceeded ? "var(--color-success)" : "var(--color-text-muted)", fontSize: 12 }}>
+          {!m.isActive ? "off" : m.lastTestSucceeded === false ? "login failed" : m.lastTestSucceeded ? "ok" : "not tested"}
+        </span>
+      </div>
+    ));
+  }
+
+  function pcCell(emp: EmployeeDto) {
+    const own = agents.filter((a) => a.employeeId === emp.id && a.registrationStatus === 1);
+    if (own.length === 0) return <span style={{ color: "var(--color-text-muted)" }}>Not installed</span>;
+    const online = own.filter((a) => a.connectionStatus === 1).length;
+    return <span style={{ color: online > 0 ? "var(--color-success)" : "var(--color-text-muted)" }}>{online > 0 ? `${online} online` : "Offline"}{own.length > 1 ? ` (of ${own.length})` : ""}</span>;
+  }
+
   if (loading) return <p>Loading...</p>;
 
   return (
     <div>
       <h1>Employees</h1>
       <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
-        The people who own mailboxes and Cases, with their department and supervisor (used for escalation). A Super
+        The people who own mailboxes and Cases, with their mailbox and PC at a glance. Most people never need adding by hand: when an
+        employee runs the company installer and types their email and password, they are added here automatically. A Super
         Administrator sign-in such as admin@sawo.com is for access only and can't be used as an employee's email.
       </p>
 
@@ -191,7 +245,11 @@ export default function EmployeesPage() {
             ))}
           </select>
         </div>
-        <button type="submit" data-tip="Add this person. Then give them a mailbox on Email Accounts and approve their PC on Windows Agents.">Add Employee</button>
+        <div>
+          <label><TipLabel tip="Optional. Their email password: IEMAS finds the mail server, checks the login and starts watching the mailbox. It is stored encrypted and never shown again. Leave blank to add the person only.">Email password</TipLabel></label><br />
+          <input type="password" autoComplete="new-password" value={mailboxPassword} onChange={(e) => setMailboxPassword(e.target.value)} />
+        </div>
+        <button type="submit" disabled={adding} data-tip="Add this person. With a password their mailbox is connected too. Their PC sets itself up from the company installer on the PCs tab.">{adding ? "Adding..." : "Add Employee"}</button>
       </form>
 
       <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
@@ -201,6 +259,8 @@ export default function EmployeesPage() {
             <th style={thStyle}>Email</th>
             <th style={thStyle}>Department</th>
             <th style={thStyle}>Supervisor</th>
+            <th style={thStyle}>Mailbox<InfoTip text="Whether IEMAS watches this person's mailbox, and whether the last connection test worked. Manage mailboxes on the Mailboxes tab." /></th>
+            <th style={thStyle}>PC<InfoTip text="Their Windows Agent: connected now, offline, or not installed yet. Manage PCs on the PCs tab." /></th>
             <th style={thStyle}>Resolved Manager<InfoTip text="The manager IEMAS will use for escalations, taken from the employee's department." /></th>
             <th style={thStyle}>Active<InfoTip text="Inactive employees get no new Cases or pop-ups, but their history is kept." /></th>
             <th style={thStyle}></th>
@@ -209,7 +269,7 @@ export default function EmployeesPage() {
         <tbody>
           {employees.map((emp) => editingId === emp.id ? (
             <tr key={emp.id} style={{ background: "var(--color-surface)" }}>
-              <td style={tdStyle} colSpan={7}>
+              <td style={tdStyle} colSpan={9}>
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "end" }}>
                   <div>
                     <label><TipLabel tip="The person's name as it should appear in pop-ups and reports.">Full name</TipLabel></label><br />
@@ -262,6 +322,8 @@ export default function EmployeesPage() {
               <td style={tdStyle}>{emp.email}</td>
               <td style={tdStyle}>{emp.departmentName ?? "—"}</td>
               <td style={tdStyle}>{emp.supervisorEmployeeName ?? "—"}</td>
+              <td style={tdStyle}>{mailboxCell(emp)}</td>
+              <td style={tdStyle}>{pcCell(emp)}</td>
               <td style={tdStyle}>{emp.managerEmployeeName ?? "—"}</td>
               <td style={tdStyle}>{emp.isActive ? "Yes" : "No"}</td>
               <td style={tdStyle}>

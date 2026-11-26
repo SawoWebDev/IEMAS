@@ -16,6 +16,7 @@ interface InstallKeyDto {
   lastUsedAt: string | null;
   revokedAt: string | null;
   usable: boolean;
+  allowsSelfEnrollment: boolean;
 }
 
 interface Availability {
@@ -23,7 +24,7 @@ interface Availability {
   message: string | null;
 }
 
-const EVERYONE = "";
+const COMPANY = "";
 // The installer does not expire and has no PC limit; an administrator can still withdraw it below.
 const NO_EXPIRY_DAYS = 36500;
 const NO_LIMIT_PCS = 100000;
@@ -38,7 +39,7 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
   const [keys, setKeys] = useState<InstallKeyDto[]>([]);
   const [open, setOpen] = useState(false);
 
-  const [forEmail, setForEmail] = useState(EVERYONE);
+  const [forEmail, setForEmail] = useState(COMPANY);
   const [serverUrl, setServerUrl] = useState(window.location.origin);
     const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -81,10 +82,10 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
     try {
       const res = await apiClient.post(
         "/agent-installers/package",
-        { emailAddress: forEmail || null, serverUrl, allowSelfSignedCertificate: serverUrl.trim().toLowerCase().startsWith("https:"), validDays: NO_EXPIRY_DAYS, maxUses: NO_LIMIT_PCS },
+        { emailAddress: forEmail || null, selfEnrollment: !forEmail, serverUrl, allowSelfSignedCertificate: serverUrl.trim().toLowerCase().startsWith("https:"), validDays: NO_EXPIRY_DAYS, maxUses: NO_LIMIT_PCS },
         { responseType: "blob" },
       );
-      const who = forEmail ? forEmail.split("@")[0] : "everyone";
+      const who = forEmail ? forEmail.split("@")[0] : "company";
       const url = URL.createObjectURL(res.data as Blob);
       const a = document.createElement("a");
       a.href = url;
@@ -96,7 +97,7 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
       setMessage(
         forEmail
           ? `Installer for ${forEmail} downloaded. Send it to that person (or run it on their PC): it installs everything and connects by itself.`
-          : "Installer downloaded. Share it with the employees: they run it and type their own email address once.",
+          : "Company installer downloaded. Share it with the employees: they run Install-IEMAS-Agent.bat, then type their own email address and password once. New employees and mailboxes are created automatically.",
       );
       await load();
       onChanged();
@@ -131,11 +132,11 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
         <div style={{ minWidth: 0 }}>
           <h2 style={{ fontSize: 16, margin: 0 }}>Install the Agent on a PC</h2>
           <p style={{ color: "var(--color-text-muted)", fontSize: 13, margin: "4px 0 0", maxWidth: 760 }}>
-            Download a ready-made installer. On the PC, extract the zip and double-click <b>Install-IEMAS-Agent.bat</b>: it installs
-            the .NET runtime if needed, installs and starts the Agent, and connects it. PCs installed this way are approved
-            automatically; nothing to approve below. On first start the Agent shows a short welcome tour of the pop-ups the
+            Download the company installer. On the PC, extract the zip and double-click <b>Install-IEMAS-Agent.bat</b>: it installs
+            the .NET runtime if needed and starts the Agent. The employee then types their <b>email and password</b>, and that is it:
+            IEMAS checks the mailbox, adds the employee and the mailbox if they are new, and approves the PC by itself. On first start the Agent shows a short welcome tour of the pop-ups the
             employee will see, and offers to send them a <b>practice inquiry</b> so they watch it reach the escalation in about
-            10 minutes. You can also send one from <b>People → Employees → Practice inquiry</b>.
+            10 minutes. You can also send one from <b>Employees → Practice inquiry</b>.
           </p>
         </div>
         <button className="btn-primary" onClick={() => setOpen((o) => !o)} disabled={availability?.available === false}
@@ -151,9 +152,9 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
       {open && availability?.available && (
         <div style={formStyle}>
           <label style={labelStyle}>
-            <span>Who is it for?<InfoTip text="For one person: the PC connects with no typing at all. For everyone: one zip for many PCs; each person types their own email address once." /></span>
+            <span>Who is it for?<InfoTip text="For everyone: one zip for all PCs. Each person types their own email and password once; IEMAS adds them as an employee with their mailbox if they are new. For one person: the PC connects with no typing at all (the mailbox must already exist)." /></span>
             <select value={forEmail} onChange={(e) => choose(e.target.value)} id="installer-for">
-              <option value={EVERYONE}>Everyone (each person types their email once)</option>
+              <option value={COMPANY}>Everyone - they only type their email and password (recommended)</option>
               {mailboxOptions.map((m) => (
                 <option key={m.id} value={m.emailAddress}>{ownerName(m.ownerEmployeeId)} — {m.emailAddress}</option>
               ))}
@@ -196,7 +197,7 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
             <tbody>
               {keys.map((k) => (
                 <tr key={k.id}>
-                  <td>{k.emailAddress ? `${k.ownerName ?? ""} (${k.emailAddress})` : "Everyone"}</td>
+                  <td>{k.emailAddress ? `${k.ownerName ?? ""} (${k.emailAddress})` : k.allowsSelfEnrollment ? "Everyone (email + password)" : "Everyone (older kind)"}</td>
                   <td>{fmt(k.createdAt)}{k.createdBy ? ` · ${k.createdBy}` : ""}</td>
                   <td>{k.expiresAt && new Date(k.expiresAt).getFullYear() > 2100 ? "Never" : fmt(k.expiresAt)}</td>
                   <td>{k.useCount}{k.maxUses >= NO_LIMIT_PCS ? "" : ` of ${k.maxUses}`}</td>

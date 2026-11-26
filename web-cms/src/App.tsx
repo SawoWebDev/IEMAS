@@ -1,4 +1,6 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import TabbedHub from "./components/layout/TabbedHub";
+import { LEGACY_REDIRECTS } from "./components/layout/navigation";
 import AppShell from "./components/layout/AppShell";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
@@ -34,6 +36,14 @@ import SystemSettingsPage from "./pages/system-settings/SystemSettingsPage";
 import SystemConfigurationPage from "./pages/system-configuration/SystemConfigurationPage";
 import MaintenancePage from "./pages/maintenance/MaintenancePage";
 
+/** An old page address: goes to the tab that now holds the page, keeping any filters in the link (?status=..., #anchor). */
+function LegacyRedirect({ to, tab }: { to: string; tab: string }) {
+  const { search, hash } = useLocation();
+  const params = new URLSearchParams(search);
+  params.set("tab", tab);
+  return <Navigate to={`${to}?${params.toString()}${hash}`} replace />;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -42,36 +52,59 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
           <Route path="/" element={<DashboardPage />} />
-          <Route path="/employees" element={<EmployeesPage />} />
-          <Route path="/email-accounts" element={<EmailAccountsPage />} />
-          <Route path="/email-monitoring" element={<EmailMonitoringPage />} />
-          <Route path="/email-classification" element={<EmailClassificationPage />} />
-          <Route path="/ai-models" element={<AiModelsPage />} />
-          <Route path="/ai-usage" element={<AiUsagePage />} />
-          <Route path="/help" element={<HelpPage />} />
-          <Route path="/tutorial" element={<TutorialPage />} />
-          <Route path="/inquiry-supervision" element={<InquirySupervisionPage />} />
-          <Route path="/inquiry-analytics" element={<InquiryAnalyticsPage />} />
-          <Route path="/setup" element={<SetupPage />} />
-          <Route path="/cases" element={<CasesPage />} />
+
+          <Route path="/inquiry-supervision" element={<TabbedHub menuId="inquiries" tabs={[
+            { id: "inquiries", element: <InquirySupervisionPage /> },
+            { id: "analytics", element: <InquiryAnalyticsPage /> },
+          ]} />} />
+          <Route path="/cases" element={<TabbedHub menuId="cases" tabs={[
+            { id: "cases", element: <CasesPage /> },
+            { id: "history", element: <CaseHistoryPage /> },
+          ]} />} />
           <Route path="/cases/:id" element={<CaseDetailPage />} />
-          <Route path="/agents" element={<AgentsPage />} />
-          <Route path="/reminder-policies" element={<ReminderPoliciesPage />} />
-          <Route path="/escalation-policies" element={<EscalationPoliciesPage />} />
-          <Route path="/escalation-groups" element={<EscalationGroupsPage />} />
-          <Route path="/escalation-history" element={<EscalationHistoryPage />} />
-          <Route path="/audit-log" element={<AuditLogPage />} />
-          <Route path="/case-workflow" element={<CaseWorkflowPage />} />
-          <Route path="/reply-verification" element={<ReplyVerificationPage />} />
-          <Route path="/system-health" element={<SystemHealthPage />} />
-          <Route path="/outbound-email" element={<OutboundEmailPage />} />
-          <Route path="/case-history" element={<CaseHistoryPage />} />
-          <Route path="/notifications" element={<NotificationsPage />} />
-          <Route path="/users" element={<UsersPage />} />
-          <Route path="/employee-activity" element={<EmployeeActivityPage />} />
-          <Route path="/system-settings" element={<SystemSettingsPage />} />
-          <Route path="/system-configuration" element={<SystemConfigurationPage />} />
-          <Route path="/maintenance" element={<MaintenancePage />} />
+          <Route path="/monitoring" element={<TabbedHub menuId="monitoring" tabs={[
+            { id: "workflow", element: <CaseWorkflowPage /> },
+            { id: "replies", element: <ReplyVerificationPage /> },
+            { id: "mailboxes", element: <EmailMonitoringPage /> },
+            { id: "escalations", element: <EscalationHistoryPage /> },
+            { id: "activity", element: <EmployeeActivityPage /> },
+          ]} />} />
+          <Route path="/reports" element={<TabbedHub menuId="reports" tabs={[
+            { id: "ai-usage", element: <AiUsagePage /> },
+            { id: "audit", element: <AuditLogPage /> },
+          ]} />} />
+          <Route path="/employees" element={<TabbedHub menuId="employees" tabs={[
+            { id: "people", element: <EmployeesPage /> },
+            { id: "mailboxes", element: <EmailAccountsPage /> },
+            { id: "outbound", element: <OutboundEmailPage /> },
+            { id: "pcs", element: <AgentsPage /> },
+          ]} />} />
+          <Route path="/email-ai" element={<TabbedHub menuId="email-ai" tabs={[
+            { id: "rules", element: <SystemConfigurationPage /> },
+            { id: "classification", element: <EmailClassificationPage /> },
+            { id: "models", element: <AiModelsPage /> },
+          ]} />} />
+          <Route path="/alerts" element={<TabbedHub menuId="alerts" tabs={[
+            { id: "popups", element: <NotificationsPage /> },
+            { id: "reminders", element: <ReminderPoliciesPage /> },
+            { id: "policies", element: <EscalationPoliciesPage /> },
+            { id: "groups", element: <EscalationGroupsPage /> },
+          ]} />} />
+          <Route path="/system" element={<TabbedHub menuId="system" tabs={[
+            { id: "setup", element: <SetupPage /> },
+            { id: "settings", element: <SystemSettingsPage /> },
+            { id: "users", element: <UsersPage /> },
+            { id: "health", element: <SystemHealthPage /> },
+            { id: "pause", element: <MaintenancePage /> },
+          ]} />} />
+          <Route path="/help" element={<TabbedHub menuId="help" tabs={[
+            { id: "help", element: <HelpPage /> },
+            { id: "tutorial", element: <TutorialPage /> },
+          ]} />} />
+
+          {LEGACY_REDIRECTS.map((r) => (
+            <Route key={r.from} path={r.from} element={<LegacyRedirect to={r.to} tab={r.tab} />} />
+          ))}
         </Route>
       </Route>
 

@@ -4,35 +4,11 @@ import { apiClient } from "../../api/client";
 import type { PauseControlDto } from "../../api/types";
 import { useAuthStore } from "../../store/authStore";
 import { getThemePreference, setThemePreference, type ThemePreference } from "../../theme";
-import { NAV_SECTIONS, helpAnchor } from "./navigation";
+import { MENU, findMenuLocation, helpAnchor } from "./navigation";
 import NavIcon from "./NavIcon";
 import PageIntro from "../help/PageIntro";
 import { hasGuide, loadSeenGuides, saveSeenGuides } from "../help/guideStorage";
 import { TooltipLayer } from "../help/Tooltip";
-
-const OPEN_SECTION_KEY = "iemas-nav-open-group";
-
-/** The menu is an accordion: at most one group is expanded (plus the group holding the current page). */
-function loadOpenSection(): string | null {
-  try {
-    return localStorage.getItem(OPEN_SECTION_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function saveOpenSection(id: string | null) {
-  try {
-    if (id) localStorage.setItem(OPEN_SECTION_KEY, id);
-    else localStorage.removeItem(OPEN_SECTION_KEY);
-  } catch {
-    // Storage unavailable: the menu still works, it just won't remember.
-  }
-}
-
-function isActivePath(itemPath: string, pathname: string) {
-  return itemPath === "/" ? pathname === "/" : pathname === itemPath || pathname.startsWith(itemPath + "/");
-}
 
 export default function AppShell() {
   const user = useAuthStore((s) => s.user);
@@ -41,10 +17,10 @@ export default function AppShell() {
   const [organizationName, setOrganizationName] = useState("IEMAS");
   const [pausedLabels, setPausedLabels] = useState<string[]>([]);
   const [theme, setTheme] = useState<ThemePreference>(getThemePreference());
-  const [openSection, setOpenSection] = useState<string | null>(loadOpenSection);
 
-  const activeSection = NAV_SECTIONS.find((section) => section.items.some((item) => isActivePath(item.path, location.pathname)));
-  const activeItem = activeSection?.items.find((item) => isActivePath(item.path, location.pathname));
+  const here = findMenuLocation(location.pathname, location.search);
+  // The page the user is on: the open tab when the menu entry has tabs. Its old address keys the help text and the page guide.
+  const activeItem = here ? { path: here.tab?.legacyPath ?? here.item.path, label: here.tab?.label ?? here.item.label } : undefined;
 
   // First-visit page guide: shown until dismissed on this browser, and re-opened from "Page guide" in the header.
   const [seenGuides, setSeenGuides] = useState<string[]>(loadSeenGuides);
@@ -66,14 +42,6 @@ export default function AppShell() {
     if (!guidePath) return;
     if (showGuide) dismissGuide();
     else setGuideOpenFor(guidePath);
-  }
-
-  function toggleSection(id: string) {
-    setOpenSection((current) => {
-      const next = current === id ? null : id;
-      saveOpenSection(next);
-      return next;
-    });
   }
 
   function chooseTheme(next: ThemePreference) {
@@ -104,39 +72,14 @@ export default function AppShell() {
           <span>{organizationName}</span>
         </div>
         <nav>
-          {NAV_SECTIONS.map((section) => {
-            const heading = section.heading && <div key={`${section.id}-heading`} className="nav-heading">{section.heading}</div>;
-            // A group with a single page (Dashboard, Cases, Help) is a plain link.
-            if (section.items.length === 1) {
-              const item = section.items[0];
-              return [heading,
-                <NavLink key={section.id} to={item.path} end={item.path === "/"}
-                  className={({ isActive }) => "nav-top" + (isActive ? " active" : "")}>
-                  <NavIcon name={section.icon} />
-                  <span>{item.label}</span>
-                </NavLink>];
-            }
-            const open = openSection === section.id || activeSection?.id === section.id;
-            return [heading,
-              <div key={section.id} className="nav-group">
-                <button className={"nav-group-toggle" + (activeSection?.id === section.id ? " has-active" : "")}
-                  aria-expanded={open} onClick={() => toggleSection(section.id)}>
-                  <NavIcon name={section.icon} />
-                  <span>{section.label}</span>
-                  <span className="nav-chevron" aria-hidden="true">{open ? "▾" : "▸"}</span>
-                </button>
-                {open && (
-                  <div className="nav-group-items">
-                    {section.items.map((item) => (
-                      <NavLink key={item.path} to={item.path}
-                        className={({ isActive }) => "nav-item" + (isActive ? " active" : "")}>
-                        {item.label}
-                      </NavLink>
-                    ))}
-                  </div>
-                )}
-              </div>];
-          })}
+          {MENU.map((item) => [
+            item.heading && <div key={`${item.id}-heading`} className="nav-heading">{item.heading}</div>,
+            <NavLink key={item.id} to={item.path} end={item.path === "/"}
+              className={() => "nav-top" + (here?.item.id === item.id ? " active" : "")}>
+              <NavIcon name={item.icon} />
+              <span>{item.label}</span>
+            </NavLink>,
+          ])}
         </nav>
       </aside>
 
