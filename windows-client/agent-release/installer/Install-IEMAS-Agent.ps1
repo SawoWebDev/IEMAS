@@ -70,20 +70,29 @@ if (Test-DesktopRuntime) {
     if (Test-DesktopRuntime) { Ok "Installed" } else { Fail "The .NET 8 Desktop Runtime is still missing. Install it by hand from https://dotnet.microsoft.com/download/dotnet/8.0 (.NET Desktop Runtime, Windows x64), then run this installer again." }
 }
 
+# --- Earlier versions -------------------------------------------------------------------------------------
+# An update replaces the old copy instead of running next to it. This PC's registration is kept.
+$appDir = Join-Path $env:LOCALAPPDATA 'Programs\IEMAS Agent'
+Step "Looking for an earlier IEMAS Agent on this PC"
+$cleanup = Join-Path $here 'Remove-Old-IEMAS-Agent.ps1'
+if (Test-Path $cleanup) {
+    try { & $cleanup -NewInstallDir $appDir } catch { Info "Could not check for an earlier version: $($_.Exception.Message)" }
+} else {
+    $running = Get-Process IemasAgent -ErrorAction SilentlyContinue
+    if ($running) { $running | Stop-Process -Force; Start-Sleep -Seconds 2 }
+}
+
 # --- Program files ----------------------------------------------------------------------------------------
 Step "Installing the IEMAS Agent"
-$running = Get-Process IemasAgent -ErrorAction SilentlyContinue
-if ($running) {
-    Info "Closing the Agent that is running now (it is updated and started again)"
-    $running | Stop-Process -Force
-    Start-Sleep -Seconds 2
-}
-$appDir = Join-Path $env:LOCALAPPDATA 'Programs\IEMAS Agent'
 New-Item -ItemType Directory -Force -Path $appDir | Out-Null
 $exe = Join-Path $appDir 'IemasAgent.exe'
 Copy-Item (Join-Path $here 'IemasAgent.exe') $exe -Force
 Unblock-File $exe -ErrorAction SilentlyContinue
 Ok "Installed to $appDir"
+# Start with Windows points at this copy only (the cleanup above removed any entry for an old one).
+try {
+    Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'IemasAgent' -Value ('"' + $exe + '" --background')
+} catch { Info "Could not set Start with Windows: $($_.Exception.Message)" }
 
 # --- Settings ---------------------------------------------------------------------------------------------
 Step "Connecting it to the IEMAS server"

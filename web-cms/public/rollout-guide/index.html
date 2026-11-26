@@ -433,7 +433,7 @@ cd IEMAS</pre>
   <details class="faq"><summary>Setting up a PC by hand instead (no installer)</summary>
     <p>Install the runtime with <code>winget install Microsoft.DotNet.DesktopRuntime.8</code>, copy <code>IemasAgent.exe</code> from the server's <code>windows-clientgent-release</code> folder and start it. In <b>Settings</b> enter the server address, tick <b>Allow self-signed certificates</b>, and Save. Register with the company email address; the PC then appears as <b>Pending</b> under Employees → PCs until an administrator chooses the employee and presses <b>Approve</b>. A withdrawn installer falls back to this same Pending request.</p>
   </details>
-  <div class="note"><b>Updating the Agent later:</b> download a new installer and run it the same way. The registration is kept.</div>
+  <div class="note"><b>Updating or replacing an older version:</b> download a new installer and run it the same way. It first looks for an earlier IEMAS Agent on the PC, wherever it was started from, stops it and removes the old copy and its shortcuts, then installs the new one, so two versions never run side by side. The PC's registration is kept, so it needs no new approval.</div>
 </section>
 
 <!-- ───────────── Part 4 ───────────── -->
