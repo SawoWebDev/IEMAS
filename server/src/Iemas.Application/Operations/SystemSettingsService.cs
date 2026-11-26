@@ -60,6 +60,7 @@ public static class SystemSettingKeys
     public const string EnrollmentMailServerPresets = "enrollment.mail_server_presets";
     public const string EnrollmentDefaultDepartment = "enrollment.default_department";
     public const string EnrollmentDefaultProfile = "enrollment.default_classification_profile";
+    public const string AgentAutoUpdate = "agents.auto_update";
     public const string PasswordMinLength = "security.password_min_length";
     public const string IgnoredSenders = "email.ignored_senders";
     public const string LegitimacyRules = "ai.legitimacy_rules";
@@ -267,6 +268,9 @@ public class SystemSettingsService
         new(SystemSettingKeys.EnrollmentDefaultProfile, "PC setup", "Classification profile for new mailboxes",
             "Name of an existing classification profile. Blank uses the profile most mailboxes already use.",
             SettingValueType.Text, "", 0, 200),
+        new(SystemSettingKeys.AgentAutoUpdate, "PC setup", "Update the Agent on PCs automatically",
+            "On: each PC downloads the newest Agent published on this server and restarts itself with it, within about 30 minutes. Off: PCs stay on the version they have. Turn it off to pause a roll-out.",
+            SettingValueType.Boolean, "true"),
         new(SystemSettingKeys.LegitimacyRules, "Email rules", "Counts as legitimate",
             "Signs of a genuine business email.", SettingValueType.RuleList, SystemSettingDefaults.LegitimacyRules, 0, 4000),
         new(SystemSettingKeys.NotLegitimateRules, "Email rules", "Not legitimate",

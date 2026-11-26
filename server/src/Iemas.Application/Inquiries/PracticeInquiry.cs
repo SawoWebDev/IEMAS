@@ -81,6 +81,13 @@ public class PracticeInquiryService
             .FirstOrDefaultAsync(cancellationToken);
         if (mailbox is null)
         {
+            var unmonitored = await _db.EmailAccounts.AsNoTracking()
+                .AnyAsync(a => a.OwnerEmployeeId == employeeId && a.Purpose == EmailAccountPurpose.Inbound && a.IsActive, cancellationToken);
+            if (unmonitored)
+            {
+                return Result<PracticeInquiryResult>.Failure(
+                    $"{employee.FullName}'s mailbox is not being monitored yet. Switch on Monitoring for it under Email Accounts, then try again.");
+            }
             return Result<PracticeInquiryResult>.Failure(
                 $"{employee.FullName} has no monitored mailbox. Add one under Email Accounts with {employee.FullName} as the owner first.");
         }

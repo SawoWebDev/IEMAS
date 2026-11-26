@@ -106,6 +106,30 @@ public class AgentSelfEnrollmentServiceTests
     }
 
     [Fact]
+    public async Task OwnMailboxAddedWithMonitoringOff_IsSwitchedOn_ByThePcSetup()
+    {
+        var h = await CreateAsync();
+        using var _ = h.Db;
+        var owner = new Employee { FullName = "Maria Santos", Email = "maria.santos@sawo.com", IsActive = true };
+        h.Db.Employees.Add(owner);
+        h.Db.EmailAccounts.Add(new EmailAccount
+        {
+            EmailAddress = "maria.santos@sawo.com", Purpose = EmailAccountPurpose.Inbound, Protocol = EmailProtocol.Imap, Host = "mail.sawo.com", Port = 993,
+            Username = "maria.santos@sawo.com", AuthMethod = EmailAuthMethod.Password, IsActive = true, OwnerEmployeeId = owner.Id, MonitoringEnabled = false,
+        });
+        await h.Db.SaveChangesAsync();
+        var before = DateTimeOffset.UtcNow;
+
+        var result = await h.Service.EnrollAsync(Request(h), null, CancellationToken.None);
+
+        Assert.True(result.Succeeded, result.Failure?.Message);
+        var account = await h.Db.EmailAccounts.SingleAsync(a => a.EmailAddress == "maria.santos@sawo.com");
+        Assert.True(account.MonitoringEnabled);
+        Assert.True(account.ProcessEmailsReceivedAfter >= before);
+        Assert.Contains(h.Audit.Entries, e => e.Action == "EMAIL_ACCOUNT_MONITORING_ENABLED");
+    }
+
+    [Fact]
     public async Task WrongPassword_WritesNothing()
     {
         var h = await CreateAsync(_ => new ProviderConnectionTestResult(false, "bad login", TimeSpan.Zero, AuthenticationFailed: true));

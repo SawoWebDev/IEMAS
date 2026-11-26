@@ -167,6 +167,31 @@ public class IemasApiClient : IDisposable
             return await ReadResultAsync<PracticeInquiryResult>(response, ct);
         });
 
+    /// <summary>The newest Agent the server publishes, when it lets PCs update themselves.</summary>
+    public Task<ApiResult<AgentUpdateInfo>> GetUpdateInfoAsync(CancellationToken ct) =>
+        ExecuteAsync<AgentUpdateInfo>(async () =>
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "api/v1/agent/update-info");
+            ApplyAuth(request);
+            using var response = await _http.SendAsync(request, ct);
+            return await ReadResultAsync<AgentUpdateInfo>(response, ct);
+        });
+
+    /// <summary>Saves the published Agent exe to <paramref name="destination"/>.</summary>
+    public Task<ApiResult<bool>> DownloadUpdateAsync(string destination, CancellationToken ct) =>
+        ExecuteAsync<bool>(async () =>
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromMinutes(10));
+            using var request = new HttpRequestMessage(HttpMethod.Get, "api/v1/agent/update-download");
+            ApplyAuth(request);
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+            if (!response.IsSuccessStatusCode) return ApiResult<bool>.Fail((int)response.StatusCode, response.ReasonPhrase ?? "Download failed.");
+            await using (var file = new System.IO.FileStream(destination, System.IO.FileMode.Create, System.IO.FileAccess.Write, System.IO.FileShare.None))
+                await response.Content.CopyToAsync(file, timeout.Token);
+            return ApiResult<bool>.Ok(true);
+        });
+
     /// <summary>§8.1 "Report errors."</summary>
     public async Task ReportErrorAsync(string detail, CancellationToken ct)
     {

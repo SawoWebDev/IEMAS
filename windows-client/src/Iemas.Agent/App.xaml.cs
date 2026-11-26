@@ -25,6 +25,23 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Started by an Agent that is updating itself: swap the files, start the new version, and finish. No window.
+        if (e.Args.Contains(AgentUpdater.ApplyArgument, StringComparer.OrdinalIgnoreCase))
+        {
+            await Task.Run(() => AgentUpdater.RunApply(e.Args));
+            Shutdown();
+            return;
+        }
+
+        // The one-file installer: an exe with the CMS's setup attached, run from anywhere but the install folder. Install
+        // over any earlier Agent and start the installed copy. This comes before the single-instance check because an
+        // earlier Agent may be running, and installing is what stops it.
+        if (await TryInstallAsync())
+        {
+            Shutdown();
+            return;
+        }
+
         // One Agent per Windows user. A second copy (for example the user double-clicks the shortcut
         // while the tray one is running) would double every pop-up, so it just quits.
         _singleInstance = new Mutex(true, @"Local\IemasAgent.SingleInstance", out var firstInstance);
@@ -75,11 +92,45 @@ public partial class App : Application
             _mainWindow.Show();
         }
 
+        // After an update the previous version is kept for a few minutes in case the new one fails; only then is it removed.
+        _ = Task.Delay(TimeSpan.FromMinutes(3)).ContinueWith(_ => AgentUpdater.CleanLeftovers());
+        Session.UpdateReady += downloaded => Dispatcher.Invoke(() =>
+        {
+            // Hand over to the downloaded exe, which swaps the files and starts the new version.
+            if (AgentUpdater.StartApply(downloaded)) ExitApplication();
+        });
         Session.StateUpdated += UpdateTrayState;
         Session.PushReceived += ShowPopup;
         Session.WelcomeTourDue += () => Dispatcher.Invoke(ShowWelcomeTour);
 
         await Session.StartAsync();
+    }
+
+    /// <summary>True when this run was the installer and has finished (the installed Agent is started); the caller then quits.</summary>
+    private static async Task<bool> TryInstallAsync()
+    {
+        var self = Environment.ProcessPath;
+        if (self is null || !string.Equals(System.IO.Path.GetFileName(self), "IemasAgent.exe", StringComparison.OrdinalIgnoreCase)) return false;
+        if (AgentInstaller.IsInstalledCopy(self)) return false;
+
+        var config = SetupPackage.ReadFrom(self, out var exeLength);
+        if (config is null) return false; // a plain exe (manual setup): runs where it is, as before
+
+        try
+        {
+            var installed = await Task.Run(() => AgentInstaller.Install(self, exeLength, config));
+            var psi = new System.Diagnostics.ProcessStartInfo(installed) { UseShellExecute = false, WorkingDirectory = System.IO.Path.GetDirectoryName(installed)! };
+            System.Diagnostics.Process.Start(psi);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            AgentInstaller.Log($"Install failed: {ex}");
+            var logFile = System.IO.Path.Combine(AgentSettings.SettingsDirectory, "install.log");
+            MessageBox.Show($"The IEMAS Agent could not be installed:\n\n{ex.Message}\n\nSend a photo of this message to your IEMAS administrator.\nDetails: {logFile}",
+                "IEMAS Agent setup", MessageBoxButton.OK, MessageBoxImage.Error);
+            return true;
+        }
     }
 
     private void SetupTrayIcon()

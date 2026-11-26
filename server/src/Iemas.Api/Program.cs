@@ -69,6 +69,7 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddScoped<RecurringJobGuards>();
+builder.Services.AddSingleton<Iemas.Api.Services.AgentReleaseLocator>();
 // Background job monitoring: in-process run history + Hangfire storage snapshot -> per-job status.
 builder.Services.AddSingleton<JobExecutionTracker>();
 builder.Services.AddSingleton<IHangfireSnapshotSource, HangfireSnapshotSource>();

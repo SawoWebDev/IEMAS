@@ -27,13 +27,40 @@ public class AgentOperationsController : ControllerBase
     private readonly Iemas.Application.Inquiries.ConversationSyncService _conversationSync;
     private readonly Iemas.Application.Inquiries.PracticeInquiryService _practice;
 
+    private readonly Iemas.Api.Services.AgentReleaseLocator _release;
+    private readonly Iemas.Application.Common.Interfaces.IAppDbContext _db;
+
     public AgentOperationsController(AgentSyncService syncService, AgentCaseActionService actionService,
-        Iemas.Application.Inquiries.ConversationSyncService conversationSync, Iemas.Application.Inquiries.PracticeInquiryService practice)
+        Iemas.Application.Inquiries.ConversationSyncService conversationSync, Iemas.Application.Inquiries.PracticeInquiryService practice,
+        Iemas.Api.Services.AgentReleaseLocator release, Iemas.Application.Common.Interfaces.IAppDbContext db)
     {
         _syncService = syncService;
         _actionService = actionService;
         _conversationSync = conversationSync;
         _practice = practice;
+        _release = release;
+        _db = db;
+    }
+
+    /// <summary>The newest published Agent, when this server lets PCs update themselves. The Agent compares the version with its own.</summary>
+    [HttpGet("update-info")]
+    public async Task<ActionResult<AgentUpdateInfoDto>> UpdateInfo(CancellationToken cancellationToken)
+    {
+        var enabled = await Iemas.Application.Operations.SystemSettingsService.GetBoolAsync(_db, Iemas.Application.Operations.SystemSettingKeys.AgentAutoUpdate, cancellationToken);
+        var current = enabled ? _release.Current() : null;
+        return Ok(current is null
+            ? new AgentUpdateInfoDto(false, null, null, null)
+            : new AgentUpdateInfoDto(true, current.Version, current.Sha256, current.SizeBytes));
+    }
+
+    /// <summary>The published Agent exe. Sent only while automatic updates are on.</summary>
+    [HttpGet("update-download")]
+    public async Task<IActionResult> UpdateDownload(CancellationToken cancellationToken)
+    {
+        var enabled = await Iemas.Application.Operations.SystemSettingsService.GetBoolAsync(_db, Iemas.Application.Operations.SystemSettingKeys.AgentAutoUpdate, cancellationToken);
+        var current = enabled ? _release.Current() : null;
+        if (current is null) return NotFound(new { message = "No update is published." });
+        return PhysicalFile(current.ExePath, "application/octet-stream", "IemasAgent.exe");
     }
 
     /// <summary>The employee's own working hours and supervision times, for the Agent's welcome tour.</summary>
@@ -115,3 +142,5 @@ public class AgentOperationsController : ControllerBase
         return NoContent();
     }
 }
+
+public record AgentUpdateInfoDto(bool Available, string? Version, string? Sha256, long? SizeBytes);

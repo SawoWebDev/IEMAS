@@ -184,6 +184,20 @@ public class AgentSelfEnrollmentService
                 existing.OwnerEmployeeId = owner!.Id;
                 await _db.SaveChangesAsync(cancellationToken);
             }
+
+            // The employee's own mailbox, password just proven: installing the Agent means "watch my mailbox", so a
+            // mailbox an administrator added with monitoring left off is switched on here. Shared or someone else's
+            // mailboxes are left for an administrator to decide.
+            if (!needsAdmin && owner is { IsActive: true } && !existing.MonitoringEnabled)
+            {
+                existing.MonitoringEnabled = true;
+                // Only mail from now on becomes inquiries; whatever arrived while monitoring was off stays history.
+                existing.ProcessEmailsReceivedAfter = DateTimeOffset.UtcNow;
+                existing.UpdatedAt = DateTimeOffset.UtcNow;
+                await _db.SaveChangesAsync(cancellationToken);
+                await _audit.LogAsync("EMAIL_ACCOUNT_MONITORING_ENABLED", "EmailAccount", existing.Id.ToString(),
+                    $"{existing.EmailAddress} (switched on by the employee's PC setup)", cancellationToken);
+            }
         }
         else
         {

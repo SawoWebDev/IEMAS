@@ -364,7 +364,10 @@ public class CaseWorkflowService
             }
         }
 
-        var role = supervised ? await _conversation!.InboundRoleAsync(message.FromAddress, cancellationToken) : ConversationRole.Customer;
+        // A practice inquiry is sent by IEMAS's own notification mailbox, which would read as internal staff mail.
+        // The classification step has already verified it is the genuine practice email, so it plays the customer.
+        var isPractice = string.Equals(message.Classification, "Practice", StringComparison.Ordinal);
+        var role = supervised && !isPractice ? await _conversation!.InboundRoleAsync(message.FromAddress, cancellationToken) : ConversationRole.Customer;
         var matchResult = await _matchingService.FindMatchingCaseAsync(message, cancellationToken);
         if (threadCase is not null && (matchResult.ExistingCase is null || (matchResult.ExistingCase.Id != threadCase.Id && !IsThreadSignal(matchResult.Signal))))
         {

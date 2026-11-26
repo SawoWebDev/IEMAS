@@ -20,6 +20,8 @@ public record AgentAuthenticateResponse(string AccessToken, DateTimeOffset Expir
 
 public record HeartbeatRequest(string? AgentVersion);
 
+public record AgentUpdateInfo(bool Available, string? Version, string? Sha256, long? SizeBytes);
+
 /// <summary>§32/§40 — mirrors server CaseDto. Enum fields arrive as strings (System.Text.Json default JsonStringEnumConverter is NOT the server's default, so these are read as ints matching the server's enum declaration order — see CaseWorkStatus/CaseReplyStatus/CaseNotificationStatus below).</summary>
 public record CaseDto(
     Guid Id,

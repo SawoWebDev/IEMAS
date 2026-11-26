@@ -327,6 +327,20 @@ public class AgentSessionManager : IAsyncDisposable
         }
     }
 
+    /// <summary>A newer Agent was downloaded and checked; the app should start it and exit. The argument is the downloaded exe.</summary>
+    public event Action<string>? UpdateReady;
+
+    private DateTime _nextUpdateCheck = DateTime.UtcNow.AddSeconds(30);
+
+    /// <summary>Asks the server for a newer Agent about every 30 minutes (first check shortly after connecting).</summary>
+    private async Task CheckForUpdateAsync()
+    {
+        if (DateTime.UtcNow < _nextUpdateCheck) return;
+        _nextUpdateCheck = DateTime.UtcNow.AddMinutes(30);
+        var downloaded = await AgentUpdater.DownloadIfNewerAsync(_api, AgentVersion, CancellationToken.None);
+        if (downloaded is not null) UpdateReady?.Invoke(downloaded);
+    }
+
     private async Task SafeHeartbeatAsync()
     {
         try
@@ -350,6 +364,7 @@ public class AgentSessionManager : IAsyncDisposable
 
             await _api.HeartbeatAsync(AgentVersion, CancellationToken.None);
             await _signalR.SendHeartbeatAsync(AgentVersion, CancellationToken.None);
+            await CheckForUpdateAsync();
         }
         catch (Exception ex)
         {

@@ -6,7 +6,7 @@ namespace Iemas.Agent.Services;
 /// <summary>§10 Settings (server URL configuration), §8.1 "Report technical state." Non-sensitive — plain JSON, unlike CredentialStore which is DPAPI-protected.</summary>
 public class AgentSettings
 {
-    private static readonly string SettingsDirectory = Path.Combine(
+    public static readonly string SettingsDirectory = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IemasAgent");
 
     private static readonly string SettingsPath = Path.Combine(SettingsDirectory, "settings.json");

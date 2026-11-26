@@ -24,6 +24,15 @@ interface Availability {
   message: string | null;
 }
 
+interface ReleaseStatus {
+  version: string | null;
+  sizeBytes: number | null;
+  autoUpdate: boolean;
+  pcsOnOlderVersion: number;
+  versions: { version: string; count: number }[];
+  problem: string | null;
+}
+
 const COMPANY = "";
 // The installer does not expire and has no PC limit; an administrator can still withdraw it below.
 const NO_EXPIRY_DAYS = 36500;
@@ -35,6 +44,7 @@ const NO_LIMIT_PCS = 100000;
  */
 export default function AgentInstallerPanel({ employees, onChanged }: { employees: EmployeeDto[]; onChanged: () => void }) {
   const [availability, setAvailability] = useState<Availability | null>(null);
+  const [release, setRelease] = useState<ReleaseStatus | null>(null);
   const [mailboxes, setMailboxes] = useState<EmailAccountDto[]>([]);
   const [keys, setKeys] = useState<InstallKeyDto[]>([]);
   const [open, setOpen] = useState(false);
@@ -47,12 +57,14 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
 
   async function load() {
     try {
-      const [a, m, k] = await Promise.all([
+      const [a, m, k, r] = await Promise.all([
         apiClient.get<Availability>("/agent-installers/availability"),
         apiClient.get<EmailAccountDto[]>("/email-accounts?purpose=0"),
         apiClient.get<InstallKeyDto[]>("/agent-installers/keys"),
+        apiClient.get<ReleaseStatus>("/agent-installers/release").catch(() => null),
       ]);
       setAvailability(a.data);
+      setRelease(r ? r.data : null);
       setMailboxes(m.data.filter((x) => x.ownerEmployeeId));
       setKeys(k.data);
     } catch {
@@ -75,13 +87,13 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
     setForEmail(email);
   }
 
-  async function download() {
+  async function download(kind: "exe" | "zip" = "exe") {
     setBusy(true);
     setError(null);
     setMessage(null);
     try {
       const res = await apiClient.post(
-        "/agent-installers/package",
+        kind === "exe" ? "/agent-installers/package-exe" : "/agent-installers/package",
         { emailAddress: forEmail || null, selfEnrollment: !forEmail, serverUrl, allowSelfSignedCertificate: serverUrl.trim().toLowerCase().startsWith("https:"), validDays: NO_EXPIRY_DAYS, maxUses: NO_LIMIT_PCS },
         { responseType: "blob" },
       );
@@ -89,7 +101,7 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
       const url = URL.createObjectURL(res.data as Blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `IEMAS-Agent-Installer-${who}.zip`;
+      a.download = kind === "exe" ? `IEMAS-Agent-Setup${forEmail ? `-${who}` : ""}.exe` : `IEMAS-Agent-Installer-${who}.zip`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -97,7 +109,9 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
       setMessage(
         forEmail
           ? `Installer for ${forEmail} downloaded. Send it to that person (or run it on their PC): it installs everything and connects by itself.`
-          : "Company installer downloaded. Share it with the employees: they run Install-IEMAS-Agent.bat, then type their own email address and password once. New employees and mailboxes are created automatically.",
+          : kind === "exe"
+            ? "Company installer downloaded. Share this one file with the employees: they double-click it, then type their own email address and password once. It replaces any earlier IEMAS Agent on the PC. New employees and mailboxes are created automatically."
+            : "Company installer downloaded. Share it with the employees: they extract the zip, run Install-IEMAS-Agent.bat, then type their own email address and password once. New employees and mailboxes are created automatically.",
       );
       await load();
       onChanged();
@@ -132,19 +146,39 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
         <div style={{ minWidth: 0 }}>
           <h2 style={{ fontSize: 16, margin: 0 }}>Install the Agent on a PC</h2>
           <p style={{ color: "var(--color-text-muted)", fontSize: 13, margin: "4px 0 0", maxWidth: 760 }}>
-            Download the company installer. On the PC, extract the zip and double-click <b>Install-IEMAS-Agent.bat</b>: it installs
-            the .NET runtime if needed and starts the Agent. The employee then types their <b>email and password</b>, and that is it:
+            Download the company installer: <b>one file</b>. On the PC, double-click it: it removes any earlier IEMAS Agent, installs the
+            new one (nothing else is needed) and starts it. The employee then types their <b>email and password</b>, and that is it:
             IEMAS checks the mailbox, adds the employee and the mailbox if they are new, and approves the PC by itself. On first start the Agent shows a short welcome tour of the pop-ups the
             employee will see, and offers to send them a <b>practice inquiry</b> so they watch it reach the escalation in about
             10 minutes. You can also send one from <b>Employees → Practice inquiry</b>.
           </p>
         </div>
         <button className="btn-primary" onClick={() => setOpen((o) => !o)} disabled={availability?.available === false}
-                data-tip="Choose who the installer is for, then download the zip.">
+                data-tip="Choose who the installer is for, then download the installer.">
           {open ? "Close" : "Download installer"}
         </button>
       </div>
 
+      {release && (
+        <div style={{ ...noticeStyle, background: release.problem ? undefined : "var(--color-surface-alt, var(--color-accent-soft))" }}>
+          {release.problem ? (
+            <span className="form-error" style={{ margin: 0 }}>{release.problem}</span>
+          ) : (
+            <>
+              Published Agent: <b>version {release.version ?? "unknown"}</b>
+              {release.sizeBytes ? ` (${Math.round(release.sizeBytes / 1024 / 1024)} MB)` : ""}.{" "}
+              {release.pcsOnOlderVersion > 0
+                ? <><b>{release.pcsOnOlderVersion}</b> PC{release.pcsOnOlderVersion === 1 ? " is" : "s are"} on an older version
+                  {release.autoUpdate ? " and will update themselves within about 30 minutes of being connected." : ". Automatic updates are switched off."}</>
+                : "All connected PCs are up to date."}
+              {" "}Automatic updates: <b>{release.autoUpdate ? "on" : "off"}</b> (change under Settings → PC setup).
+              {release.versions.length > 0 && (
+                <span style={{ color: "var(--color-text-muted)" }}> PCs by version: {release.versions.map((v) => `${v.version} × ${v.count}`).join(", ")}.</span>
+              )}
+            </>
+          )}
+        </div>
+      )}
       {availability?.available === false && <div className="form-error" style={{ marginTop: 10 }}>{availability.message}</div>}
       {error && <div className="form-error" style={{ marginTop: 10 }}>{error}</div>}
       {message && <div style={noticeStyle}>{message}</div>}
@@ -170,11 +204,15 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
             </div>
           )}
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <button className="btn-primary" onClick={download} disabled={busy || !serverUrl.trim()}>
-              {busy ? "Preparing..." : "Download zip"}
+            <button className="btn-primary" onClick={() => download("exe")} disabled={busy || !serverUrl.trim()}>
+              {busy ? "Preparing..." : "Download installer"}
+            </button>
+            <button onClick={() => download("zip")} disabled={busy || !serverUrl.trim()}
+                    data-tip="The older form: a zip with the Agent and Install-IEMAS-Agent.bat. Use it only if a PC will not run the single file.">
+              Download as zip instead
             </button>
             <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>
-              About 25 MB. Treat it like a password: anyone with it can connect a PC until you withdraw it.
+              About 75 MB. Treat it like a password: anyone with it can connect a PC until you withdraw it.
             </span>
           </div>
         </div>
