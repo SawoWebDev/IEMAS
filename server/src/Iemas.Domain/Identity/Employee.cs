@@ -12,6 +12,9 @@ public class Employee : Entity
     public string Email { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
 
+    /// <summary>A higher-up who only receives escalations and notifications. No mailbox of theirs is read or watched.</summary>
+    public bool IsManagement { get; set; }
+
     public Guid? DepartmentId { get; set; }
     public Department? Department { get; set; }
 

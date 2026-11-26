@@ -41,7 +41,7 @@ public class EscalationTestEmailService
         if (supervisor is null || string.IsNullOrWhiteSpace(supervisor.Email))
         {
             return Result<TestEscalationEmailResult>.Failure(
-                $"{agent.FullName} has no supervisor with an email address. Set one under People > Employees; level-1 escalations go to that person.");
+                $"{agent.FullName} has no supervisor with an email address. Set one under Settings > Users; level-1 escalations go to that person.");
         }
 
         var email = await BuildSampleAsync(agent.FullName, agent.Email, supervisor.FullName, supervisor.Email, 1, cancellationToken);
@@ -52,6 +52,25 @@ public class EscalationTestEmailService
 
         return Result<TestEscalationEmailResult>.Success(
             new TestEscalationEmailResult(result.Sent, supervisor.FullName, supervisor.Email, email.Subject, result.Error));
+    }
+
+    /// <summary>
+    /// Sends the same sample escalation email to this person themself, to prove a supervisor's address receives
+    /// escalations. Used when a Supervisor is added. Nothing is stored except an audit-log entry.
+    /// </summary>
+    public async Task<Result<TestEscalationEmailResult>> SendToRecipientAsync(Guid recipientEmployeeId, CancellationToken cancellationToken)
+    {
+        var person = await _db.Employees.AsNoTracking().FirstOrDefaultAsync(e => e.Id == recipientEmployeeId, cancellationToken);
+        if (person is null) return Result<TestEscalationEmailResult>.Failure("User not found.");
+        if (string.IsNullOrWhiteSpace(person.Email)) return Result<TestEscalationEmailResult>.Failure($"{person.FullName} has no email address.");
+
+        var email = await BuildSampleAsync("Sample Agent", "agent@sawo.com", person.FullName, person.Email, 1, cancellationToken);
+        var result = await _sender.SendAsync(email, cancellationToken);
+        await _audit.LogAsync("Escalation.TestEmailSent", "Employee", person.Id.ToString(),
+            $"Test escalation email to supervisor {person.Email}: {(result.Sent ? "sent" : "failed - " + result.Error)}", cancellationToken);
+
+        return Result<TestEscalationEmailResult>.Success(
+            new TestEscalationEmailResult(result.Sent, person.FullName, person.Email, email.Subject, result.Error));
     }
 
     /// <summary>

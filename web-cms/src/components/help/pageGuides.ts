@@ -168,10 +168,11 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     ],
   },
   "/employees": {
-    intro: "The people who own mailboxes and Cases, with their department and supervisor. The supervisor is used for escalation.",
+    intro: "The people IEMAS looks after. An Agent handles customer email; a Supervisor only receives escalations.",
     steps: [
-      "Most people add themselves: they run the company installer on their PC and type their email and password. Add by hand only people who will not install the Agent, such as managers.",
-      "Set the supervisor correctly: they are told when this person's Cases are escalated.",
+      "Press Add User, choose Agent or Supervisor, and follow the guided setup that opens. A supervisor gets a test escalation email; an agent goes through mailbox, PC and a practice run.",
+      "Agents can also add themselves by running the company installer and typing their email and password.",
+      "Set the supervisor correctly: they are told when an agent's Cases are escalated.",
       "Deactivate someone who leaves. Delete works only when nothing refers to them.",
     ],
   },

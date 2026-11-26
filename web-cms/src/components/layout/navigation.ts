@@ -191,9 +191,9 @@ export const NAV_SECTIONS: NavSection[] = [
     icon: "people",
     items: [
       {
-        label: "Employees",
+        label: "Users",
         path: "/employees",
-        help: "The people who own mailboxes and Cases, with their department and supervisor (used for escalation). Deactivate someone who leaves; Delete only works when nothing refers to them.",
+        help: "The people IEMAS looks after: agents (their mailbox is read and their PC gets pop-ups) and supervisors (they only receive escalations). Adding one opens a guided setup. Set a department and supervisor for escalation. Deactivate someone who leaves; Delete only works when nothing refers to them.",
       },
       {
         label: "Windows Agents",
@@ -202,7 +202,7 @@ export const NAV_SECTIONS: NavSection[] = [
         tasks: ["Download an installer for one person or for everyone", "Withdraw an installer", "Approve a PC set up by hand", "Revoke a lost PC", "Check whether an Agent is connected"],
       },
       {
-        label: "Users & Permissions",
+        label: "Logins & Permissions",
         path: "/users",
         help: "Who can sign in to this CMS and what each role may do (Super Administrator, Administrator, Supervisor, Auditor). Deactivating a user signs them out immediately.",
         tasks: ["Add a user and give them roles", "Reset a password", "Change your own password"],
@@ -323,9 +323,9 @@ export const MENU: MenuItem[] = [
     ],
   },
   {
-    id: "employees", label: "Employees", path: "/employees", icon: "people", heading: "Settings",
+    id: "employees", label: "Users", path: "/employees", icon: "people", heading: "Settings",
     tabs: [
-      { id: "people", label: "Employees", legacyPath: "/employees" },
+      { id: "people", label: "Users", legacyPath: "/employees" },
       { id: "mailboxes", label: "Mailboxes", legacyPath: "/email-accounts" },
       { id: "outbound", label: "Outbound email", legacyPath: "/outbound-email" },
       { id: "pcs", label: "PCs", legacyPath: "/agents" },
@@ -353,7 +353,7 @@ export const MENU: MenuItem[] = [
     tabs: [
       { id: "setup", label: "Setup checklist", legacyPath: "/setup" },
       { id: "settings", label: "Settings", legacyPath: "/system-settings" },
-      { id: "users", label: "Users & permissions", legacyPath: "/users" },
+      { id: "users", label: "Logins & permissions", legacyPath: "/users" },
       { id: "health", label: "Health", legacyPath: "/system-health" },
       { id: "pause", label: "Emergency pause", legacyPath: "/maintenance" },
     ],

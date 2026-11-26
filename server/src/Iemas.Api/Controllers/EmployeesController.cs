@@ -31,6 +31,22 @@ public class EmployeesController : ControllerBase
         return result.Succeeded ? Ok(result.Value) : BadRequest(new { message = result.Error });
     }
 
+    /// <summary>How far this person's latest practice inquiry has got (next-next list ending in the escalation).</summary>
+    [HttpGet("{id:guid}/practice-progress")]
+    [Authorize(Policy = "RequireAdministrator")]
+    public async Task<ActionResult<Iemas.Application.Inquiries.PracticeProgressDto>> PracticeProgress(Guid id, CancellationToken cancellationToken)
+        => Ok(await _practice.GetProgressAsync(id, cancellationToken));
+
+    /// <summary>Sends a sample escalation email to this person, to prove a supervisor receives escalations.</summary>
+    [HttpPost("{id:guid}/test-escalation-receipt")]
+    [Authorize(Policy = "RequireAdministrator")]
+    public async Task<ActionResult<Iemas.Application.Escalations.TestEscalationEmailResult>> TestEscalationReceipt(
+        Guid id, [FromServices] Iemas.Application.Escalations.EscalationTestEmailService testEmail, CancellationToken cancellationToken)
+    {
+        var result = await testEmail.SendToRecipientAsync(id, cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : BadRequest(new { message = result.Error });
+    }
+
     [HttpGet]
     [Authorize(Policy = "RequireAuditorOrAbove")]
     public async Task<ActionResult<List<EmployeeDto>>> GetAll(CancellationToken cancellationToken)

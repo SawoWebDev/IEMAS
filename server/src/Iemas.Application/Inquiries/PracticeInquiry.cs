@@ -53,6 +53,10 @@ public static class PracticeInquiry
 public sealed record WorkingRulesDto(string WorkingHours, int FirstReplyBusinessHours, int ReminderIntervalBusinessHours,
     int RemindersBeforeEscalation, int CustomerWaitCalendarDays, string? SupervisorName);
 
+public sealed record PracticeStepDto(string Key, string Label, string RealLife, string State, DateTimeOffset? At);
+
+public sealed record PracticeProgressDto(bool Found, bool Replied, string? SupervisorName, string Summary, IReadOnlyList<PracticeStepDto> Steps);
+
 public sealed record PracticeInquiryResult(bool Sent, string Mailbox, string Subject, string Message, string? Error);
 
 /// <summary>Sends the practice inquiry email (CMS button, or the employee's own "Send me a practice inquiry" in the Agent).</summary>
@@ -118,6 +122,48 @@ public class PracticeInquiryService
               + "if nobody replies, the reminder, the escalation warning and the escalation follow within about 10 minutes."
             : $"The practice email could not be sent: {result.Error}";
         return Result<PracticeInquiryResult>.Success(new PracticeInquiryResult(result.Sent, mailbox.EmailAddress, subject, message, result.Error));
+    }
+
+    /// <summary>
+    /// Where this person's latest practice inquiry has got to, as a next-next list: received, pop-up, deadline missed,
+    /// each reminder, escalated to the supervisor. Each step also says how long it takes in real use.
+    /// </summary>
+    public async Task<PracticeProgressDto> GetProgressAsync(Guid employeeId, CancellationToken cancellationToken)
+    {
+        var settings = await SupervisionSettings.LoadAsync(_db, cancellationToken);
+        var supervisor = await _db.Employees.AsNoTracking().Where(e => e.Id == employeeId)
+            .Select(e => e.SupervisorEmployee == null ? null : e.SupervisorEmployee.FullName).FirstOrDefaultAsync(cancellationToken);
+        var who = supervisor ?? "their supervisor";
+
+        var c = await _db.Cases.AsNoTracking()
+            .Where(x => x.OwnerEmployeeId == employeeId && x.Subject.Contains("[IEMAS practice"))
+            .OrderByDescending(x => x.FirstEmailReceivedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var plan = new List<(string Key, string Label, string RealLife, bool Done, DateTimeOffset? At)>();
+        plan.Add(("received", "Customer inquiry arrives in the mailbox", "Seen within about 3 minutes", c is not null, c?.FirstEmailReceivedAt));
+        plan.Add(("popup", "NEW EMAIL pop-up appears on their PC", "At once when the inquiry is seen", c is not null && c.NotificationStatus != Iemas.Domain.Cases.CaseNotificationStatus.None, null));
+        plan.Add(("deadline", $"No reply in time: the reply deadline is missed", $"After {settings.FirstResponseBusinessHours} business hours without a reply", c?.EpisodeDeadlineMissedAt is not null, c?.EpisodeDeadlineMissedAt));
+        for (var k = 1; k <= Math.Max(1, settings.RemindersBeforeEscalation); k++)
+        {
+            var n = k;
+            plan.Add(($"reminder{k}", $"Reminder {k} of {Math.Max(1, settings.RemindersBeforeEscalation)} to the agent",
+                $"{settings.ReminderIntervalBusinessHours} business hours after the {(k == 1 ? "deadline" : "previous reminder")}",
+                c is not null && c.EpisodeRemindersSent >= n, k == 1 ? c?.EpisodeLastReminderAt : null));
+        }
+        plan.Add(("escalated", $"Escalated to {who}", $"{settings.ReminderIntervalBusinessHours} business hours after the last reminder",
+            c is not null && (c.EpisodeEscalations >= 1 || c.OverdueEscalatedAt is not null), c?.EpisodeLastEscalatedAt));
+
+        var replied = c?.FirstAgentResponseAt is not null;
+        var firstOpen = plan.FindIndex(p => !p.Done);
+        var steps = plan.Select((p, i) => new PracticeStepDto(p.Key, p.Label, p.RealLife,
+            p.Done ? "done" : (i == firstOpen && !replied ? "current" : "pending"), p.At)).ToList();
+
+        var summary = c is null ? "No practice inquiry yet. Send one to watch it run."
+            : replied ? "A reply was detected, so the reminders stop. That is what a good reply looks like."
+            : firstOpen < 0 ? $"The whole sequence ran: the inquiry was escalated to {who}."
+            : $"Waiting for: {steps[firstOpen].Label}.";
+        return new PracticeProgressDto(c is not null, replied, supervisor, summary, steps);
     }
 
     /// <summary>The working hours and supervision times, in words, for the Agent's welcome tour.</summary>

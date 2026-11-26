@@ -251,7 +251,7 @@ export default function EmailAccountsPage() {
             <Field label="Owner employee" tip="The person responsible for this mailbox. They get the pop-ups, own its Cases and receive the reminders.">
               <select value={form.ownerEmployeeId} onChange={(e) => setForm({ ...form, ownerEmployeeId: e.target.value })} style={fullWidth}>
                 <option value="">— none —</option>
-                {employees.filter((emp) => emp.isActive || emp.id === form.ownerEmployeeId).map((emp) => (
+                {employees.filter((emp) => !emp.isManagement && (emp.isActive || emp.id === form.ownerEmployeeId)).map((emp) => (
                   <option key={emp.id} value={emp.id}>{emp.fullName} ({emp.email})</option>
                 ))}
               </select>

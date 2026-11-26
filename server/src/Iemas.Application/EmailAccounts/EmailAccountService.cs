@@ -123,6 +123,12 @@ public class EmailAccountService
             return Result<EmailAccountDto>.Failure("Owner employee not found.");
         }
 
+        if (request.OwnerEmployeeId is not null
+            && await _db.Employees.AnyAsync(e => e.Id == request.OwnerEmployeeId && e.IsManagement, cancellationToken))
+        {
+            return Result<EmailAccountDto>.Failure("That user is a Supervisor: their mailbox is not watched. Change their role to Agent on the Users page first, or pick another owner.");
+        }
+
         // Requirements §19 — the outbound notification account must not be monitored as a
         // customer mailbox; monitoring only ever applies to Inbound accounts.
         if (request.Purpose == EmailAccountPurpose.Outbound && request.MonitoringEnabled)
@@ -194,6 +200,12 @@ public class EmailAccountService
             && !await _db.Employees.AnyAsync(e => e.Id == request.OwnerEmployeeId, cancellationToken))
         {
             return Result<EmailAccountDto>.Failure("Owner employee not found.");
+        }
+
+        if (request.OwnerEmployeeId is not null
+            && await _db.Employees.AnyAsync(e => e.Id == request.OwnerEmployeeId && e.IsManagement, cancellationToken))
+        {
+            return Result<EmailAccountDto>.Failure("That user is a Supervisor: their mailbox is not watched. Change their role to Agent on the Users page first, or pick another owner.");
         }
 
         if (account.Purpose == EmailAccountPurpose.Outbound && request.MonitoringEnabled)

@@ -53,6 +53,7 @@ public class MailServerDiscovery
         var adapter = _adapters.Resolve(EmailProtocol.Imap);
         var tried = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string? lastError = null;
+        MailDiscoveryResult? acceptAll = null;
 
         foreach (var stage in Stages(domain))
         {
@@ -78,7 +79,18 @@ public class MailServerDiscovery
                         return new MailDiscoveryResult(false, null, null, false, lastError);
                     }
 
-                    if (result.Succeeded) return new MailDiscoveryResult(true, candidate, username, false, null);
+                    if (result.Succeeded)
+                    {
+                        // A server that also lets a made-up password in proves nothing about the typed one (a test
+                        // server, or a catch-all). Keep looking for a server that really checks; fall back to this
+                        // one only if no other server answers at all.
+                        if (await AcceptsAnyPasswordAsync(adapter, candidate, username, budget.Token))
+                        {
+                            acceptAll ??= new MailDiscoveryResult(true, candidate, username, false, null);
+                            break;
+                        }
+                        return new MailDiscoveryResult(true, candidate, username, false, null);
+                    }
                     lastError = result.ErrorMessage;
                     if (result.AuthenticationFailed) authRefused++;
                     else break; // unreachable / TLS problem: another username will not help, try the next server
@@ -87,7 +99,19 @@ public class MailServerDiscovery
             }
         }
 
-        return new MailDiscoveryResult(false, null, null, false, lastError);
+        return acceptAll ?? new MailDiscoveryResult(false, null, null, false, lastError);
+    }
+
+    private static async Task<bool> AcceptsAnyPasswordAsync(IEmailProviderAdapter adapter, MailServerCandidate candidate, string username, CancellationToken ct)
+    {
+        try
+        {
+            var probe = await adapter.TestConnectionAsync(new EmailProviderConnectionSettings(
+                EmailProtocol.Imap, candidate.Host, candidate.Port, candidate.Encryption, username, EmailAuthMethod.Password,
+                "wrong-" + Guid.NewGuid().ToString("N")), ct);
+            return probe.Succeeded;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return false; }
     }
 
     private IEnumerable<Func<CancellationToken, Task<IReadOnlyList<MailServerCandidate>>>> Stages(string domain)

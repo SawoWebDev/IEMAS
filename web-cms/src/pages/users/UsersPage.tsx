@@ -131,7 +131,7 @@ export default function UsersPage() {
 
   return (
     <div>
-      <h1>Users &amp; Permissions</h1>
+      <h1>Logins &amp; Permissions</h1>
       <p style={mutedStyle}>
         The people who can sign in to this CMS and what each role may do. Employees (who own Cases) and Windows Agents
         (PCs) are managed separately; link a user to their employee record when they are the same person.

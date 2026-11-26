@@ -1726,6 +1726,9 @@ namespace Iemas.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsManagement")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid?>("SupervisorEmployeeId")
                         .HasColumnType("uuid");
 

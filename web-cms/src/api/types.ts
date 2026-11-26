@@ -17,6 +17,7 @@ export interface EmployeeDto {
   supervisorEmployeeName: string | null;
   managerEmployeeId: string | null;
   managerEmployeeName: string | null;
+  isManagement: boolean;
 }
 
 export type EmailAccountPurpose = 0 | 1; // Inbound | Outbound

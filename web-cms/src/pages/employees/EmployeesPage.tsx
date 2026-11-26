@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { apiClient } from "../../api/client";
 import type { AgentDto, DepartmentDto, EmailAccountDto, EmployeeDto } from "../../api/types";
 import { InfoTip, TipLabel } from "../../components/help/Tooltip";
+import UserSetupWizard from "./UserSetupWizard";
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<EmployeeDto[]>([]);
@@ -13,10 +14,11 @@ export default function EmployeesPage() {
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [mailboxPassword, setMailboxPassword] = useState("");
+  const [wizardId, setWizardId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [departmentId, setDepartmentId] = useState("");
   const [supervisorEmployeeId, setSupervisorEmployeeId] = useState("");
+  const [isManagement, setIsManagement] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm>(emptyEditForm);
@@ -58,32 +60,16 @@ export default function EmployeesPage() {
         email,
         departmentId: departmentId || null,
         supervisorEmployeeId: supervisorEmployeeId || null,
+        isManagement,
       });
-      let result = `Added ${fullName}.`;
-
-      // With a password the mailbox is set up too: IEMAS finds the mail server by logging in, then saves the mailbox.
-      if (mailboxPassword) {
-        try {
-          const found = await apiClient.post<{ host: string; port: number; encryption: string; username: string }>(
-            "/email-accounts/detect-settings", { emailAddress: email, password: mailboxPassword });
-          await apiClient.post("/email-accounts", {
-            emailAddress: email, displayName: fullName, purpose: 0, kind: 0, protocol: 0,
-            host: found.data.host, port: found.data.port, encryption: found.data.encryption, username: found.data.username,
-            authMethod: 0, secret: mailboxPassword, ownerEmployeeId: created.data.id, classificationProfileName: null, monitoringEnabled: true,
-          });
-          result += " Their mailbox is connected and being watched.";
-        } catch (err: any) {
-          setError(`${fullName} was added, but the mailbox was not: ${err.response?.data?.message ?? "it could not be set up."} Add it on the Mailboxes tab.`);
-        }
-      } else {
-        result += " Add a mailbox on the Mailboxes tab, or let them set up their own PC with the company installer.";
-      }
+      const result = `Added ${fullName}. Finish setting them up below.`;
+      setWizardId(created.data.id);
       setNotice(result);
       setFullName("");
       setEmail("");
-      setMailboxPassword("");
       setDepartmentId("");
       setSupervisorEmployeeId("");
+      setIsManagement(false);
       await load();
     } catch (err: any) {
       setError(err.response?.data?.message ?? "Failed to create employee.");
@@ -102,6 +88,7 @@ export default function EmployeesPage() {
       isActive: emp.isActive,
       departmentId: emp.departmentId ?? "",
       supervisorEmployeeId: emp.supervisorEmployeeId ?? "",
+      isManagement: emp.isManagement,
     });
   }
 
@@ -116,6 +103,7 @@ export default function EmployeesPage() {
         isActive: editForm.isActive,
         departmentId: editForm.departmentId || null,
         supervisorEmployeeId: editForm.supervisorEmployeeId || null,
+        isManagement: editForm.isManagement,
       });
       setEditingId(null);
       setNotice(`Saved ${editForm.fullName}.`);
@@ -185,6 +173,7 @@ export default function EmployeesPage() {
   }
 
   function mailboxCell(emp: EmployeeDto) {
+    if (emp.isManagement) return <span style={{ color: "var(--color-text-muted)" }}>Not watched</span>;
     const own = mailboxes.filter((m) => m.ownerEmployeeId === emp.id);
     if (own.length === 0) return <span style={{ color: "var(--color-text-muted)" }}>None</span>;
     return own.map((m) => (
@@ -198,6 +187,7 @@ export default function EmployeesPage() {
   }
 
   function pcCell(emp: EmployeeDto) {
+    if (emp.isManagement) return <span style={{ color: "var(--color-text-muted)" }}>—</span>;
     const own = agents.filter((a) => a.employeeId === emp.id && a.registrationStatus === 1);
     if (own.length === 0) return <span style={{ color: "var(--color-text-muted)" }}>Not installed</span>;
     const online = own.filter((a) => a.connectionStatus === 1).length;
@@ -208,12 +198,15 @@ export default function EmployeesPage() {
 
   return (
     <div>
-      <h1>Employees</h1>
+      <h1>Users</h1>
       <p style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
-        The people who own mailboxes and Cases, with their mailbox and PC at a glance. Most people never need adding by hand: when an
-        employee runs the company installer and types their email and password, they are added here automatically. A Super
+        The people IEMAS looks after, with their mailbox and PC at a glance. An Agent handles customer email (their mailbox is read and their PC gets pop-ups); a Supervisor only receives escalations. After you add someone, a short guided setup checks everything works. Agents can also add themselves: when they run the company installer and type their email and password, they appear here automatically. A Super
         Administrator sign-in such as admin@sawo.com is for access only and can't be used as an employee's email.
       </p>
+
+      {wizardId && employees.find((e) => e.id === wizardId) && (
+        <UserSetupWizard employee={employees.find((e) => e.id === wizardId)!} employees={employees} onClose={() => setWizardId(null)} onChanged={load} />
+      )}
 
       {error && <div className="form-error">{error}</div>}
       {notice && <div style={{ color: "var(--color-success)", marginBottom: 12 }}>{notice}</div>}
@@ -226,6 +219,13 @@ export default function EmployeesPage() {
         <div>
           <label><TipLabel tip="Their work email address.">Email</TipLabel></label><br />
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        </div>
+        <div>
+          <label><TipLabel tip="Agent: handles customer email, so their mailbox is read and their PC gets pop-ups. Supervisor: only receives escalations and notifications; their mailbox is not read.">Role</TipLabel></label><br />
+          <select value={isManagement ? "supervisor" : "agent"} onChange={(e) => setIsManagement(e.target.value === "supervisor")}>
+            <option value="agent">Agent (handles customer email)</option>
+            <option value="supervisor">Supervisor (receives escalations only)</option>
+          </select>
         </div>
         <div>
           <label><TipLabel tip="Their department. The department's manager can be an escalation recipient.">Department</TipLabel></label><br />
@@ -245,11 +245,7 @@ export default function EmployeesPage() {
             ))}
           </select>
         </div>
-        <div>
-          <label><TipLabel tip="Optional. Their email password: IEMAS finds the mail server, checks the login and starts watching the mailbox. It is stored encrypted and never shown again. Leave blank to add the person only.">Email password</TipLabel></label><br />
-          <input type="password" autoComplete="new-password" value={mailboxPassword} onChange={(e) => setMailboxPassword(e.target.value)} />
-        </div>
-        <button type="submit" disabled={adding} data-tip="Add this person. With a password their mailbox is connected too. Their PC sets itself up from the company installer on the PCs tab.">{adding ? "Adding..." : "Add Employee"}</button>
+        <button type="submit" disabled={adding} data-tip="Add this person, then a guided setup opens: mailbox, PC and a practice run for an agent, or a test escalation email for a supervisor.">{adding ? "Adding..." : "Add User"}</button>
       </form>
 
       <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
@@ -304,6 +300,15 @@ export default function EmployeesPage() {
                       <InfoTip text="Untick when someone leaves. Their history stays; they get no new work." />
                     </label>
                   </div>
+                  <div>
+                    <label>
+                      <TipLabel tip="Agent: handles customer email, mailbox read, PC gets pop-ups. Supervisor: only receives escalations and notifications; mailbox not read.">Role</TipLabel>
+                    </label><br />
+                    <select value={editForm.isManagement ? "supervisor" : "agent"} onChange={(e) => setEditForm({ ...editForm, isManagement: e.target.value === "supervisor" })}>
+                      <option value="agent">Agent</option>
+                      <option value="supervisor">Supervisor</option>
+                    </select>
+                  </div>
                 </div>
                 <p style={{ color: "var(--color-text-muted)", fontSize: 12, margin: "8px 0 0" }}>
                   The resolved manager comes from the department's manager. Changing the supervisor affects who gets escalations for this employee's Cases.
@@ -316,7 +321,7 @@ export default function EmployeesPage() {
             </tr>
           ) : (
             <tr key={emp.id}>
-              <td style={tdStyle}>{emp.fullName}{!emp.isActive && <span style={{ marginLeft: 6, fontSize: 11, color: "var(--color-danger)", fontWeight: 700 }}>INACTIVE</span>}</td>
+              <td style={tdStyle}>{emp.fullName}{emp.isManagement && <span style={{ marginLeft: 6, fontSize: 11, color: "var(--color-text-muted)", fontWeight: 700 }}>SUPERVISOR</span>}{!emp.isActive && <span style={{ marginLeft: 6, fontSize: 11, color: "var(--color-danger)", fontWeight: 700 }}>INACTIVE</span>}</td>
               <td style={tdStyle}>{emp.email}</td>
               <td style={tdStyle}>{emp.departmentName ?? "—"}</td>
               <td style={tdStyle}>{emp.supervisorEmployeeName ?? "—"}{emp.managerEmployeeName && <div style={{ fontSize: 12, color: "var(--color-text-muted)" }}>Manager: {emp.managerEmployeeName}</div>}</td>
@@ -324,6 +329,7 @@ export default function EmployeesPage() {
               <td style={tdStyle}>{pcCell(emp)}</td>
               <td style={{ ...tdStyle, minWidth: 210 }}>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <button className="btn-primary" onClick={() => setWizardId(emp.id)} disabled={!emp.isActive} data-tip="Guided setup: check the mailbox, the PC and a practice run for an agent, or a test escalation email for a supervisor.">Set up</button>
                   <button onClick={() => startEdit(emp)} disabled={editingId !== null} data-tip="Change name, email, department or supervisor.">Edit</button>
                   <button onClick={() => handleToggleActive(emp)} style={{ minWidth: 80 }} data-tip="Deactivate someone who left: they get no new work, history is kept. Activate brings them back.">
                     {emp.isActive ? "Deactivate" : "Activate"}
@@ -339,8 +345,8 @@ export default function EmployeesPage() {
                   </button>
                   <button
                     onClick={() => handlePracticeInquiry(emp)}
-                    disabled={!emp.isActive}
-                    data-tip="Send a sample customer inquiry to this person's mailbox so they can see the pop-up, reminder, warning and escalation on their PC within about 10 minutes. Management is never emailed."
+                    disabled={!emp.isActive || emp.isManagement}
+                    data-tip="Send a sample customer inquiry to this person's mailbox so they can see the pop-up, reminder, warning and escalation on their PC within about 10 minutes. A supervisor is never emailed."
                   >
                     Practice inquiry
                   </button>
@@ -368,9 +374,10 @@ interface EditForm {
   isActive: boolean;
   departmentId: string;
   supervisorEmployeeId: string;
+  isManagement: boolean;
 }
 
-const emptyEditForm: EditForm = { fullName: "", email: "", isActive: true, departmentId: "", supervisorEmployeeId: "" };
+const emptyEditForm: EditForm = { fullName: "", email: "", isActive: true, departmentId: "", supervisorEmployeeId: "", isManagement: false };
 
 const thStyle: React.CSSProperties = { textAlign: "left" };
 const tdStyle: React.CSSProperties = {};

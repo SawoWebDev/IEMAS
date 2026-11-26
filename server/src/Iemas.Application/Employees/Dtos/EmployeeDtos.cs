@@ -10,17 +10,20 @@ public record EmployeeDto(
     Guid? SupervisorEmployeeId,
     string? SupervisorEmployeeName,
     Guid? ManagerEmployeeId,
-    string? ManagerEmployeeName);
+    string? ManagerEmployeeName,
+    bool IsManagement = false);
 
 public record CreateEmployeeRequest(
     string FullName,
     string Email,
     Guid? DepartmentId,
-    Guid? SupervisorEmployeeId);
+    Guid? SupervisorEmployeeId,
+    bool IsManagement = false);
 
 public record UpdateEmployeeRequest(
     string FullName,
     string Email,
     bool IsActive,
     Guid? DepartmentId,
-    Guid? SupervisorEmployeeId);
+    Guid? SupervisorEmployeeId,
+    bool IsManagement = false);

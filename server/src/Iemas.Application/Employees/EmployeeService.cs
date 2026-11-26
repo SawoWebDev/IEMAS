@@ -48,7 +48,8 @@ public class EmployeeService
             e.SupervisorEmployeeId,
             e.SupervisorEmployee != null ? e.SupervisorEmployee.FullName : null,
             e.Department != null ? e.Department.ManagerEmployeeId : null,
-            e.Department != null && e.Department.ManagerEmployee != null ? e.Department.ManagerEmployee.FullName : null));
+            e.Department != null && e.Department.ManagerEmployee != null ? e.Department.ManagerEmployee.FullName : null,
+            e.IsManagement));
     }
 
     public async Task<Result<EmployeeDto>> CreateAsync(CreateEmployeeRequest request, CancellationToken cancellationToken)
@@ -98,7 +99,8 @@ public class EmployeeService
             FullName = fullName,
             Email = email,
             DepartmentId = request.DepartmentId,
-            SupervisorEmployeeId = request.SupervisorEmployeeId
+            SupervisorEmployeeId = request.SupervisorEmployeeId,
+            IsManagement = request.IsManagement
         };
 
         _db.Employees.Add(employee);
@@ -173,6 +175,7 @@ public class EmployeeService
         employee.IsActive = request.IsActive;
         employee.DepartmentId = request.DepartmentId;
         employee.SupervisorEmployeeId = request.SupervisorEmployeeId;
+        employee.IsManagement = request.IsManagement;
         employee.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _db.SaveChangesAsync(cancellationToken);
