@@ -68,23 +68,36 @@ export default function AppShell() {
     <div className="app-shell">
       <aside className="app-sidebar">
         <div className="app-brand" title="IEMAS — Intelligent Email Monitoring & Alert System">
-          <img src="/logo.png" alt="" className="brand-logo" />
-          <span>{organizationName}</span>
+          <img src="/sawo-logo.webp" alt="SAWO" className="brand-logo" />
+          <span className="app-brand-name">{organizationName}</span>
         </div>
         <nav>
           {MENU.map((item) => [
             item.heading && <div key={`${item.id}-heading`} className="nav-heading">{item.heading}</div>,
             <NavLink key={item.id} to={item.path} end={item.path === "/"}
               className={() => "nav-top" + (here?.item.id === item.id ? " active" : "")}>
-              <NavIcon name={item.icon} />
+              <span className="nav-chip"><NavIcon name={item.icon} size={16} /></span>
               <span>{item.label}</span>
             </NavLink>,
           ])}
         </nav>
+        <div className="sidebar-footer">
+          <div className="sidebar-footer-card">
+            <div className="sidebar-footer-id">
+              <div className="sidebar-footer-avatar">{(user?.displayName ?? "?").trim().charAt(0).toUpperCase()}</div>
+              <div className="sidebar-footer-username" title={user?.displayName}>{user?.displayName}</div>
+            </div>
+            <button className="app-header-logout" onClick={() => logout()}>Sign out</button>
+          </div>
+        </div>
       </aside>
 
       <div className="app-main">
         <header className="app-header">
+          <div className="app-header-titles">
+            <div className="app-header-title">{here?.item.label ?? "IEMAS"}</div>
+            {here?.tab && here.tab.label !== here.item.label && <div className="app-header-sub">{here.tab.label}</div>}
+          </div>
           {activeItem && activeItem.path !== "/help" && (
             <NavLink to={`/help#${helpAnchor(activeItem.path)}`} className="app-header-help" title={`What is ${activeItem.label}?`}>
               <NavIcon name="help" size={16} /> Help for this page
@@ -104,10 +117,6 @@ export default function AppShell() {
               </button>
             ))}
           </div>
-          <div className="app-header-user">{user?.displayName}</div>
-          <button className="app-header-logout" onClick={() => logout()}>
-            Sign out
-          </button>
         </header>
         <main className="app-content">
           {pausedLabels.length > 0 && (

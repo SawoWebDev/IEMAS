@@ -258,18 +258,16 @@ export default function EmployeesPage() {
             <th style={thStyle}>Name</th>
             <th style={thStyle}>Email</th>
             <th style={thStyle}>Department</th>
-            <th style={thStyle}>Supervisor</th>
+            <th style={thStyle}>Supervisor<InfoTip text="Their direct supervisor, with the department manager IEMAS uses for escalations below it. Inactive employees get no new Cases or pop-ups, but their history is kept." /></th>
             <th style={thStyle}>Mailbox<InfoTip text="Whether IEMAS watches this person's mailbox, and whether the last connection test worked. Manage mailboxes on the Mailboxes tab." /></th>
             <th style={thStyle}>PC<InfoTip text="Their Windows Agent: connected now, offline, or not installed yet. Manage PCs on the PCs tab." /></th>
-            <th style={thStyle}>Resolved Manager<InfoTip text="The manager IEMAS will use for escalations, taken from the employee's department." /></th>
-            <th style={thStyle}>Active<InfoTip text="Inactive employees get no new Cases or pop-ups, but their history is kept." /></th>
             <th style={thStyle}></th>
           </tr>
         </thead>
         <tbody>
           {employees.map((emp) => editingId === emp.id ? (
             <tr key={emp.id} style={{ background: "var(--color-surface)" }}>
-              <td style={tdStyle} colSpan={9}>
+              <td style={tdStyle} colSpan={7}>
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "end" }}>
                   <div>
                     <label><TipLabel tip="The person's name as it should appear in pop-ups and reports.">Full name</TipLabel></label><br />
@@ -318,16 +316,14 @@ export default function EmployeesPage() {
             </tr>
           ) : (
             <tr key={emp.id}>
-              <td style={tdStyle}>{emp.fullName}</td>
+              <td style={tdStyle}>{emp.fullName}{!emp.isActive && <span style={{ marginLeft: 6, fontSize: 11, color: "var(--color-danger)", fontWeight: 700 }}>INACTIVE</span>}</td>
               <td style={tdStyle}>{emp.email}</td>
               <td style={tdStyle}>{emp.departmentName ?? "—"}</td>
-              <td style={tdStyle}>{emp.supervisorEmployeeName ?? "—"}</td>
+              <td style={tdStyle}>{emp.supervisorEmployeeName ?? "—"}{emp.managerEmployeeName && <div style={{ fontSize: 12, color: "var(--color-text-muted)" }}>Manager: {emp.managerEmployeeName}</div>}</td>
               <td style={tdStyle}>{mailboxCell(emp)}</td>
               <td style={tdStyle}>{pcCell(emp)}</td>
-              <td style={tdStyle}>{emp.managerEmployeeName ?? "—"}</td>
-              <td style={tdStyle}>{emp.isActive ? "Yes" : "No"}</td>
-              <td style={tdStyle}>
-                <div style={{ display: "flex", gap: 8 }}>
+              <td style={{ ...tdStyle, minWidth: 210 }}>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   <button onClick={() => startEdit(emp)} disabled={editingId !== null} data-tip="Change name, email, department or supervisor.">Edit</button>
                   <button onClick={() => handleToggleActive(emp)} style={{ minWidth: 80 }} data-tip="Deactivate someone who left: they get no new work, history is kept. Activate brings them back.">
                     {emp.isActive ? "Deactivate" : "Activate"}

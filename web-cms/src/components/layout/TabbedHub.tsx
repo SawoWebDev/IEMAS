@@ -28,14 +28,14 @@ export default function TabbedHub({ menuId, tabs }: { menuId: string; tabs: HubT
           );
         })}
       </div>
-      <div key={active.id}>{active.element}</div>
+      <div key={active.id} className="hub-body">{active.element}</div>
     </div>
   );
 }
 
-const barStyle: React.CSSProperties = { display: "flex", gap: 4, flexWrap: "wrap", borderBottom: "1px solid var(--color-border)", marginBottom: 16 };
+const barStyle: React.CSSProperties = { display: "flex", gap: 4, flexWrap: "wrap", borderBottom: "2px solid var(--color-border)", marginBottom: 20 };
 const tabStyle: React.CSSProperties = {
   background: "transparent", border: "none", borderBottom: "2px solid transparent", borderRadius: 0, padding: "8px 14px",
-  cursor: "pointer", color: "var(--color-text-muted)", fontSize: 14, marginBottom: -1,
+  cursor: "pointer", color: "var(--color-text-muted)", fontSize: 13.5, fontWeight: 600, marginBottom: -2,
 };
 const selectedStyle: React.CSSProperties = { color: "var(--color-text)", borderBottomColor: "var(--color-accent)", fontWeight: 600 };

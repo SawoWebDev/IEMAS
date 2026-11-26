@@ -53,7 +53,7 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     steps: [
       "Click a card to list those Cases, e.g. \"No reply yet\".",
       "After an employee says they replied, press Check Now to look in the Sent folders straight away.",
-      "\"Couldn't check\" means a mailbox could not be read. Fix its password on Email Accounts.",
+      "\"Couldn't check\" means a mailbox could not be read. Fix its password on Employees > Mailboxes.",
     ],
     tip: "Clicking \"Already replied\" on the PC is only a claim until the reply is found here.",
   },
@@ -69,7 +69,7 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     intro: "Shows each mailbox IEMAS checks for new email. It checks every minute by itself.",
     steps: [
       "Press Run Now on a mailbox to check it immediately, e.g. right after adding or fixing it.",
-      "If a mailbox is not being checked, turn Monitoring on for it on Email Accounts.",
+      "If a mailbox is not being checked, turn Monitoring on for it on Employees > Mailboxes.",
     ],
   },
   "/employee-activity": {
@@ -115,7 +115,7 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     intro: "Classification profiles tell the AI what kind of email matters for a mailbox: its categories and what counts as important.",
     steps: [
       "Click a profile's categories to see its include and exclude words.",
-      "Create a new profile, then select it on a mailbox (Email Accounts, Edit). Profiles cannot be edited later.",
+      "Create a new profile, then select it on a mailbox (Employees > Mailboxes, Edit). Profiles cannot be edited later.",
       "Use Test classification to try a sample email without creating anything.",
     ],
   },
@@ -170,7 +170,7 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
   "/employees": {
     intro: "The people who own mailboxes and Cases, with their department and supervisor. The supervisor is used for escalation.",
     steps: [
-      "Add an employee, then give them a mailbox (Email Accounts) and approve their PC (Windows Agents).",
+      "Most people add themselves: they run the company installer on their PC and type their email and password. Add by hand only people who will not install the Agent, such as managers.",
       "Set the supervisor correctly: they are told when this person's Cases are escalated.",
       "Deactivate someone who leaves. Delete works only when nothing refers to them.",
     ],
