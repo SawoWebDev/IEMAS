@@ -88,6 +88,8 @@ export default function AgentInstallerPanel({ employees, onChanged }: { employee
   }
 
   async function download(kind: "exe" | "zip" = "exe") {
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)/i.test(serverUrl)
+      && !window.confirm("This installer will point at \"localhost\", which only works on this PC. Employees' PCs will show \"No connection could be made\".\n\nUse the server's network address instead (for example https://172.16.2.68:8443).\n\nDownload it anyway?")) return;
     setBusy(true);
     setError(null);
     setMessage(null);

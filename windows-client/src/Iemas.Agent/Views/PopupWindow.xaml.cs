@@ -32,6 +32,22 @@ public partial class PopupWindow : Window
         ApplyColours(TitleText.Text);
         ShowUnansweredCount(MessageText.Text);
 
+        foreach (var button in ButtonsPanel.Children.OfType<System.Windows.Controls.Button>())
+        {
+            button.MouseEnter += (_, _) =>
+            {
+                if (button.ToolTip is not string hint || hint.Length == 0) return;
+                HintText.Text = hint;
+                HintText.Visibility = Visibility.Visible;
+                Dispatcher.BeginInvoke(new Action(Arrange), System.Windows.Threading.DispatcherPriority.Background);
+            };
+            button.MouseLeave += (_, _) =>
+            {
+                HintText.Visibility = Visibility.Collapsed;
+                Dispatcher.BeginInvoke(new Action(Arrange), System.Windows.Threading.DispatcherPriority.Background);
+            };
+        }
+
         Loaded += (_, _) => Arrange();
         Closed += (_, _) => { Open.Remove(this); Arrange(); };
     }

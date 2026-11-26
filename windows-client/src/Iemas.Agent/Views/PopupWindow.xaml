@@ -28,6 +28,9 @@
             <TextBlock x:Name="TitleText" FontWeight="Bold" FontSize="14" Foreground="#111827" TextWrapping="Wrap" Margin="0,4,0,4"/>
             <TextBlock x:Name="MessageText" Foreground="#374151" TextWrapping="Wrap" MaxHeight="120"/>
             <TextBlock x:Name="CaseText" Foreground="#6B7280" FontSize="11" Margin="0,6,0,0"/>
+            <!-- WPF shows no tooltips in a window that is not active, and this pop-up never takes focus (it would steal the
+                 employee's typing), so a hovered button's explanation is shown here instead. -->
+            <TextBlock x:Name="HintText" Visibility="Collapsed" Foreground="#4B5563" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0"/>
             <StackPanel x:Name="ButtonsPanel" Orientation="Horizontal" Margin="0,12,0,0">
                 <Button x:Name="OpenButton" Content="Open Case" Background="#2563EB" Foreground="White" BorderThickness="0" Padding="12,6"
                         Margin="0,0,8,0" Cursor="Hand" Click="OpenCase_Click"
