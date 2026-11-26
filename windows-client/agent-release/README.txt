@@ -4,14 +4,14 @@ IEMAS Agent release
 This folder is mounted into the API container (see docker-compose.yml). The CMS zips it into the
 one-click installer: People & Devices > Windows Agents > Download installer.
 
-  IemasAgent.exe         the Agent (needs the .NET 8 Desktop Runtime; the installer adds it)
+  IemasAgent.exe         the Agent, one self-contained file (carries its own .NET runtime)
   installer\              Install-IEMAS-Agent.bat / .ps1 and README.txt, copied into every zip
 
 The CMS adds iemas-agent-setup.json (server address + a one-time installer key) to each zip.
 
 Rebuild IemasAgent.exe after changing the Agent:
-  dotnet publish windows-client/src/Iemas.Agent/Iemas.Agent.csproj -c Release -r win-x64 --self-contained false
-    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o <temp folder>
+  dotnet publish windows-client/src/Iemas.Agent/Iemas.Agent.csproj -c Release -r win-x64 --self-contained true
+    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -o <temp folder>
   then copy IemasAgent.exe here.
 
 Manual setup without the installer: run IemasAgent.exe, Settings > Server URL (for example

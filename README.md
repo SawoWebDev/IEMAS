@@ -56,7 +56,7 @@ Full steps with screenshots are in the Rollout Tutorial.
 **Each employee PC** (no approval step)
 
 1. In the CMS: **Employees → PCs → Download installer**. Leave it on "Everyone", check the server address, download the zip. (Choosing one person's mailbox makes an installer that needs no typing, but the mailbox must already exist.)
-2. On the PC: extract the zip and double-click **`Install-IEMAS-Agent.bat`**. It installs the .NET 8 Desktop Runtime if missing, installs the Agent for that Windows user, turns on Start with Windows, starts it, and the Agent registers and is approved automatically.
+2. On the PC: extract the zip and double-click **`Install-IEMAS-Agent.bat`**. It installs the Agent for that Windows user (the Agent carries its own .NET runtime, so nothing else is installed), turns on Start with Windows, starts it, and the Agent registers and is approved automatically.
 
 The company installer carries a key that can be withdrawn in the CMS; only its hash is stored. The key alone connects nothing: the employee must also type a real mailbox password, which the server proves with a login before anything is saved, only company email domains are accepted (System > Settings > PC setup), and an address is paused for 15 minutes after 5 wrong passwords. The password is never stored on the PC and never written to a log. Running the installer on a PC that already has an older IEMAS Agent finds it (running program, Start-with-Windows entry, shortcuts, usual folders), stops and removes it, and installs the new version in its place, keeping the PC's registration. A shared mailbox or one owned by someone else waits for an administrator to approve it under Employees > PCs. If the mail server cannot be found automatically, add it once under System > Settings > PC setup (`sawo.com = mail.sawo.com:993:ssl`). Manual setup (copy `windows-client/agent-release/IemasAgent.exe`, enter the server address, register, approve under Employees > PCs) still works.
 
@@ -89,9 +89,10 @@ cd web-cms && npm install && npm run dev
 # Agent
 dotnet build windows-client/src/Iemas.Agent/Iemas.Agent.csproj -c Release
 
-# Agent release build used by the CMS installer (single file, needs the .NET 8 Desktop Runtime on the PC)
-dotnet publish windows-client/src/Iemas.Agent/Iemas.Agent.csproj -c Release -r win-x64 --self-contained false \
-  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o windows-client/agent-release
+# Agent release build used by the CMS installer: one self-contained file (about 75 MB), no .NET needed on the PC
+dotnet publish windows-client/src/Iemas.Agent/Iemas.Agent.csproj -c Release -r win-x64 --self-contained true \
+  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none \
+  -o <temp folder>   # then copy IemasAgent.exe into windows-client/agent-release
 ```
 
 Live simulation against the test stack (sends real test emails to the local test mail server and uses the configured AI):

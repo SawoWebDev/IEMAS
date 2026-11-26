@@ -415,7 +415,7 @@ cd IEMAS</pre>
         <p>Copy the zip to the PC, right-click it and choose <b>Extract All…</b>, then double-click <b>Install-IEMAS-Agent.bat</b> in the extracted folder. If Windows asks whether to run it, choose <b>Run</b> (or <b>More info → Run anyway</b>).</p>
         <p>The installer does the rest by itself:</p>
         <ul>
-          <li>installs the .NET 8 Desktop Runtime if the PC doesn't have it (Windows may ask to allow the change: click <b>Yes</b>),</li>
+          <li>needs nothing else installed: the Agent carries its own .NET runtime, so no administrator rights are asked for,</li>
           <li>installs the Agent for the signed-in user and adds it to the Start menu,</li>
           <li>sets the server address and certificate option, and turns on <b>Start with Windows</b>,</li>
           <li>starts the Agent and asks for the email address and password.</li>
@@ -431,7 +431,7 @@ cd IEMAS</pre>
       </div></li>
   </ol>
   <details class="faq"><summary>Setting up a PC by hand instead (no installer)</summary>
-    <p>Install the runtime with <code>winget install Microsoft.DotNet.DesktopRuntime.8</code>, copy <code>IemasAgent.exe</code> from the server's <code>windows-clientgent-release</code> folder and start it. In <b>Settings</b> enter the server address, tick <b>Allow self-signed certificates</b>, and Save. Register with the company email address; the PC then appears as <b>Pending</b> under Employees → PCs until an administrator chooses the employee and presses <b>Approve</b>. A withdrawn installer falls back to this same Pending request.</p>
+    <p>Copy <code>IemasAgent.exe</code> from the server's <code>windows-clientgent-release</code> folder and start it. In <b>Settings</b> enter the server address, tick <b>Allow self-signed certificates</b>, and Save. Register with the company email address; the PC then appears as <b>Pending</b> under Employees → PCs until an administrator chooses the employee and presses <b>Approve</b>. A withdrawn installer falls back to this same Pending request.</p>
   </details>
   <div class="note"><b>Updating or replacing an older version:</b> download a new installer and run it the same way. It first looks for an earlier IEMAS Agent on the PC, wherever it was started from, stops it and removes the old copy and its shortcuts, then installs the new one, so two versions never run side by side. The PC's registration is kept, so it needs no new approval.</div>
 </section>

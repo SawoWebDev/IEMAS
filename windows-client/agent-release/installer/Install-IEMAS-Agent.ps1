@@ -1,9 +1,10 @@
 # Installs or updates the IEMAS Agent for the signed-in Windows user. Started by Install-IEMAS-Agent.bat.
-#   1. installs the .NET 8 Desktop Runtime if it is missing (the only step that may ask for administrator rights)
+#   1. removes any earlier IEMAS Agent on this PC (see Remove-Old-IEMAS-Agent.ps1)
 #   2. copies IemasAgent.exe to %LOCALAPPDATA%\Programs\IEMAS Agent
 #   3. writes the server address and the installer key from iemas-agent-setup.json into the Agent's settings
 #   4. adds a Start menu shortcut, turns on Start with Windows, and starts the Agent
 # The Agent then registers with the installer key and connects without waiting for approval.
+# The Agent carries its own .NET runtime, so nothing else is installed and no administrator rights are needed.
 # Windows PowerShell 5.1 compatible; keep this file ASCII.
 
 $ErrorActionPreference = 'Stop'
@@ -29,46 +30,6 @@ if ($setup.expiresAt) {
 }
 Info "Server: $($setup.serverUrl)"
 if ($setup.emailAddress) { Info "For:    $($setup.employeeName) <$($setup.emailAddress)>" }
-
-# --- .NET 8 Desktop Runtime -------------------------------------------------------------------------------
-function Test-DesktopRuntime {
-    $key = 'HKLM:\SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.WindowsDesktop.App'
-    if (Test-Path $key) {
-        if ((Get-Item $key).Property | Where-Object { $_ -like '8.*' }) { return $true }
-    }
-    $dotnet = Join-Path $env:ProgramFiles 'dotnet\dotnet.exe'
-    if (Test-Path $dotnet) {
-        $list = & $dotnet --list-runtimes 2>$null
-        if ($list | Where-Object { $_ -like 'Microsoft.WindowsDesktop.App 8.*' }) { return $true }
-    }
-    return $false
-}
-
-Step "Checking the .NET 8 Desktop Runtime"
-if (Test-DesktopRuntime) {
-    Ok "Already installed"
-} else {
-    Info "Not installed yet. Installing it now; Windows may ask you to allow the change - click Yes."
-    $winget = Get-Command winget -ErrorAction SilentlyContinue
-    if ($winget) {
-        try {
-            & winget install --id Microsoft.DotNet.DesktopRuntime.8 --exact --silent --accept-package-agreements --accept-source-agreements | Out-Host
-        } catch { Info "winget did not finish: $($_.Exception.Message)" }
-    }
-    if (-not (Test-DesktopRuntime)) {
-        Info "Downloading the runtime from Microsoft..."
-        $installer = Join-Path $env:TEMP 'windowsdesktop-runtime-8-win-x64.exe'
-        try {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            Invoke-WebRequest -Uri 'https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe' -OutFile $installer -UseBasicParsing
-            $p = Start-Process -FilePath $installer -ArgumentList '/install', '/quiet', '/norestart' -Verb RunAs -Wait -PassThru
-            Info "Runtime installer finished with code $($p.ExitCode)"
-        } catch {
-            Fail "Could not install the .NET 8 Desktop Runtime ($($_.Exception.Message)). Install it by hand from https://dotnet.microsoft.com/download/dotnet/8.0 (.NET Desktop Runtime, Windows x64), then run this installer again."
-        }
-    }
-    if (Test-DesktopRuntime) { Ok "Installed" } else { Fail "The .NET 8 Desktop Runtime is still missing. Install it by hand from https://dotnet.microsoft.com/download/dotnet/8.0 (.NET Desktop Runtime, Windows x64), then run this installer again." }
-}
 
 # --- Earlier versions -------------------------------------------------------------------------------------
 # An update replaces the old copy instead of running next to it. This PC's registration is kept.

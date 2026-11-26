@@ -90,7 +90,7 @@ public class AgentInstallersController : ControllerBase
         using var buffer = new MemoryStream();
         using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
         {
-            zip.CreateEntryFromFile(Path.Combine(folder, "IemasAgent.exe"), "IemasAgent.exe", CompressionLevel.Optimal);
+            zip.CreateEntryFromFile(Path.Combine(folder, "IemasAgent.exe"), "IemasAgent.exe", CompressionLevel.NoCompression);
             foreach (var file in Directory.GetFiles(Path.Combine(folder, "installer")))
             {
                 zip.CreateEntryFromFile(file, Path.GetFileName(file), CompressionLevel.Optimal);
