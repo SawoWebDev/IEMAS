@@ -23,7 +23,8 @@ IEMAS watches the company mailboxes, recognises customer inquiries, alerts the e
 - **Reliability:** OpenRouter retries, fallback models and circuit breaker; duplicate-email protection; scheduled-job monitoring on the System Health page.
 - **Reporting:** Inquiry Analytics (volumes, response and resolution times, AI accuracy) and an audit of every AI call and its cost.
 - **Security:** login lockout after 5 failed attempts, secret length checks at start-up, encrypted stored replies.
-- **One-click Agent installer:** download a zip from the CMS, run one .bat on the PC, and it installs, configures and connects itself with no approval step.
+- **One-step PC setup:** download one company installer from the CMS (Employees > PCs), run its .bat on a PC, then type your work email and password. IEMAS checks the mailbox, finds the mail server, adds the employee and mailbox if they are new, and approves the PC. Nothing else to configure.
+- **Ten-item menu:** the CMS sidebar went from about 30 entries to 10. Every old page is a tab inside one of them, and old links still work.
 - **Windows Agent 1.2.0:** installer keys, confirm or reject "looks resolved", colour-coded always-on-top pop-ups, help text matching the 2-minute reply check.
 - **Rollout Tutorial** inside the CMS.
 
@@ -54,10 +55,10 @@ Full steps with screenshots are in the Rollout Tutorial.
 
 **Each employee PC** (no approval step)
 
-1. In the CMS: **People & Devices → Windows Agents → Download installer**. Pick one person's mailbox (nothing to type on the PC) or "Everyone" (each person types their email once), check the server address, download the zip.
+1. In the CMS: **Employees → PCs → Download installer**. Leave it on "Everyone", check the server address, download the zip. (Choosing one person's mailbox makes an installer that needs no typing, but the mailbox must already exist.)
 2. On the PC: extract the zip and double-click **`Install-IEMAS-Agent.bat`**. It installs the .NET 8 Desktop Runtime if missing, installs the Agent for that Windows user, turns on Start with Windows, starts it, and the Agent registers and is approved automatically.
 
-Each installer carries a one-time installer key with an expiry date and a maximum number of PCs; it can be withdrawn in the CMS, and only its hash is stored. An expired installer still installs the Agent, but the PC then waits for approval as before. Manual setup (copy `windows-client/agent-release/IemasAgent.exe`, enter the server address, register, approve under Windows Agents) still works.
+The company installer carries a key that can be withdrawn in the CMS; only its hash is stored. The key alone connects nothing: the employee must also type a real mailbox password, which the server proves with a login before anything is saved, only company email domains are accepted (System > Settings > PC setup), and an address is paused for 15 minutes after 5 wrong passwords. The password is never stored on the PC and never written to a log. A shared mailbox or one owned by someone else waits for an administrator to approve it under Employees > PCs. If the mail server cannot be found automatically, add it once under System > Settings > PC setup (`sawo.com = mail.sawo.com:993:ssl`). Manual setup (copy `windows-client/agent-release/IemasAgent.exe`, enter the server address, register, approve under Employees > PCs) still works.
 
 **Updating**
 

@@ -8,7 +8,7 @@ const SECTIONS: Array<{ title: string; items: Array<{ label: string; to: string;
   {
     title: "Email",
     items: [
-      { label: "Agent mailboxes", to: "/email-accounts", what: "Add each agent's mailbox (IMAP server, login, password), its owner, and the date monitoring starts." },
+      { label: "Agent mailboxes", to: "/email-accounts", what: "Personal mailboxes are added automatically when an employee sets up their PC with their email and password. Add shared mailboxes here." },
       { label: "Outbound email (management escalations)", to: "/outbound-email", what: "The SMTP account the system sends escalation emails from." },
       { label: "Agents (people)", to: "/employees", what: "Add or edit agents, set their supervisor and department, activate or deactivate them." },
     ],

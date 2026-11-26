@@ -198,8 +198,8 @@ footer { margin-top: 60px; padding-top: 18px; border-top: 1px solid var(--line);
 
 <div class="overview">
   <div class="ov"><span class="n">PART 1</span><h3>Server PC</h3><p>Install Docker, fill in one settings file, double-click Build-IEMAS.</p><span class="time">≈ 30 min · once</span></div>
-  <div class="ov"><span class="n">PART 2</span><h3>Configure in the CMS</h3><p>Mailboxes, employees, managers, working hours.</p><span class="time">≈ 30 min · once</span></div>
-  <div class="ov"><span class="n">PART 3</span><h3>Each employee PC</h3><p>Download a one-click installer from the CMS and run it. It connects by itself.</p><span class="time">≈ 2 min per PC</span></div>
+  <div class="ov"><span class="n">PART 2</span><h3>Configure in the CMS</h3><p>Outgoing mail, managers, working hours. Employees add themselves.</p><span class="time">≈ 30 min · once</span></div>
+  <div class="ov"><span class="n">PART 3</span><h3>Each employee PC</h3><p>Run the company installer, type your email and password. Everything else is automatic.</p><span class="time">≈ 2 min per PC</span></div>
   <div class="ov"><span class="n">PART 4–5</span><h3>First use and alerts</h3><p>What employees see, and a live simulator of every pop-up.</p><span class="time">≈ 10 min per person</span></div>
 </div>
 
@@ -355,20 +355,20 @@ cd IEMAS</pre>
   </div>
   <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;System → Setup Checklist</div><img src="img/cms-setup.png" alt="Setup checklist page" loading="lazy"><figcaption>The Setup Checklist lists every missing setting with a Fix link. Here, only business hours are left.</figcaption></figure>
   <ol class="steps">
-    <li><h3>Add the employees</h3>
+    <li><h3>Employees appear by themselves (add only managers and supervisors)</h3>
       <div class="step-body">
-        <p><b>People &amp; Devices → Employees.</b> One row per person, with the company email address they will register the Agent with.</p>
-        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;People &amp; Devices → Employees</div><img src="img/cms-employees.png" alt="Employees page" loading="lazy"></figure>
+        <p><b>Employees.</b> You do not have to type the team in: each person is added automatically, with their mailbox, when they run the installer on their PC and type their email and password (Part 3). Add by hand only the people who will not install the Agent, such as managers and supervisors who receive escalations. Typing a name, an email and the email password is enough: IEMAS finds the mail server by itself.</p>
+        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Employees</div><img src="img/cms-employees.png" alt="Employees page" loading="lazy"></figure>
       </div></li>
-    <li><h3>Add each mailbox and choose its owner</h3>
+    <li><h3>Shared mailboxes and special cases (optional)</h3>
       <div class="step-body">
-        <p><b>Email → Email Accounts → Add.</b> Enter the mailbox address, the IMAP server and its password, and choose the <b>owner</b>: the employee whose PC gets the alerts for this mailbox. Press <b>Test connection</b> and make sure the <b>Sent folder</b> is found; IEMAS needs it to see the replies.</p>
-        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Email → Email Accounts</div><img src="img/cms-email-accounts.png" alt="Email accounts page" loading="lazy"></figure>
+        <p>Personal mailboxes are created automatically. Use <b>Employees → Mailboxes → Add</b> only for a shared mailbox such as sales@ or info@, or a mail server IEMAS cannot find by itself: enter the address, the IMAP server and its password, and choose the <b>owner</b>. Press <b>Test connection</b> and make sure the <b>Sent folder</b> is found; IEMAS needs it to see the replies. If IEMAS cannot find your company mail server, add it once under <b>System → Settings → PC setup</b> (for example <code>sawo.com = mail.sawo.com:993:ssl</code>).</p>
+        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Employees → Mailboxes</div><img src="img/cms-email-accounts.png" alt="Email accounts page" loading="lazy"></figure>
       </div></li>
     <li><h3>Set the outgoing mail account</h3>
       <div class="step-body">
-        <p><b>Email → Outbound Email.</b> One SMTP account IEMAS uses to send escalation emails. <b>Test connection</b> checks the login without sending anything. After the next step, use <b>Test escalation</b> on an employee's row (Employees page) to send a real sample to their manager.</p>
-        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Email → Outbound Email</div><img src="img/cms-outbound-email.png" alt="Outbound email page" loading="lazy"></figure>
+        <p><b>Employees → Outbound email.</b> One SMTP account IEMAS uses to send escalation emails. <b>Test connection</b> checks the login without sending anything. After the next step, use <b>Test escalation</b> on an employee's row (Employees page) to send a real sample to their manager.</p>
+        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Employees → Outbound email</div><img src="img/cms-outbound-email.png" alt="Outbound email page" loading="lazy"></figure>
       </div></li>
     <li><h3>Set who gets escalations</h3>
       <div class="step-body">
@@ -394,19 +394,21 @@ cd IEMAS</pre>
   <div class="part-head">
     <div class="eyebrow">Part 3 · on every employee PC</div>
     <h2>Install the IEMAS Agent</h2>
-    <p class="who">Who: an <b>administrator</b> downloads the installer once; the <b>employee</b> (or IT) runs it on the PC. About 2 minutes per PC, and no approval step.</p>
+    <p class="who">Who: an <b>administrator</b> downloads the company installer once; each <b>employee</b> (or IT) runs it on their PC and types their email and password. About 2 minutes per PC, and no approval step.</p>
   </div>
   <ol class="steps">
-    <li><h3>Download the installer from the CMS</h3>
+    <li><h3>Download the company installer from the CMS</h3>
       <div class="step-body">
-        <p><b>People &amp; Devices → Windows Agents → Download installer.</b> Choose who it is for:</p>
+        <p><b>Employees → PCs → Download installer.</b> The default, <b>Everyone</b>, is the one you want: one zip for the whole team. Each person types their own email address and password once, and IEMAS does the rest:</p>
         <ul>
-          <li><b>One person</b> (pick their mailbox): nothing to type on the PC at all. Best when IT sets up each PC.</li>
-          <li><b>Everyone</b>: one zip for the whole team; each person types their own email address once.</li>
+          <li>checks the password with a real mailbox login and finds the mail server by itself,</li>
+          <li>adds the employee and the mailbox if they are new (name taken from the address, department from <b>System → Settings → PC setup</b>),</li>
+          <li>approves the PC. An existing mailbox simply connects to its owner.</li>
         </ul>
+        <p>Choosing <b>one person</b> instead makes an installer that needs no typing at all; their mailbox must already exist.</p>
         <p>Check the <b>server address</b> (the address the PCs use, for example <code>http://172.16.2.68:8191</code>), keep <b>Server uses its own certificate</b> ticked when the server is reached by IP address, then <b>Download zip</b>.</p>
-        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;People &amp; Devices → Windows Agents</div><img src="img/cms-agent-installer.png" alt="Download installer panel on the Windows Agents page" loading="lazy"><figcaption>Every installer has an expiry date and a maximum number of PCs, and can be withdrawn here. PCs already connected keep working.</figcaption></figure>
-        <div class="note warn"><b>Treat the zip like a password.</b> Until it expires or is used up, anyone who runs it can connect a PC to IEMAS for the mailbox it allows. Send it directly to the person, not to a group or a shared folder.</div>
+        <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Employees → PCs</div><img src="img/cms-agent-installer.png" alt="Download installer panel on the PCs tab" loading="lazy"><figcaption>An installer can be withdrawn here at any time. PCs already connected keep working.</figcaption></figure>
+        <div class="note warn"><b>Keep the zip inside the company.</b> Running it is not enough to connect a PC: the person also needs a real company mailbox and its password, and only your company email domains are accepted. Still, share it on an internal drive, not publicly, and withdraw it if it leaks.</div>
       </div></li>
     <li><h3>Run it on the PC</h3>
       <div class="step-body">
@@ -416,20 +418,20 @@ cd IEMAS</pre>
           <li>installs the .NET 8 Desktop Runtime if the PC doesn't have it (Windows may ask to allow the change: click <b>Yes</b>),</li>
           <li>installs the Agent for the signed-in user and adds it to the Start menu,</li>
           <li>sets the server address and certificate option, and turns on <b>Start with Windows</b>,</li>
-          <li>starts the Agent, which registers itself and is <b>approved automatically</b>.</li>
+          <li>starts the Agent and asks for the email address and password.</li>
         </ul>
       </div></li>
-    <li><h3>Check the light is green</h3>
+    <li><h3>Type the email and password, then check the light is green</h3>
       <div class="step-body">
-        <p>With a one-person installer, the Agent shows <b>● Connected</b> and the employee's name within a few seconds. With an "Everyone" installer, the person types their company email address once and clicks <b>Register</b>; it connects straight away.</p>
+        <p>In the Agent window the person types their company email address and email password and clicks <b>Connect</b>. After a few seconds (up to a minute the first time, while IEMAS finds the mail server) the Agent shows <b>● Connected</b> and their name. The password is used once and is never kept on the PC. If it is refused: check the password, and for Gmail or Microsoft 365 use an app password. A shared mailbox, or one that belongs to someone else, waits for an administrator to approve it under <b>Employees → PCs</b>.</p>
         <div class="shots-2">
-          <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;"Everyone" installer · first start</div><img src="img/agent-connect.png" alt="Agent asking for the email address after an Everyone installer" loading="lazy"></figure>
+          <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;First start · email and password</div><img src="img/agent-connect.png" alt="Agent asking for the email address and password" loading="lazy"></figure>
           <figure class="screen"><div class="bar"><i></i><i></i><i></i>&nbsp;Connected</div><img src="img/agent-main.png" alt="Agent connected and listing inquiries" loading="lazy"></figure>
         </div>
       </div></li>
   </ol>
   <details class="faq"><summary>Setting up a PC by hand instead (no installer)</summary>
-    <p>Install the runtime with <code>winget install Microsoft.DotNet.DesktopRuntime.8</code>, copy <code>IemasAgent.exe</code> from the server's <code>windows-clientgent-release</code> folder and start it. In <b>Settings</b> enter the server address, tick <b>Allow self-signed certificates</b>, and Save. Register with the company email address; the PC then appears as <b>Pending</b> under Windows Agents until an administrator chooses the employee and presses <b>Approve</b>. An installer that has expired falls back to this same Pending request.</p>
+    <p>Install the runtime with <code>winget install Microsoft.DotNet.DesktopRuntime.8</code>, copy <code>IemasAgent.exe</code> from the server's <code>windows-clientgent-release</code> folder and start it. In <b>Settings</b> enter the server address, tick <b>Allow self-signed certificates</b>, and Save. Register with the company email address; the PC then appears as <b>Pending</b> under Employees → PCs until an administrator chooses the employee and presses <b>Approve</b>. A withdrawn installer falls back to this same Pending request.</p>
   </details>
   <div class="note"><b>Updating the Agent later:</b> download a new installer and run it the same way. The registration is kept.</div>
 </section>
@@ -518,7 +520,7 @@ cd IEMAS</pre>
     <h2>Troubleshooting</h2>
   </div>
   <details class="faq"><summary>The Agent stays on "Connecting…"</summary><p>Check the Server URL in Settings (https, port 8443) and that "Allow self-signed certificates" is ticked. From the PC, open http://172.16.2.68:8191 in a browser: if that fails too, check the server's firewall rule and that Docker Desktop is running on the server.</p></details>
-  <details class="faq"><summary>Registration fails, or the installer "can no longer be used"</summary><p>The email must be a mailbox IEMAS watches, with an owner set on the Email Accounts page. An installer that expired, was used up or was withdrawn still installs the Agent, but the PC then waits as Pending under Windows Agents: approve it there, or download a new installer.</p></details>
+  <details class="faq"><summary>The Agent says the password didn't work, or can't find the mail server</summary><p><b>Password didn't work:</b> retype it carefully; Gmail and Microsoft 365 need an <b>app password</b> instead of the normal one. After 5 wrong attempts the address is paused for 15 minutes. <b>Can't reach the mail server:</b> add the company domain once under <b>System → Settings → PC setup</b> (<code>sawo.com = mail.sawo.com:993:ssl</code>). <b>Not a company email domain:</b> the address must be on one of the domains listed under <b>PC setup → Allowed email domains</b> (blank uses the internal company domains). <b>Installer can no longer be used:</b> it was withdrawn; download a new one.</p></details>
   <details class="faq"><summary>I replied but still get reminders</summary><p>Wait 2 minutes for the Sent-folder check. Reply to the customer's own email (not a new email) from the mailbox the customer wrote to. If you answered by phone, open the inquiry and use Mark as resolved or add a note.</p></details>
   <details class="faq"><summary>A customer email did not become an inquiry</summary><p>Allow a couple of minutes. Newsletters, auto-replies and internal mail are filtered out on purpose. Emails the AI was unsure about wait for a supervisor in the Review queue (Email → Email Classification).</p></details>
   <details class="faq"><summary>No pop-ups appear</summary><p>The tray icon's dot must be green. Pop-ups go to the owner of the mailbox the email arrived in. Pop-ups missed while the PC was off are shown when it connects again.</p></details>
@@ -647,11 +649,11 @@ const ITEMS = [
   "Firewall allows port 8443; the CMS opens from another PC",
   "Every mailbox added, connection tested, Sent folder found",
   "Outbound email set; Test escalation (Employees page) reached a manager",
-  "Every employee added with the right mailbox",
+  "Every employee's mailbox shows ok on the Employees page (they were added by running the installer)",
   "Every employee has the right supervisor (and escalation groups, if used)",
   "Default reminder policy: office hours, time zone, weekends and holidays set",
   "System Settings: CMS web address set; TEST MODE (count hours as minutes) is off",
-  "Every employee PC: installer run, light is green; unused installers withdrawn",
+  "Every employee PC: installer run, email and password typed, light is green; old installers withdrawn",
   "Each employee has opened the Agent's Help tab once and tried the alert simulator",
   "Daily database backup scheduled and one restore tested",
 ];
