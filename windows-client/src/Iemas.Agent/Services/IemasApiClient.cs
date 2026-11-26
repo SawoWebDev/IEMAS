@@ -22,10 +22,16 @@ public class IemasApiClient : IDisposable
 
     public string? AccessToken { get; set; }
 
-    public IemasApiClient(string serverBaseUrl, bool allowInsecureTls)
+    public IemasApiClient(string serverBaseUrl, bool allowInsecureTls, string? pinnedThumbprint = null)
     {
         var handler = new HttpClientHandler();
-        if (allowInsecureTls)
+        if (!string.IsNullOrWhiteSpace(pinnedThumbprint))
+        {
+            var pinned = pinnedThumbprint.Replace(" ", "").Replace(":", "");
+            handler.ServerCertificateCustomValidationCallback = (_, cert, _, _) =>
+                cert is not null && string.Equals(cert.GetCertHashString(), pinned, StringComparison.OrdinalIgnoreCase);
+        }
+        else if (allowInsecureTls)
         {
             // Dev/self-signed-cert convenience only — an explicit opt-in in Settings, never the
             // silent default (§84 HTTPS is a minimum security requirement).
@@ -48,6 +54,16 @@ public class IemasApiClient : IDisposable
         {
             using var response = await _http.PostAsJsonAsync("api/v1/agent-enrollment/register", request, JsonOptions, ct);
             return await ReadResultAsync<RegisterAgentResponse>(response, ct);
+        });
+
+    /// <summary>One-step setup: the server proves the mailbox password, creates what is missing and approves this PC. Can take up to a minute while it looks for the mail server.</summary>
+    public Task<ApiResult<SelfEnrollResponse>> SelfEnrollAsync(SelfEnrollRequest request, CancellationToken ct) =>
+        ExecuteAsync<SelfEnrollResponse>(async () =>
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(90));
+            using var response = await _http.PostAsJsonAsync("api/v1/agent-enrollment/self-enroll", request, JsonOptions, timeout.Token);
+            return await ReadResultAsync<SelfEnrollResponse>(response, timeout.Token);
         });
 
     public Task<ApiResult<AgentRegistrationStatusResponse>> GetRegistrationStatusAsync(string registrationRequestToken, CancellationToken ct) =>

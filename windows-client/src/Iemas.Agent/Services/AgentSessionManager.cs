@@ -48,7 +48,7 @@ public class AgentSessionManager : IAsyncDisposable
     public AgentSessionManager()
     {
         _settings = AgentSettings.Load();
-        _api = new IemasApiClient(_settings.ServerUrl, _settings.AllowInsecureTls);
+        _api = new IemasApiClient(_settings.ServerUrl, _settings.AllowInsecureTls, _settings.ServerCertificateThumbprint);
 
         _signalR.StateChanged += OnSignalRStateChanged;
         _signalR.CommandReceived += OnPushReceived;
@@ -120,7 +120,7 @@ public class AgentSessionManager : IAsyncDisposable
             StateUpdated?.Invoke();
 
             // Installed from a CMS package made for one mailbox: register straight away, nothing to type.
-            if (HasInstallKey && !string.IsNullOrWhiteSpace(_settings.InstallEmail))
+            if (HasInstallKey && !_settings.SelfEnrollment && !string.IsNullOrWhiteSpace(_settings.InstallEmail))
             {
                 var (ok, error) = await RegisterAsync(_settings.InstallEmail!, Environment.MachineName);
                 if (!ok)
@@ -158,19 +158,45 @@ public class AgentSessionManager : IAsyncDisposable
             return (false, result.Error);
         }
 
+        await AfterRegisteredAsync(result.Value.AgentId, result.Value.RegistrationRequestToken, result.Value.Status);
+        return (true, null);
+    }
+
+    /// <summary>True when the installer is a company installer: the employee types an email and a password, nothing else.</summary>
+    public bool UsesSelfEnrollment => _settings.SelfEnrollment && HasInstallKey;
+
+    /// <summary>
+    /// One-step setup. The password goes to the server once, over TLS, and is never stored on this PC. The server
+    /// proves it with a real mailbox login, finds or creates the employee and the mailbox, and approves this PC.
+    /// </summary>
+    public async Task<(bool Succeeded, string? Error)> SelfEnrollAsync(string emailAddress, string password)
+    {
+        var request = new SelfEnrollRequest(_settings.InstallKey ?? string.Empty, emailAddress, password, Environment.MachineName,
+            _settings.ServerUrl, AgentVersion, Environment.MachineName);
+        var result = await _api.SelfEnrollAsync(request, CancellationToken.None);
+        if (!result.Succeeded || result.Value is null)
+        {
+            return (false, result.Error);
+        }
+
+        await AfterRegisteredAsync(result.Value.AgentId, result.Value.RegistrationRequestToken, result.Value.Status);
+        return (true, result.Value.Message);
+    }
+
+    private async Task AfterRegisteredAsync(Guid agentId, string registrationRequestToken, int status)
+    {
         AutoRegistrationError = null;
 
-        _agentId = result.Value.AgentId;
-        _registrationRequestToken = result.Value.RegistrationRequestToken;
+        _agentId = agentId;
+        _registrationRequestToken = registrationRequestToken;
         State = SessionState.PendingApproval;
         StateUpdated?.Invoke();
         _reauthWatchTimer.Start();
-        if (result.Value.Status == 1)
+        if (status == 1)
         {
             // Approved on the spot by the installer key: collect the credential now instead of on the next poll.
             await PollRegistrationIfPendingAsync();
         }
-        return (true, null);
     }
 
     private async Task PollRegistrationIfPendingAsync()
@@ -206,9 +232,10 @@ public class AgentSessionManager : IAsyncDisposable
 
     private void ForgetInstallKey()
     {
-        if (_settings.InstallKey is null && _settings.InstallEmail is null) return;
+        if (_settings.InstallKey is null && _settings.InstallEmail is null && !_settings.SelfEnrollment) return;
         _settings.InstallKey = null;
         _settings.InstallEmail = null;
+        _settings.SelfEnrollment = false;
         try { _settings.Save(); } catch (System.IO.IOException) { /* retried on the next registration */ }
     }
 
@@ -386,7 +413,7 @@ public class AgentSessionManager : IAsyncDisposable
     private void RebuildApiClientIfServerChanged(string serverUrl)
     {
         _api.Dispose();
-        _api = new IemasApiClient(serverUrl, _settings.AllowInsecureTls);
+        _api = new IemasApiClient(serverUrl, _settings.AllowInsecureTls, _settings.ServerCertificateThumbprint);
     }
 
     public void SignOut()

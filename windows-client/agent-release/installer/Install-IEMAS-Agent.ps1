@@ -24,7 +24,7 @@ if ($setup.expiresAt) {
     $expires = [DateTimeOffset]::Parse($setup.expiresAt)
     if ($expires -lt [DateTimeOffset]::UtcNow) {
         Write-Host "   NOTE  This installer expired on $($expires.LocalDateTime). The Agent will still install," -ForegroundColor Yellow
-        Write-Host "         but an administrator must approve this PC in the CMS (People & Devices > Windows Agents)." -ForegroundColor Yellow
+        Write-Host "         but an administrator must approve this PC in the CMS (Employees > PCs)." -ForegroundColor Yellow
     }
 }
 Info "Server: $($setup.serverUrl)"
@@ -102,6 +102,8 @@ Set-Setting 'StartWithWindows' $true
 Set-Setting 'StartupDefaultApplied' $true
 Set-Setting 'InstallKey' ([string]$setup.installKey)
 Set-Setting 'InstallEmail' $(if ($setup.emailAddress) { [string]$setup.emailAddress } else { $null })
+Set-Setting 'SelfEnrollment' ([bool]$setup.selfEnrollment)
+Set-Setting 'ServerCertificateThumbprint' $(if ($setup.serverCertificateThumbprint) { [string]$setup.serverCertificateThumbprint } else { $null })
 [IO.File]::WriteAllText($settingsPath, ($settings | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
 
 $credentialFile = Join-Path $settingsDir 'agent.dat'
@@ -126,7 +128,9 @@ try {
 Start-Process -FilePath $exe -WorkingDirectory $appDir
 Ok "The IEMAS Agent is running. Its icon is next to the clock; it starts by itself with Windows."
 Write-Host ""
-if ($setup.emailAddress) {
+if ($setup.selfEnrollment) {
+    Write-Host "Last step: in the IEMAS Agent window, type your work email address and its password, then click Connect." -ForegroundColor White
+} elseif ($setup.emailAddress) {
     Write-Host "The Agent connects by itself in a few seconds. The light at the top left turns green." -ForegroundColor White
 } else {
     Write-Host "In the Agent window, type your company email address and click Register. It connects straight away." -ForegroundColor White

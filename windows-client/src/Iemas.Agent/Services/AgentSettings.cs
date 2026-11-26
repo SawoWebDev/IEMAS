@@ -28,6 +28,12 @@ public class AgentSettings
     /// <summary>The mailbox the installer package was made for, if any; registration then needs no typing.</summary>
     public string? InstallEmail { get; set; }
 
+    /// <summary>The installer is a company installer: the employee types their email and password and IEMAS sets everything else up.</summary>
+    public bool SelfEnrollment { get; set; }
+
+    /// <summary>SHA-1 thumbprint of the server certificate. When set, only that certificate is trusted, so a password is never sent to an impostor on the network.</summary>
+    public string? ServerCertificateThumbprint { get; set; }
+
     /// <summary>Set once the first-run welcome tour has been shown on this PC.</summary>
     public bool WelcomeTourShown { get; set; }
 

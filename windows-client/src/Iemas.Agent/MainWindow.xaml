@@ -101,11 +101,13 @@
                     <TextBlock x:Name="OnboardingTitle" FontSize="16" FontWeight="Bold" Margin="0,0,0,8"/>
                     <TextBlock x:Name="OnboardingMessage" TextWrapping="Wrap" Foreground="#4B5563" Margin="0,0,0,16"/>
                     <StackPanel x:Name="RegistrationForm">
-                        <TextBlock Text="Email Address (must be an enrolled IEMAS mailbox)" FontSize="12" Foreground="#4B5563"/>
+                        <TextBlock x:Name="EmailLabel" Text="Email Address (must be an enrolled IEMAS mailbox)" FontSize="12" Foreground="#4B5563"/>
                         <TextBox x:Name="EmailTextBox" Margin="0,4,0,10" Padding="6"/>
-                        <TextBlock Text="Client/Agent Name" FontSize="12" Foreground="#4B5563"/>
+                        <TextBlock x:Name="PasswordLabel" Text="Email password" FontSize="12" Foreground="#4B5563" Visibility="Collapsed"/>
+                        <PasswordBox x:Name="PasswordBox" Margin="0,4,0,10" Padding="6" Visibility="Collapsed" KeyDown="PasswordBox_KeyDown"/>
+                        <TextBlock x:Name="ClientNameLabel" Text="Client/Agent Name" FontSize="12" Foreground="#4B5563"/>
                         <TextBox x:Name="ClientNameTextBox" Margin="0,4,0,10" Padding="6"/>
-                        <Button Content="Register" Style="{StaticResource ActionButton}" HorizontalAlignment="Left" Click="RegisterButton_Click"/>
+                        <Button x:Name="RegisterButton" Content="Register" Style="{StaticResource ActionButton}" HorizontalAlignment="Left" Click="RegisterButton_Click"/>
                         <TextBlock x:Name="RegistrationError" Foreground="#DC2626" TextWrapping="Wrap" Margin="0,8,0,0"/>
                     </StackPanel>
                 </StackPanel>

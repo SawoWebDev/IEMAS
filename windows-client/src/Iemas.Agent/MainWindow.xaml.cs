@@ -89,13 +89,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         switch (App.Session.State)
         {
             case SessionState.NotRegistered:
-                if (App.Session.HasInstallKey)
+                if (App.Session.UsesSelfEnrollment)
                 {
+                    ShowOnboarding("Connect this PC to IEMAS", "Type your work email address and its password. That is all: IEMAS sets up the rest by itself. The password is only used once to check your mailbox and is never kept on this PC.", showForm: true);
+                    SetSelfEnrollLayout(true);
+                }
+                else if (App.Session.HasInstallKey)
+                {
+                    SetSelfEnrollLayout(false);
                     ShowOnboarding("Connect this PC to IEMAS", "Enter your company email address (the mailbox IEMAS watches for you) and click Register. This PC was installed with an IEMAS installer, so it connects straight away; no approval is needed.", showForm: true);
                     if (string.IsNullOrWhiteSpace(EmailTextBox.Text) && !string.IsNullOrWhiteSpace(App.Session.InstallEmail)) EmailTextBox.Text = App.Session.InstallEmail;
                 }
                 else
                 {
+                    SetSelfEnrollLayout(false);
                     ShowOnboarding("Register this device", "This computer is not yet registered with IEMAS. Enter your enrolled email address to request registration; an administrator must approve it before you can connect.", showForm: true);
                 }
                 if (!string.IsNullOrWhiteSpace(App.Session.AutoRegistrationError)) RegistrationError.Text = App.Session.AutoRegistrationError;
@@ -150,10 +157,53 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     // --- Registration ---
 
+    private void PasswordBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Enter) RegisterButton_Click(sender, e);
+    }
+
+    /// <summary>Company installer: email + password only, so the client-name box is hidden and the password box shown.</summary>
+    private void SetSelfEnrollLayout(bool selfEnroll)
+    {
+        var password = selfEnroll ? Visibility.Visible : Visibility.Collapsed;
+        PasswordLabel.Visibility = password;
+        PasswordBox.Visibility = password;
+        ClientNameLabel.Visibility = selfEnroll ? Visibility.Collapsed : Visibility.Visible;
+        ClientNameTextBox.Visibility = selfEnroll ? Visibility.Collapsed : Visibility.Visible;
+        EmailLabel.Text = selfEnroll ? "Work email address" : "Email Address (must be an enrolled IEMAS mailbox)";
+        RegisterButton.Content = selfEnroll ? "Connect" : "Register";
+    }
+
     private async void RegisterButton_Click(object sender, RoutedEventArgs e)
     {
         RegistrationError.Text = string.Empty;
         var email = EmailTextBox.Text.Trim();
+
+        if (App.Session.UsesSelfEnrollment)
+        {
+            if (string.IsNullOrWhiteSpace(email) || PasswordBox.Password.Length == 0)
+            {
+                RegistrationError.Text = "Type your email address and its password.";
+                return;
+            }
+
+            RegisterButton.IsEnabled = false;
+            RegisterButton.Content = "Checking your mailbox...";
+            try
+            {
+                var (ok, message) = await App.Session.SelfEnrollAsync(email, PasswordBox.Password);
+                if (!ok) RegistrationError.Text = message ?? "Setup failed.";
+                else if (!string.IsNullOrWhiteSpace(message)) RegistrationError.Text = message;
+            }
+            finally
+            {
+                PasswordBox.Clear();
+                RegisterButton.IsEnabled = true;
+                RegisterButton.Content = "Connect";
+            }
+            return;
+        }
+
         var clientName = string.IsNullOrWhiteSpace(ClientNameTextBox.Text) ? Environment.MachineName : ClientNameTextBox.Text.Trim();
 
         if (string.IsNullOrWhiteSpace(email))

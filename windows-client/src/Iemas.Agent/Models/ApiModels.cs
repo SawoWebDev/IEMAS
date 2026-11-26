@@ -8,6 +8,10 @@ public record RegisterAgentRequest(string EmailAddress, string ClientName, strin
 
 public record RegisterAgentResponse(Guid AgentId, string RegistrationRequestToken, int Status);
 
+public record SelfEnrollRequest(string InstallKey, string EmailAddress, string Password, string ClientName, string? ServerAddress, string? AgentVersion, string? DeviceMetadata);
+
+public record SelfEnrollResponse(Guid AgentId, string RegistrationRequestToken, int Status, string EmployeeName, bool EmployeeCreated, bool MailboxCreated, string? Message);
+
 public record AgentRegistrationStatusResponse(int Status, string? RegistrationKey, DateTimeOffset? RegistrationKeyExpiresAt, string? RejectionReason);
 
 public record AgentAuthenticateRequest(Guid AgentId, string RegistrationKey);
