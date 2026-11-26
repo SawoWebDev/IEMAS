@@ -254,6 +254,7 @@ const string AuthRateLimitPolicy = "AuthRateLimit";
 // polling endpoint, rather than reusing the strict login/register/authenticate limit and breaking
 // normal Agent behavior.
 const string AgentPollRateLimitPolicy = "AgentPollRateLimit";
+const string SelfEnrollRateLimitPolicy = "SelfEnrollRateLimit";
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -265,6 +266,9 @@ builder.Services.AddRateLimiter(options =>
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0,
         }));
+    options.AddPolicy(SelfEnrollRateLimitPolicy, httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        factory: _ => new FixedWindowRateLimiterOptions { PermitLimit = 12, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     options.AddPolicy(AgentPollRateLimitPolicy, httpContext => RateLimitPartition.GetFixedWindowLimiter(
         partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         factory: _ => new FixedWindowRateLimiterOptions

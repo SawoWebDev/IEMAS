@@ -54,7 +54,8 @@ public class ImapEmailProviderAdapter : IEmailProviderAdapter
             stopwatch.Stop();
             // Never include the secret in the error message; MailKit exceptions do not echo credentials,
             // but message text is still logged/stored, so keep it to protocol-level detail only.
-            return new ProviderConnectionTestResult(false, ex.Message, stopwatch.Elapsed);
+            return new ProviderConnectionTestResult(false, ex.Message, stopwatch.Elapsed,
+                ImapFailureClassifier.Classify(ex) == ImapFailureCategory.AuthenticationFailure);
         }
     }
 

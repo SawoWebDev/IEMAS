@@ -19,6 +19,9 @@ public class AgentInstallKey : Entity
     public string? EmailAddress { get; set; }
 
     public string? Label { get; set; }
+
+    /// <summary>A company installer: any PC holding it may enroll by email + password (the mailbox login is the proof). Personal keys never can.</summary>
+    public bool AllowsSelfEnrollment { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
     public int MaxUses { get; set; }
     public int UseCount { get; set; }

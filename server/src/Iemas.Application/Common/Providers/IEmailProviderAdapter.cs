@@ -15,7 +15,7 @@ public record EmailProviderConnectionSettings(
     EmailAuthMethod AuthMethod,
     string Secret);
 
-public record ProviderConnectionTestResult(bool Succeeded, string? ErrorMessage, TimeSpan Duration);
+public record ProviderConnectionTestResult(bool Succeeded, string? ErrorMessage, TimeSpan Duration, bool AuthenticationFailed = false);
 
 public record ProviderAttachmentSummary(string FileName, string? ContentType, long SizeBytes);
 

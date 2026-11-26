@@ -39,7 +39,7 @@ public class AgentInstallKeyService
 
         string? email = null;
         string? ownerName = null;
-        if (!string.IsNullOrWhiteSpace(request.EmailAddress))
+        if (!request.SelfEnrollment && !string.IsNullOrWhiteSpace(request.EmailAddress))
         {
             email = request.EmailAddress.Trim().ToLowerInvariant();
             var account = await _db.EmailAccounts.AsNoTracking()
@@ -58,9 +58,10 @@ public class AgentInstallKeyService
         {
             KeyHash = Hash(rawKey),
             EmailAddress = email,
-            Label = email is null ? "Any monitored mailbox" : $"{ownerName} ({email})",
+            Label = request.SelfEnrollment ? "Company installer (everyone)" : email is null ? "Any monitored mailbox" : $"{ownerName} ({email})",
             ExpiresAt = DateTimeOffset.UtcNow.AddDays(request.ValidDays),
             MaxUses = request.MaxUses,
+            AllowsSelfEnrollment = request.SelfEnrollment,
             CreatedByUserId = createdByUserId,
         };
         _db.AgentInstallKeys.Add(key);
@@ -80,7 +81,7 @@ public class AgentInstallKeyService
             .Select(k => new
             {
                 k.Id, k.EmailAddress, k.Label, k.CreatedAt, CreatedBy = k.CreatedByUser != null ? k.CreatedByUser.Email : null,
-                k.ExpiresAt, k.MaxUses, k.UseCount, k.LastUsedAt, k.RevokedAt,
+                k.ExpiresAt, k.MaxUses, k.UseCount, k.LastUsedAt, k.RevokedAt, k.AllowsSelfEnrollment,
             })
             .ToListAsync(cancellationToken);
 
@@ -93,7 +94,7 @@ public class AgentInstallKeyService
         return rows.Select(r => new AgentInstallKeyDto(
             r.Id, r.EmailAddress, owners.FirstOrDefault(o => o.EmailAddress == r.EmailAddress)?.FullName, r.Label, r.CreatedAt, r.CreatedBy,
             r.ExpiresAt, r.MaxUses, r.UseCount, r.LastUsedAt, r.RevokedAt,
-            r.RevokedAt is null && r.ExpiresAt > now && r.UseCount < r.MaxUses)).ToList();
+            r.RevokedAt is null && r.ExpiresAt > now && r.UseCount < r.MaxUses, r.AllowsSelfEnrollment)).ToList();
     }
 
     public async Task<Result<bool>> RevokeAsync(Guid id, CancellationToken cancellationToken)

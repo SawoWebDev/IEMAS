@@ -51,7 +51,7 @@ public class SecurityReviewTests
         var allowed = new HashSet<string>
         {
             "AuthController.Login", "AuthController.Refresh", "AgentAuthController.Authenticate",
-            "AgentEnrollmentController.Register", "AgentEnrollmentController.GetStatus",
+            "AgentEnrollmentController.Register", "AgentEnrollmentController.SelfEnroll", "AgentEnrollmentController.GetStatus",
         };
         var anonymous = Actions().Where(a => Anonymous(a.Controller, a.Action)).ToList();
         Assert.NotEmpty(anonymous);

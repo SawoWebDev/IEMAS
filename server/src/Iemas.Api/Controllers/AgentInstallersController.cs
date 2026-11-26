@@ -79,6 +79,8 @@ public class AgentInstallersController : ControllerBase
         {
             serverUrl = request.ServerUrl.Trim().TrimEnd('/'),
             allowSelfSignedCertificate = request.AllowSelfSignedCertificate,
+            selfEnrollment = request.SelfEnrollment,
+            serverCertificateThumbprint = _configuration["AgentInstaller:CertificateThumbprint"],
             emailAddress = created.Value!.Key.EmailAddress,
             employeeName = created.Value.OwnerName,
             installKey = created.Value.RawKey,
@@ -99,7 +101,7 @@ public class AgentInstallersController : ControllerBase
             await JsonSerializer.SerializeAsync(stream, setup, new JsonSerializerOptions { WriteIndented = true }, cancellationToken);
         }
 
-        var who = created.Value.Key.EmailAddress is { } e ? e.Split('@')[0] : "all";
+        var who = created.Value.Key.EmailAddress is { } e ? e.Split('@')[0] : "company";
         var fileName = $"IEMAS-Agent-Installer-{who}-{DateTime.UtcNow:yyyyMMdd}.zip";
         return File(buffer.ToArray(), "application/zip", fileName);
     }

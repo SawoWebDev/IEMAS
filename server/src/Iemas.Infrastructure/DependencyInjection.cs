@@ -45,6 +45,7 @@ public static class DependencyInjection
         services.AddScoped<IEmailProviderAdapter, MicrosoftGraphEmailProviderAdapter>();
         services.AddScoped<IEmailProviderAdapter, SmtpEmailProviderAdapter>();
         services.AddScoped<IEmailProviderAdapterResolver, EmailProviderAdapterResolver>();
+        services.AddHttpClient<Iemas.Application.Common.Providers.IMailAutoconfigLookup, ThunderbirdAutoconfigLookup>();
 
         // §82 — OpenRouter is the V1 AI provider; isolated behind IAiClassificationProvider so
         // the classification workflow never depends on HTTP/OpenRouter specifics directly (same

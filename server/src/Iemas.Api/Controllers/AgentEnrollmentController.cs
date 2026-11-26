@@ -41,6 +41,15 @@ public class AgentEnrollmentController : ControllerBase
     /// AgentPollRateLimit (60/min), not the strict 10/min AuthRateLimit, since the Windows Agent
     /// itself legitimately polls this every ~5s (12/min) while PendingApproval.
     /// </summary>
+    /// <summary>One-step PC setup: the company installer key plus the employee's own email and password.</summary>
+    [HttpPost("self-enroll")]
+    [EnableRateLimiting("SelfEnrollRateLimit")]
+    public async Task<IActionResult> SelfEnroll([FromBody] SelfEnrollAgentRequest request, [FromServices] AgentSelfEnrollmentService selfEnroll, CancellationToken cancellationToken)
+    {
+        var result = await selfEnroll.EnrollAsync(request, HttpContext.Connection.RemoteIpAddress?.ToString(), cancellationToken);
+        return result.Succeeded ? Ok(result.Response) : BadRequest(new { code = result.Failure!.Code, message = result.Failure.Message });
+    }
+
     [HttpGet("status/{registrationRequestToken}")]
     [EnableRateLimiting("AgentPollRateLimit")]
     public async Task<ActionResult<AgentRegistrationStatusResponse>> GetStatus(string registrationRequestToken, CancellationToken cancellationToken)

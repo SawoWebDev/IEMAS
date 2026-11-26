@@ -54,6 +54,12 @@ public static class SystemSettingKeys
     public const string OrganizationName = "general.organization_name";
     public const string DefaultTimeZone = "general.default_time_zone";
     public const string CmsBaseUrl = "general.cms_base_url";
+
+    // PC setup: employees enrolling their own PC with email + password.
+    public const string EnrollmentAllowedDomains = "enrollment.allowed_domains";
+    public const string EnrollmentMailServerPresets = "enrollment.mail_server_presets";
+    public const string EnrollmentDefaultDepartment = "enrollment.default_department";
+    public const string EnrollmentDefaultProfile = "enrollment.default_classification_profile";
     public const string PasswordMinLength = "security.password_min_length";
     public const string IgnoredSenders = "email.ignored_senders";
     public const string LegitimacyRules = "ai.legitimacy_rules";
@@ -248,6 +254,18 @@ public class SystemSettingsService
             "IANA time zone (e.g. Asia/Manila) used to display dates in notification messages.", SettingValueType.TimeZone, "UTC"),
         new(SystemSettingKeys.CmsBaseUrl, "General", "CMS web address",
             "The address people use to open this CMS, e.g. http://172.16.2.68:8191. Escalation emails link to the Case with it. Leave blank for no link.",
+            SettingValueType.Text, "", 0, 200),
+        new(SystemSettingKeys.EnrollmentAllowedDomains, "PC setup", "Allowed email domains",
+            "One domain per line (sawo.com). Only these email addresses can set up a PC by themselves. Blank uses the internal company domains. A mailbox that already exists in IEMAS is always allowed.",
+            SettingValueType.SenderList, "", 0, 4000),
+        new(SystemSettingKeys.EnrollmentMailServerPresets, "PC setup", "Mail server for a domain",
+            "Optional, one per line: domain = host:port:ssl or domain = host:port:starttls (sawo.com = mail.sawo.com:993:ssl). Used when IEMAS cannot work the server out by itself.",
+            SettingValueType.LongText, "", 0, 4000),
+        new(SystemSettingKeys.EnrollmentDefaultDepartment, "PC setup", "Department for new employees",
+            "Name of an existing department. New employees who set up their own PC are placed in it. Blank for none.",
+            SettingValueType.Text, "", 0, 200),
+        new(SystemSettingKeys.EnrollmentDefaultProfile, "PC setup", "Classification profile for new mailboxes",
+            "Name of an existing classification profile. Blank uses the profile most mailboxes already use.",
             SettingValueType.Text, "", 0, 200),
         new(SystemSettingKeys.LegitimacyRules, "Email rules", "Counts as legitimate",
             "Signs of a genuine business email.", SettingValueType.RuleList, SystemSettingDefaults.LegitimacyRules, 0, 4000),

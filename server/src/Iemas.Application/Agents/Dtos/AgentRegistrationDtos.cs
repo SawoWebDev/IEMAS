@@ -63,7 +63,9 @@ public record CreateInstallPackageRequest(
     string ServerUrl,
     bool AllowSelfSignedCertificate,
     int ValidDays = 7,
-    int MaxUses = 3);
+    int MaxUses = 3,
+    // A company installer: any PC with it may enroll by typing email + password (no mailbox needs to exist yet).
+    bool SelfEnrollment = false);
 
 public record AgentInstallKeyDto(
     Guid Id,
@@ -77,4 +79,5 @@ public record AgentInstallKeyDto(
     int UseCount,
     DateTimeOffset? LastUsedAt,
     DateTimeOffset? RevokedAt,
-    bool Usable);
+    bool Usable,
+    bool AllowsSelfEnrollment = false);

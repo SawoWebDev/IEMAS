@@ -41,6 +41,9 @@ public static class DependencyInjection
         services.AddScoped<CaseService>();
         services.AddScoped<ReplyVerificationService>();
         services.AddScoped<AgentRegistrationService>();
+        services.AddScoped<AgentSelfEnrollmentService>();
+        services.AddScoped<MailServerDiscovery>();
+        services.AddSingleton<EnrollmentAttemptLimiter>();
         services.AddScoped<AgentInstallKeyService>();
         services.AddScoped<AgentAuthService>();
         services.AddScoped<AgentCaseActionService>();
